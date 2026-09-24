@@ -1,409 +1,415 @@
 [
   {
-    "timestamp": "2026-09-23T23:24:19.003165",
+    "timestamp": "2026-09-23T23:54:19.440413",
     "src_ip": "52.128.40.10",
     "src_port": 8333,
     "dst_ip": "142.250.190.1",
     "dst_port": 8333,
-    "txid": "1086a19a97b831cca4768c7da901d65c7bfe42a8f21ff81c2127442077758719",
+    "txid": "79ef9bbe185ef7f177b55e0ea7d9ae3c9e5cd4da26cdf1cef1f50dfc90d2bf0c",
     "input_addresses": [
-      "bc1q2674f83e7625a5565e145abb4f7c5c8929c06e",
-      "bc1qa71ee6e2d41ecc39342d8771f939a36410e221",
-      "bc1q6053491b1fe1f392557f212eeb6f0857695e5c",
-      "bc1q5f19dd3ecfdb346136e90e8ff16bc7d5a3a363",
-      "bc1q7e8f0762ca0f5549023a9fde6f6fcdfdd45a0e",
-      "bc1qc32916b497163f34465326daad896fc604f371",
-      "bc1q3a088c3182fe819a2f6a5044fc2185593521fb",
-      "bc1q2125f77ae28a5c49192853021517f6cc02630f",
-      "bc1qdb20dcad72b8b9a4d9c5b222e40ecc07025286",
-      "bc1q627af34fc3b7458cb6ee56267b70a8c9b5cc73",
-      "bc1q51d9d5bc6cdf013b7963d1ec93082f60b08c4c",
-      "bc1q81b36bb78b8dc45c7ae18602a871495ebcda7c",
-      "bc1q950b4e7b2ff7df703a689fbe1886777348e4f4",
-      "bc1q7379c55f53039f97797d0a6a15c90526cce929",
-      "bc1qb679fc380aec4c3c5931b21f8b82bb4cd8c45b",
-      "bc1q91e8dc918b1c187569028865edfd5f34bca5f4",
-      "bc1q3c5dd3b1b22a988f42b93683f34ee86df4ae77",
-      "bc1qbf0db6fb0f6cd58325406b7a92a07a318b3383",
-      "bc1qe1324592f716aefbd7981081494ff1e2044978",
-      "bc1qccf8e19328519d6dd1f95aba643e4a3535f087"
+      "bc1q85b99441d4c36dcbc7ff41f5c8d11bc39dd324",
+      "bc1q503035a0b59708aff0be62dd207e00c9763790",
+      "bc1q3fa3b5e85823c4c015f615371a9ed7c12382b5",
+      "bc1q83521b70b16844af592a9d4250dbdd76450731",
+      "bc1qb1d82ada01c23aba609b103c08591cb53a64d0",
+      "bc1qfd4d52d43c5f17e8c8984776f9dcb9beb6b5cd",
+      "bc1qe253e983b36002a8c83a2040320493438ceff5",
+      "bc1qdcd2bbaa1ae5190923e5f6630b723e1d8c81b8",
+      "bc1q201c37c1d6cfe2c21354f475bbd260446f5ae1",
+      "bc1q98562ce82c501eec94c06d085866191dd0a4d9",
+      "bc1qa5637938b7b0fa597eef84c525f2033d034dd3",
+      "bc1qc6a60cc7e01cb770d75b84e0623a93f22bca36",
+      "bc1q57aca6d1c80b3c069f828eadd5bac4bcbc2478",
+      "bc1q53f9194b699f0771d5876a7343afddf8e0b39c",
+      "bc1qe935a1390ef94c21ec1d17ffbd0c6ab623553a",
+      "bc1q2b1b83130d3a6f2dce2760e1dfa7031142d329",
+      "bc1q3f3a346bbb1b931a0d9a87e44b35abc70fabc1",
+      "bc1q0724f8db62ae7b8b105b8bf5c73c8f77eee287",
+      "bc1q00de2c0a71c80e64c517086d647a07fe1d0246",
+      "bc1q5447cd801e2a109649b0801958d491421cb9be"
     ],
     "input_amounts": [
-      0.4463,
-      0.3217,
-      0.2515,
-      0.1912,
-      0.1599,
-      0.3196,
-      0.3118,
-      0.2926,
-      0.4413,
-      0.3718,
-      0.2385,
-      0.3165,
-      0.113,
-      0.1014,
-      0.4534,
-      0.3216,
-      0.439,
-      0.3193,
-      0.3134,
-      0.0784
+      0.3871,
+      0.1085,
+      0.132,
+      0.2067,
+      0.1933,
+      0.3032,
+      0.156,
+      0.1348,
+      0.3547,
+      0.1522,
+      0.3888,
+      0.3824,
+      0.4248,
+      0.4065,
+      0.2178,
+      0.3385,
+      0.0615,
+      0.3879,
+      0.215,
+      0.1075
     ],
     "output_addresses": [
-      "bc1q3fcd06e3fa897d4e75e83cf59661d994a7defb"
+      "bc1q83cca45de01636b820034b1688ba6a17712670"
     ],
     "output_amounts": [
-      5.8012
+      5.0582
     ],
     "fee": 0.001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T01:24:19.003165",
+    "timestamp": "2026-09-24T01:54:19.440413",
     "src_ip": "185.220.101.42",
     "src_port": 8333,
     "dst_ip": "94.23.1.7",
     "dst_port": 8333,
-    "txid": "fe0a135a4048bc4187102437263074e0fdf6770c210b5b9f69a181533266f443",
+    "txid": "1dd5e244417bfa51418acadc9e9e51f6c1212d0f49a21ea5716a42fccb24fa83",
     "input_addresses": [
-      "bc1q33e70035f8dce81d11fa3e426146edf447d38d"
+      "bc1q31ab461e9fb50cb60897a788028d1f3ebe57d6"
     ],
     "input_amounts": [
-      5.5642
+      4.8618999999999994
     ],
     "output_addresses": [
-      "bc1q33ec8dbe8520b86469e247104a75597c2ff19c",
-      "bc1q8b2f5f24394ac5210f6a1d6a65eefb9ed70415"
+      "bc1q31bb3a662734896f74418ded2cbbc273ad5739",
+      "bc1q193fd51e40d7cb0b28c03de2c5640bc84ed8a1"
     ],
     "output_amounts": [
-      5.5142,
+      4.8119,
       0.049
     ],
     "fee": 0.001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T01:59:19.003165",
+    "timestamp": "2026-09-24T02:29:19.440413",
     "src_ip": "185.220.101.45",
     "src_port": 8333,
     "dst_ip": "94.23.1.8",
     "dst_port": 8333,
-    "txid": "81c268cb6770338cf9e290bc38031def81e4819571e536c454aa11f6ef0b5b99",
+    "txid": "0140ed8f365402a922988ed420db79e8e2bec913f5374ee7c35ac8baa9d482e8",
     "input_addresses": [
-      "bc1q33ec8dbe8520b86469e247104a75597c2ff19c"
+      "bc1q31bb3a662734896f74418ded2cbbc273ad5739"
     ],
     "input_amounts": [
-      5.5142
+      4.8119
     ],
     "output_addresses": [
-      "bc1q8f5f4eb41c0046081f35f3b204bc0d58a57ba3",
-      "bc1q7578967c9555aebe4b81d3a34b8d70bffded2a",
-      "bc1qe86968fce365b66439209d8c2e869472eb4324",
-      "bc1q597e59c6d8e8e441dd12f0061a8974452edae0",
-      "bc1qc3ba6477dcac48e42b3377495c2e9d91b42585",
-      "bc1qafe33fc25aaf1fc1952197d353488737bcad4c",
-      "bc1qe86779a2ebdc4162392c01a10c06ed5f0067de",
-      "bc1q88a603e56a674cc947ba42d7b0ec6741a16e34",
-      "bc1q8ff25fab68ac82d33ffa31676ca4342bea63b3"
+      "bc1q62288080a4f7cc1388165e6f411cee519530be",
+      "bc1q1c83d20d833940aded8bd9c20b5f729d882dd2",
+      "bc1q22b7f49dc2740a37f862965f09b61890a0a5a1",
+      "bc1q59fa53d0a62bf2c369fb41a046bfd90e93bebc",
+      "bc1q4e6fb6e94402984d6508e7ea1b7b294550b3b6",
+      "bc1q74d57c176c367844da4c2ac682218d67fec39d",
+      "bc1q0dbb596bf91f5a156b86fa97db308dcc532b1c",
+      "bc1qd6063fee92950828fb54a2504a5d24f394b61a",
+      "bc1q9bfad911de7e1ddd6aecdc8ce1a697f5aa66c4",
+      "bc1q5e892e1bd4cf866117a535bcde9943e748d74d",
+      "bc1qf74185ad936d282ce919cf03b206f68fac5c1a",
+      "bc1q2e7e1954b715ff4c370119db9cce5eac77ff9f"
     ],
     "output_amounts": [
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6127,
-      0.6076
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.401,
+      0.3959
     ],
     "fee": 0.005,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:24:19.003165",
+    "timestamp": "2026-09-24T03:54:19.440413",
     "src_ip": "103.245.236.12",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "506ee645eeba1a89a975f5164ebf7ec35709f8aabb4a86ec2e3a7f7d1eddf8ec",
+    "txid": "5ea4e5d29b833f9ceeb36e926717caef9aa34ffde312b02140b8d9f8a81388cb",
     "input_addresses": [
-      "bc1q740a878a974c073dae1c9912312d6127b906f5"
+      "bc1q34c41e3c65909244a15ee0b0d48d4ee10e6de2"
     ],
     "input_amounts": [
-      23.1194
+      23.0386
     ],
     "output_addresses": [
-      "bc1q9736f9e8ba28228e8a66bc4779e05697cab5e1",
-      "bc1q9781a44226917f018ad13d5f984ac271628cec"
+      "bc1q28eee9457a2eebc1c4291f5e8cf9ea3fa8cdcc",
+      "bc1q9a9f6114ede9697507136cd3d5552c762ff1ba"
     ],
     "output_amounts": [
-      1.1799,
-      21.9375
+      1.2254,
+      21.8112
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:28:19.003165",
+    "timestamp": "2026-09-24T03:57:19.440413",
     "src_ip": "194.26.29.80",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "c380f67f30d1ffd2ed2bbebb560a560ffe4b401e7f4b89df4a009b76ce0612d5",
+    "txid": "8539edd0fa23817d7ebf790d81f72180e41046eb2b4c8e6ed25f69f8654681b0",
     "input_addresses": [
-      "bc1q9781a44226917f018ad13d5f984ac271628cec"
+      "bc1q9a9f6114ede9697507136cd3d5552c762ff1ba"
     ],
     "input_amounts": [
-      21.9375
+      21.8112
     ],
     "output_addresses": [
-      "bc1q2532b8affe34bbc37f0cd5766a4678df37b858",
-      "bc1q2d1d105ef1242c62dd98137755a5a9d1d72dda"
+      "bc1qfa65106ebcb0710f91988b9842041b8d8c0df1",
+      "bc1qe7f1cc08dac365cbc695c432cb7b3b0d1f5e6d"
     ],
     "output_amounts": [
-      1.0973,
-      20.8382
+      0.6636,
+      21.1456
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:34:19.003165",
+    "timestamp": "2026-09-24T04:03:19.440413",
     "src_ip": "103.245.236.12",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "2599c0b7fb21474024328ba4a934c74a4a69a4d40036b7d98a5738bad84ad0ea",
+    "txid": "b86d913cd0a1640bed4e0b9b2befbd120571d19715c0d5ad22943153c7aa81ca",
     "input_addresses": [
-      "bc1q2d1d105ef1242c62dd98137755a5a9d1d72dda"
+      "bc1qe7f1cc08dac365cbc695c432cb7b3b0d1f5e6d"
     ],
     "input_amounts": [
-      20.8382
+      21.1456
     ],
     "output_addresses": [
-      "bc1q57e8c28deb25712bd2c42987a06c3915f28724",
-      "bc1q5d613fc7c77a3c5c4c4e03f58fbb40c6af2f4b"
+      "bc1q1b4624ce4980596c4e2a810ba6fee26899da11",
+      "bc1qdc4a41be97285c70339a3276183c3bd214a493"
     ],
     "output_amounts": [
-      0.9556,
-      19.8806
+      0.824,
+      20.3196
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:40:19.003165",
+    "timestamp": "2026-09-24T04:14:19.440413",
     "src_ip": "194.26.29.80",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "b4bce4d1da164c089c0a4a33bc5a03e2e0865addd7d5401521bbb0b963b8b622",
+    "txid": "4c75ca407bc3c93e5a9d40252d771d9dd1b60dc32812af579d317c7e18c903fb",
     "input_addresses": [
-      "bc1q5d613fc7c77a3c5c4c4e03f58fbb40c6af2f4b"
+      "bc1qdc4a41be97285c70339a3276183c3bd214a493"
     ],
     "input_amounts": [
-      19.8806
+      20.3196
     ],
     "output_addresses": [
-      "bc1q1431606eb635c1396c323e23209e201ad49186",
-      "bc1qc71e9e86953a703db68eebe0856b42d05b7207"
+      "bc1q6f42bf73dfc6f36a6037fe657acb1721177623",
+      "bc1q2b0e28de1ab910007038ff0463a5429470b077"
     ],
     "output_amounts": [
-      0.6642,
-      19.2144
+      0.8942,
+      19.4234
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:48:19.003165",
+    "timestamp": "2026-09-24T04:26:19.440413",
     "src_ip": "103.245.236.12",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "8a9d34a1d29c03a9f0bf731c7e97eff3174b1f9c0f9007b159c7dcb77ea7659f",
+    "txid": "e4903f6782bc8ed575fdc90d907d79022dae3110f4cdb4c07dadf41d80346e50",
     "input_addresses": [
-      "bc1qc71e9e86953a703db68eebe0856b42d05b7207"
+      "bc1q2b0e28de1ab910007038ff0463a5429470b077"
     ],
     "input_amounts": [
-      19.2144
+      19.4234
     ],
     "output_addresses": [
-      "bc1q26888852d91216e52a9a4107bc1598bab01a6a",
-      "bc1qf6aa7fe47d4b66ae3c82748436843e4cfe1a63"
+      "bc1q065c8a0ed740fbca3ec2eb197538096f6cabcf",
+      "bc1qd246833957d9c999db0797d67f303ef99a254a"
     ],
     "output_amounts": [
-      0.7118,
-      18.5006
+      0.7081,
+      18.7133
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T03:56:19.003165",
+    "timestamp": "2026-09-24T04:33:19.440413",
     "src_ip": "194.26.29.80",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "20bd8a726a45c83cd43f8db7865a4877d0cd0fdfb3a52d57f4d308e4ec8d6e01",
+    "txid": "7afbfc0b1c025681b51f17d19c1cc1e9501b046391d0cf626890d992a2d1a3dc",
     "input_addresses": [
-      "bc1qf6aa7fe47d4b66ae3c82748436843e4cfe1a63"
+      "bc1qd246833957d9c999db0797d67f303ef99a254a"
     ],
     "input_amounts": [
-      18.5006
+      18.7133
     ],
     "output_addresses": [
-      "bc1qa09cde36a59c760297c72dff5930917995e7af",
-      "bc1q3063d617bb85a74b441ce40e6a5f8682bcd466"
+      "bc1qbc5fba3b862aec6f77640ed999430d4d5bc66c",
+      "bc1q70e7c49a876256af69e1fea96cba55a98e958b"
     ],
     "output_amounts": [
-      1.7079,
-      16.7907
+      0.997,
+      17.7143
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T04:00:19.003165",
+    "timestamp": "2026-09-24T04:38:19.440413",
     "src_ip": "103.245.236.12",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "e1f0bb61f040c177f9d9fc5142a451acd94f4db3c86a8977c641e19934be5703",
+    "txid": "fd3a53f5cda735e473a9016ec5696b3636d756463b804147fce776bf74501dd1",
     "input_addresses": [
-      "bc1q3063d617bb85a74b441ce40e6a5f8682bcd466"
+      "bc1q70e7c49a876256af69e1fea96cba55a98e958b"
     ],
     "input_amounts": [
-      16.7907
+      17.7143
     ],
     "output_addresses": [
-      "bc1q9a5fc7cecbe9237418fd11968c4ce5b8a1844e",
-      "bc1q94e28253fc423613afeb8588d110d227d26b7e"
+      "bc1q697f0ef472cfe80ff5b9ae85409e6b756be1ff",
+      "bc1qb3a4ff050789812e8b6995f3f8e57e1cb349c3"
     ],
     "output_amounts": [
-      1.7458,
-      15.0429
+      0.5239,
+      17.1884
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T04:07:19.003165",
+    "timestamp": "2026-09-24T04:41:19.440413",
     "src_ip": "194.26.29.80",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "fceb93a14db72cd5ef92c5d0d03182b0ff169bb37f243a3410b9aff550327063",
+    "txid": "b3afd9d6ef3e509c16fc21efdcaded7e4a4439ddbcba972b0f7f6fb1c90cf73d",
     "input_addresses": [
-      "bc1q94e28253fc423613afeb8588d110d227d26b7e"
+      "bc1qb3a4ff050789812e8b6995f3f8e57e1cb349c3"
     ],
     "input_amounts": [
-      15.0429
+      17.1884
     ],
     "output_addresses": [
-      "bc1q4d00c201e4173666d83039c1c533d8649fc1eb",
-      "bc1qf198d4d7549acf8bf98d7286fb889d1507e2cd"
+      "bc1qee6541629044dcfe7a4b4bbff8df9be4df1551",
+      "bc1q4defc8a5896346186955cf393f918fc0eb1924"
     ],
     "output_amounts": [
-      0.8314,
-      14.2095
+      0.5479,
+      16.6385
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T04:12:19.003165",
+    "timestamp": "2026-09-24T04:45:19.440413",
     "src_ip": "103.245.236.12",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "291b858df1494e6780c5c388c24e4a6e15cfd5d5b1d8b324e01f183a354e1058",
+    "txid": "06dc97bccc486516bf0de0c76ea2e1248785cbd1431b51a6c9cdf18535bb520a",
     "input_addresses": [
-      "bc1qf198d4d7549acf8bf98d7286fb889d1507e2cd"
+      "bc1q4defc8a5896346186955cf393f918fc0eb1924"
     ],
     "input_amounts": [
-      14.2095
+      16.6385
     ],
     "output_addresses": [
-      "bc1q90d4ed357fe55d68677b0ec48025193f685bd2",
-      "bc1q4d4a72c2610c24f13ed8cf25b574a52a8b68df"
+      "bc1qd2e4a9c465f9409abf455959a9cb9e007fb571",
+      "bc1qc86f82715c9af2e454ef8698c01e192c6a491a"
     ],
     "output_amounts": [
-      0.5568,
-      13.6507
+      0.7876,
+      15.8489
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T04:15:19.003165",
+    "timestamp": "2026-09-24T04:56:19.440413",
     "src_ip": "194.26.29.80",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "fd106b5682830bcdfff8f6f298dd21ec6f1ef4c86578c8f26afebb7a7d8b8163",
+    "txid": "30526603028ea491816d389b9d55357337d5ae995780a62ad29198bb03254035",
     "input_addresses": [
-      "bc1q4d4a72c2610c24f13ed8cf25b574a52a8b68df"
+      "bc1qc86f82715c9af2e454ef8698c01e192c6a491a"
     ],
     "input_amounts": [
-      13.6507
+      15.8489
     ],
     "output_addresses": [
-      "bc1q93bac6db530932e566c280bab7e0f17b9ed9d5",
-      "bc1q912a740a0e2341b6f2324ee3734e4c328b3cac"
+      "bc1qbcbdaa44e36a4c73568b4449225c9468140693",
+      "bc1q8e8e3104636719518a597980792e001df80ad0"
     ],
     "output_amounts": [
-      0.8288,
-      12.8199
+      1.6098,
+      14.2371
     ],
     "fee": 0.002,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T05:24:19.003165",
+    "timestamp": "2026-09-24T05:54:19.440413",
     "src_ip": "198.51.100.88",
     "src_port": 8333,
     "dst_ip": "52.128.40.10",
     "dst_port": 8333,
-    "txid": "1266530cfed234e48f7543f1bcd3b77d48db2f602bfd2b93f954cc20ee7cb6cf",
+    "txid": "0e0dbf176c02f6638b2cd289354117e71bdfaae6cced77305ee4a9b5bfff9e74",
     "input_addresses": [
-      "bc1qd92be6048b790002078e97c8d6e66d00d747fc",
-      "bc1q6ec8a232859aa0bb116e1b96bf341cd0d01969",
-      "bc1q5573701e08d607d3168c437d5e702f447029ca",
-      "bc1q48553728646f4953f6ff960b00dc043c9dd586",
-      "bc1qcf1716106a7a824558fe6a6e577df09ce7e93e",
-      "bc1q6b882c6a7fe221b8c7bb6b6c7b0ff27cbd53d5",
-      "bc1q564b632080ebd213bdc80a855cc6705fe9cb0f",
-      "bc1q70228fbd3ae1a78d7851a838a1f6bb4e0c7aba",
-      "bc1qa8c29ad927802decd2a9bcacf5b7caf7f297c6",
-      "bc1q8998ccb6553adbef5bcbc66061b6a7c073e3be"
+      "bc1qa12f32b6be5e16bcf1eb0389f50c91368ca078",
+      "bc1q1799eb30312181ea70b10c799af5cf9fb2c6ba",
+      "bc1q4c0dd9409aa027ecf403eb160754c654c96680",
+      "bc1q7da072692ceb21240ba4a42973b3e4d2db54e3",
+      "bc1qeb62ae13df2ab01bea801b165a6669fa646c30",
+      "bc1qd90c6678d86cfe67a1cefb7e507cd78ece69c4",
+      "bc1qdf5bb5a3ff9cf5ece5bae0c224945a937b48d7",
+      "bc1q3fd0b99fa0711a4ec66d1333a8701b0b93e758",
+      "bc1q3bcf7995e504b334de626cf1e2386818681df5",
+      "bc1q7586bf969276d69c8bf3244cd7bb251797864f"
     ],
     "input_amounts": [
-      0.5213,
-      0.523,
-      0.5189,
-      0.5292,
-      0.5299,
-      0.5225,
-      0.5375,
-      0.5234,
-      0.5113,
-      0.5137
+      0.5158,
+      0.5294,
+      0.5159,
+      0.5447,
+      0.5333,
+      0.5239,
+      0.5416,
+      0.5138,
+      0.5447,
+      0.5118
     ],
     "output_addresses": [
-      "bc1q0b7dd7041248c6ac17ba0437e647352d5b3e8e",
-      "bc1qd69325af219d1542e7b5ec4e831bcff589adae",
-      "bc1q05ae1cd72dbba400fdf605e98d84c7192420db",
-      "bc1q27fb0c35fff577cb7db22bbd56d8164962aacc",
-      "bc1q6c944615dd3c91150b3edb942c0b043250eb17",
-      "bc1q10c1c70912d6ade33439234224e0f8391c1da6",
-      "bc1q0f5c435f9468046a0548bbd664872f365ff3a3",
-      "bc1q1a8607b3ae3b9c6778c64eba0bf091a6241213",
-      "bc1q8bac8e430a8c8ed619ca87d2fde4d0b9048540",
-      "bc1q7b1b0b592af5640a301bab7209cbcb6cb5ac64",
-      "bc1q36658ec342391127a0531e44078e45fdb120de"
+      "bc1qee0a9ec8455b38863d3132fef683ffd69013c7",
+      "bc1q222b7550007bb367dad1962bc6e71fdbbb0259",
+      "bc1qe02d00a7c663acc3245646022776efdac9165d",
+      "bc1qc5c8992a0ca72e8edf9846222920598b4c025c",
+      "bc1qd6f06e0fa961afe00025f3b457564f2bebe907",
+      "bc1qe457bb931cf764e015257e9876dd63483547cb",
+      "bc1qdda9d0413cb96b70355f035e70082669e59eda",
+      "bc1qbe970f5e9b8b47f7eacfa2e805b34d18457303",
+      "bc1q022307ecef9f687d5a0edaf1ae2b2bc519ad68",
+      "bc1qd046a0a749495be4074b149a76f9e59285e3e2",
+      "bc1q74e3ca0ddb736203f295e793253f8f5a0973d5"
     ],
     "output_amounts": [
       0.5,
@@ -416,417 +422,417 @@
       0.5,
       0.5,
       0.5,
-      0.2107
+      0.2549
     ],
     "fee": 0.02,
     "script_type": "P2WSH"
   },
   {
-    "timestamp": "2026-09-24T06:24:19.003165",
+    "timestamp": "2026-09-24T06:54:19.440413",
     "src_ip": "52.128.40.10",
     "src_port": 8333,
     "dst_ip": "142.250.190.1",
     "dst_port": 8333,
-    "txid": "708ff25c262bf791ab8d64a0c3e90e4ace525d13932d91151bf8d7d6fdd9aa70",
+    "txid": "279b40490317f40aa55b703c66a824cf28c83fc59e911071209e27e9b99d490f",
     "input_addresses": [
-      "bc1q5c9c7fc62c675b203954d34f147e947675cdf2",
-      "bc1q29b4e3270b9851c28d583ada2bdc11ad365c62",
-      "bc1q159b24584ba98c37da652b717c691ffbe89073",
-      "bc1q576bed8d2aff27b2aed412174fe8e277cdb3f2",
-      "bc1q03bf8827c5b8454fcfe1c532b8a514e0a9199a",
-      "bc1q9a4af30fe9960df25cc9e54ed342c3cc58835e",
-      "bc1qdd6078e7ed3b7f2559b5bd295fb61a9be35f0a",
-      "bc1q0c5968559d1262d714465f9ed976543a5dc5c6",
-      "bc1qf426126eaa1f592dfdfb4b73a0061ae8adec64",
-      "bc1qfb0649ef161a0207cf8c07236a80a935ec6819",
-      "bc1q5a3571c7890e39cc3cb9e4c0bd7ceb196c95cf",
-      "bc1qd6b9fd87100d5bb16e43ce35243059ce74b575",
-      "bc1q38f76b900acbbc8156059be1f5f17d53550707",
-      "bc1q6ac2edda5ef5c069e2aea423af73229021c059",
-      "bc1q9e28527b000b650f8f00af58fa54bb592c25bd"
+      "bc1q31b328f3b66735dd3a665fe1e6340fc327795c",
+      "bc1qb12d317e447c6ac5d9156794ef8e2a47ef9243",
+      "bc1q1149b8fb19eafdf1c713e0b71621fd6fb1c1ef",
+      "bc1q30a42201118f3e7441a659b2d34455b1bd23fc",
+      "bc1q6c033041b0934fb14baf899663a3e4627b6bd8",
+      "bc1q40399c42243b5c5ab65e5d7ba390d2283f2a2e",
+      "bc1qcad0190d42c086194fcb4f401d7a0cc13fd2a0",
+      "bc1qa99c780b913e792f38caeb142788f80eacb887",
+      "bc1qa23a36c0887b67a91cf10e5863add1f924679d",
+      "bc1q156e1056ce901371a320d3e3f7030ccfc08d5b",
+      "bc1q946581551a5e7eaa32d9fe081087c6160c0890",
+      "bc1qa6d8de25e6cf7335aa09bffe3240e257d981f4",
+      "bc1qe51612c2e6a85494a5c94ba977816fefd5707c",
+      "bc1q021ce65cba28baa956946833c1e239c9c6b33d",
+      "bc1q23c17822b3a300918d9de688dd891e1e796078"
     ],
     "input_amounts": [
-      0.284,
-      0.285,
-      0.1859,
-      0.3303,
-      0.4919,
-      0.11,
-      0.3271,
-      0.1349,
-      0.4194,
-      0.3883,
-      0.4701,
-      0.4571,
-      0.2869,
-      0.1116,
-      0.1334
+      0.1173,
+      0.3934,
+      0.1366,
+      0.1387,
+      0.1292,
+      0.4678,
+      0.3571,
+      0.3145,
+      0.078,
+      0.1122,
+      0.3968,
+      0.1368,
+      0.0693,
+      0.1306,
+      0.1114
     ],
     "output_addresses": [
-      "bc1q1e9923336791353cefde34f900c4478b081ee3"
+      "bc1q9052fec22d17aa0604a8e92f27bdebcc80184d"
     ],
     "output_amounts": [
-      4.4149
+      3.0887
     ],
     "fee": 0.001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:03:19.003165",
+    "timestamp": "2026-09-24T07:33:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "4dec4d5c6910ce1c0439a4d1ccc67d11989d9028a9697ca62bd76a744b902640",
+    "txid": "9d992b34ef7dd1792764d7680f6e4203a4450a0cab9a168c67fe1906078f8338",
     "input_addresses": [
-      "bc1qb8c4f76e321be3c6184f919d93cb7b0f382229"
+      "bc1q42bcf96c3087a31a7cf255807bd0fd31f39fa7"
     ],
     "input_amounts": [
-      0.06859
+      0.08373
     ],
     "output_addresses": [
-      "bc1q6ed8079b5e3264ae2c4a508afd7bacdc6ff080",
-      "bc1qdcf6114c8a51037d8c1feaba9d97782eeff7c7"
+      "bc1qee690600c608bb432546506f1e59166151ccff",
+      "bc1q5c45c0666d21439969b17906e88470147961af"
     ],
     "output_amounts": [
-      0.02052,
-      0.04797
+      0.03152,
+      0.05211
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:05:19.003165",
+    "timestamp": "2026-09-24T07:35:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "fc6b777862022c6a6858c8b5a683e13615d4733339fa82bb875d9fa855f3e089",
+    "txid": "146ec8921736ea73b67cf9dcf2f1ef3f286b9b19a73c54ab4e94068dc64de352",
     "input_addresses": [
-      "bc1qc7dbeddc3ed3003ee4aff4ab2356020067dcc3"
+      "bc1q001f285da6d8b73f4657cf1612199d211695b5"
     ],
     "input_amounts": [
-      0.0971
+      0.3406
     ],
     "output_addresses": [
-      "bc1q08e741f789b9da3e0c1f5b35dde21ff0140712",
-      "bc1q8a440b372c51df0869f629acf82aa2a104bddc"
+      "bc1qb684b73f689e4bda1102ff0a5218231cb05ddf",
+      "bc1q1ab065406df954ac1a7280ffda0558141ee5f3"
     ],
     "output_amounts": [
-      0.02672,
-      0.07028
+      0.31309,
+      0.02741
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:06:19.003165",
+    "timestamp": "2026-09-24T07:36:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "d90c4aa6fe48fe681663e3b9dec5b8a4213f32c1658c4887b1a492be2d3c022a",
+    "txid": "2040bc0043ca6f11197a9e6585af4f090ffd9d9817985a3e673a289ce372004c",
     "input_addresses": [
-      "bc1q89d7be705bed30bcfda9b3c80ec390aa662434"
+      "bc1qfd1278414e8e2c7a8404ba9eb621b09aaacc51"
     ],
     "input_amounts": [
-      0.03925
+      0.13883
     ],
     "output_addresses": [
-      "bc1q751d45164ff3c5c6bfc9d54b41831fbe22b259",
-      "bc1q71143ea07428bb9039133b6ca6a3f3c1652f0f"
+      "bc1q6b161ec6760298274656b3f6519855e8e88e8c",
+      "bc1q242906c47d4483f5328c38760e30edc6238e12"
     ],
     "output_amounts": [
-      0.00512,
-      0.03403
+      0.07933,
+      0.0594
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:08:19.003165",
+    "timestamp": "2026-09-24T07:38:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "a7f3d3df310e966111422f1d048334ee9b5a61699965d50f655e3ac2c2840ffb",
+    "txid": "48d6f82bbd88042d523b5dbf22fdf03d55286d1797422fbbd4292b8e0b57bca9",
     "input_addresses": [
-      "bc1qa4f3f103e9f844f0ba03c7d75e0973888693c7"
+      "bc1qcf17ca517eb7f4da97c19474666f57e7038469"
     ],
     "input_amounts": [
-      0.23407
+      0.2867
     ],
     "output_addresses": [
-      "bc1q58f1f0164302d7246fcb0e65ce492328d2e0d1",
-      "bc1q5c80b3c7952672df73e13d1dc09117c7655c18"
+      "bc1q848b5863a7e6b0264bf95ad295f659f4e11274",
+      "bc1qa502f033d8b8374b1582bf85ffcd8166e74c45"
     ],
     "output_amounts": [
-      0.20914,
-      0.02483
+      0.20916,
+      0.07744
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:09:19.003165",
+    "timestamp": "2026-09-24T07:39:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "9fec43d06c46436c349eca906ff736567b2f3c8a552b73aa4367f5a1db721b7d",
+    "txid": "528c1a24472e4e8c57119160603e3cb03f207b2b32f7f9c704e9e6e6e22e43d8",
     "input_addresses": [
-      "bc1q3fc8831fbfd6fc350abfed3b09143526890b69"
+      "bc1q32cd7b284ba3589187dc55043f63b627775aff"
     ],
     "input_amounts": [
-      0.08016
+      0.19057
     ],
     "output_addresses": [
-      "bc1qee585d8e54c13a703a1ac094b97a2f73db17bb",
-      "bc1qeec72091e5a2192372ff07ad4fa51bf29ed061"
+      "bc1qdba5719c4fd826a0948793c1fcc444a69c507c",
+      "bc1qab335b49d99cac152cad60fe5420ad1185c5ce"
     ],
     "output_amounts": [
-      0.03243,
-      0.04763
+      0.1343,
+      0.05617
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:11:19.003165",
+    "timestamp": "2026-09-24T07:41:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "0e57f48ac297992597b473c2ce5f5fa8ac8a20175600b2305336a736e48db6ab",
+    "txid": "d7154a19e7565afb5c731a78d02c28d7fca1da259d9cfd1bf035081fb0f380a3",
     "input_addresses": [
-      "bc1qd06bc746efe3431bcc81b678a2fe6ec79285c8"
+      "bc1q31bdda89aea523986baaccfffaa91e8c0129cf"
     ],
     "input_amounts": [
-      0.47494
+      0.10178
     ],
     "output_addresses": [
-      "bc1qdbfcdbdf5a153f545c17e42f97a56148b0c351",
-      "bc1q4a869924eaf97fdf19d84c22864c9dd3b42c8a"
+      "bc1q2b1179c542c032504436b6c9590551dc66ff6b",
+      "bc1q4bc2ee7334197226faf0dc62ed7b55ae2529cb"
     ],
     "output_amounts": [
-      0.44271,
-      0.03213
+      0.07683,
+      0.02485
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:12:19.003165",
+    "timestamp": "2026-09-24T07:42:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "9c2f6d9effc7bb83c7d1eb852cdcf6bd86c80e6e3d04e70a13111fe38359831c",
+    "txid": "0cb82cd931a08d000bb7e52fbd4ec311f8a01225f79deef26759a589fbfc2354",
     "input_addresses": [
-      "bc1q16a89adbf2ed7d68dfd1f77e0ec54c803880cb"
+      "bc1qffb6aa8f094d9bde7793feb2113d5b79b8aadc"
     ],
     "input_amounts": [
-      0.38282
+      0.35999
     ],
     "output_addresses": [
-      "bc1q29e2194d9d8c75aeaa2073c0ce085c1bc6af60",
-      "bc1q7241bc6e797c684875d825bbcf77b202c5250f"
+      "bc1qbed4f24c8269310c76e202746b33016aa4d860",
+      "bc1q9360ebab392c6de01af5e01ee1246af020699d"
     ],
     "output_amounts": [
-      0.33259,
-      0.05013
+      0.28169,
+      0.0782
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:14:19.003165",
+    "timestamp": "2026-09-24T07:44:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "cd8bbd5fc5158ab33a6ea094097d63d68dd46884937efdb6408bedf373054e27",
+    "txid": "1694f4e521791195a4c30a8d0d6596345dd3d18b70439ab61b1fc9bbf62ce06d",
     "input_addresses": [
-      "bc1q4837c025de17f0a188fff744ef34aac3a32892"
+      "bc1qd6ea44b48cf3488de2fb56a48b9558ae824db5"
     ],
     "input_amounts": [
-      0.16661
+      0.21944
     ],
     "output_addresses": [
-      "bc1qa4cad50d5b901ef8314b213d4451889a51f059",
-      "bc1q8c51a2788897f4c33530a25d1938dd4e0bb784"
+      "bc1q9fe7077c6908c11615f2f170ed4b0868a621ea",
+      "bc1q57a3df9265568146d85be060ca53a0348507cd"
     ],
     "output_amounts": [
-      0.14803,
-      0.01848
+      0.18958,
+      0.02976
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:15:19.003165",
+    "timestamp": "2026-09-24T07:45:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "9066376b642f83a3d45c44406afd7dee968bd79cc882760a56e41d469e3d8faa",
+    "txid": "99f54b83a16e4d3749434b0977b16fe97b71481aa5b1703ec8c215fde548f6c9",
     "input_addresses": [
-      "bc1q30e8323cbc0a77a3d4f4f3eb66557af8a77d3b"
+      "bc1q32a72c21da3d0bf9727a7db5b70424cd7dc9ef"
     ],
     "input_amounts": [
-      0.09511
+      0.33673
     ],
     "output_addresses": [
-      "bc1q5ae481abf425fc85b6a9c54fae4002cc8fc5c4",
-      "bc1q30848f1bde1df4efc7fd83279fe33e87cdd219"
+      "bc1q20eaeedc0b5b6432fdf6b4eaa98f48019f8e42",
+      "bc1q1db7914c351b7012fce2367fff72e987e8a246"
     ],
     "output_amounts": [
-      0.05314,
-      0.04187
+      0.31083,
+      0.0258
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:17:19.003165",
+    "timestamp": "2026-09-24T07:47:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "b72f31880a2691aedc87d08cca6a40a5859ccf186c3404e832988af0b0b11888",
+    "txid": "24a6bc67d7caf2d6776e8590e274a34094f0df0b768ab8d3b6b8b8d41f5bb419",
     "input_addresses": [
-      "bc1qefc57444b7a5f3024f6b275b070a0b0d2816ae"
+      "bc1qe8b46b189c252e213dc7651822f2a35a1703ee"
     ],
     "input_amounts": [
-      0.50028
+      0.35052
     ],
     "output_addresses": [
-      "bc1q8b0f99ee757e1255252008ccc172edb17366fb",
-      "bc1q0184d4db8ee358f24e78fe07bb908c5084bc13"
+      "bc1q5ca705c6212281a5d8bf831e84b8992df7b00a",
+      "bc1q6453514dafaab079c3deffd7b6f2edf67086aa"
     ],
     "output_amounts": [
-      0.41848,
-      0.0817
+      0.3354,
+      0.01502
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:18:19.003165",
+    "timestamp": "2026-09-24T07:48:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "04bc67c960626bb34e337bbb967622cfa5d3a8991cd3a0671fde00d90fca2e92",
+    "txid": "a1a2f7b5b749498ced40cff2d6d7040a21f15d39d4a97ed5b561afed1eb80e56",
     "input_addresses": [
-      "bc1q60d1f8d041ca81938a832d93aee825d85f15e5"
+      "bc1qe50bdd4d32dd67014dee370560bf70b1c27d2c"
     ],
     "input_amounts": [
-      0.2611
+      0.271
     ],
     "output_addresses": [
-      "bc1qfa77ef064e3af859ed04622ab5bdf9ecb20d98",
-      "bc1q81be0c7fb46986836c5d0966b6e06b67240b9e"
+      "bc1q4aadb10c6de461b1d92a6dd01f651ea10a2c96",
+      "bc1qa333bd5fa2b27ad6aee7bbcd1ef85bec1c4541"
     ],
     "output_amounts": [
-      0.17628,
-      0.08472
+      0.23883,
+      0.03207
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:20:19.003165",
+    "timestamp": "2026-09-24T07:50:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "30747100bedc1ff8233d04c0ae031ed94d1b9b7c2bbc406b16be495ad58beee6",
+    "txid": "bc70933b259f4abfd0b1196b59ed95cb4df92a49b54bd512608ca47c972482ea",
     "input_addresses": [
-      "bc1qe1c603a3bd2d2c8f32d18e19e86d75fa80ef7e"
+      "bc1q449de91da428c2962785ac6bfa1c8d3fe0a808"
     ],
     "input_amounts": [
-      0.41215
+      0.48774
     ],
     "output_addresses": [
-      "bc1q58fa270ce3a2d75d7390b48cf0829b9dc81aa6",
-      "bc1qd8f6152b21374fa48e0354ce9473e7e111bb53"
+      "bc1qdba05d929914ce33ffd11fe2e8e8e97899c9c0",
+      "bc1q8b23ab42bc99a47ee033e1fbced82f09e558f9"
     ],
     "output_amounts": [
-      0.3415,
-      0.07055
+      0.42615,
+      0.06149
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:21:19.003165",
+    "timestamp": "2026-09-24T07:51:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "40e3c09301a8671244482ddc236049ff581596d5b0cf86344dc2823853ed8974",
+    "txid": "350edab101c6ea80d05973a3e489f88e418e6b799e8111b8fc21f8d866adc5df",
     "input_addresses": [
-      "bc1q315d6f959963764c3b02fb293d48dc33e75810"
+      "bc1q2ce465b0503272e682984063bdb5c2177f507a"
     ],
     "input_amounts": [
-      0.49178
+      0.15854
     ],
     "output_addresses": [
-      "bc1qe3f2913cba4f147ef67282734e564876e260ea",
-      "bc1q4d4410438eb067566e7a4abfa253f2280d0bde"
+      "bc1qa08a331b66fa2033d5a2fbe13e78b85d0b8d45",
+      "bc1qb587b80b49c01f2646744d638f0c5a3d5bb6ef"
     ],
     "output_amounts": [
-      0.40502,
-      0.08666
+      0.14627,
+      0.01217
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:23:19.003165",
+    "timestamp": "2026-09-24T07:53:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "e7c4053dd57dc55272ca0775be41200865cbbd0537d5cf7786c7d8425ab14937",
+    "txid": "48d3455ff7a95e45022ae1cd83e6c9393977fefae4c4f1f792d8ce38008778e7",
     "input_addresses": [
-      "bc1q6073148761fc469226ec98be87f9e477799016"
+      "bc1q2dcc0965b6124639d2e75d0830be6b81c2b15d"
     ],
     "input_amounts": [
-      0.15085
+      0.36578
     ],
     "output_addresses": [
-      "bc1q985d27157364ead3a4ec7531dddaea1ce908a7",
-      "bc1q1263005d0244b4fd752831a67629797f3f00e3"
+      "bc1q36f57faddb7c8078654aa29f69833d32dcd71b",
+      "bc1qbff03a0df212747a169c26d17e8b4e9b9b78b2"
     ],
     "output_amounts": [
-      0.10603,
-      0.04472
+      0.34871,
+      0.01697
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
   },
   {
-    "timestamp": "2026-09-24T07:24:19.003165",
+    "timestamp": "2026-09-24T07:54:19.440413",
     "src_ip": "24.120.45.12",
     "src_port": 8333,
     "dst_ip": "86.128.90.4",
     "dst_port": 8333,
-    "txid": "4d34b815a9e6b59ff9b536b604e783cf342a2f776441ca1d18ba24aadda016d9",
+    "txid": "375e5acd420bbf37d34f88377836c9d7e6690694650b0289a8f956460806e292",
     "input_addresses": [
-      "bc1qdd02c42127403bd797c78d0bf8e0238101e01b"
+      "bc1q45e5dd285ffe75d5b3ac3b2bdde075b54f167b"
     ],
     "input_amounts": [
-      0.30518
+      0.1338
     ],
     "output_addresses": [
-      "bc1qb48a300e88608e6ed0519a4c3b74295bc38104",
-      "bc1q3d5a21074d557ad945f17847c78512b0ffeaed"
+      "bc1qe33975dd7a77bbde449ad3466826c521812f00",
+      "bc1q3df5f48863d4ceb4104c079a535e5c1a0fc2b0"
     ],
     "output_amounts": [
-      0.25456,
-      0.05052
+      0.05639,
+      0.07731
     ],
     "fee": 0.0001,
     "script_type": "P2WPKH"
