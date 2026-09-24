@@ -40,15 +40,11 @@ def get_model_card() -> Dict[str, Any]:
 
 
 @router.post("/evaluate")
-def run_evaluation(labels: str | None = None) -> Dict[str, Any]:
-    """Measure the stored pipeline output against a labels.csv (default: newest synthetic dataset)."""
-    from pathlib import Path
-
-    from beans.score.model_card import build_model_card, default_labels_path
-    path = Path(labels) if labels else default_labels_path()
-    if not path or not path.exists():
-        raise HTTPException(404, "no labels.csv found; generate a synthetic dataset first")
-    with db.connection() as conn:
-        card = build_model_card(conn, path)
-    db.audit("MODEL_EVALUATE", "MODEL", "model_card", {"labels": str(path.name)})
-    return {"status": "evaluated", "source": CARD_FILE.name, **card}
+def run_evaluation() -> Dict[str, Any]:
+    """Re-run the whole ML pipeline (train + out-of-fold evaluation) on the current database."""
+    from beans.api.rescore import rescore_all
+    result = rescore_all()
+    db.audit("MODEL_EVALUATE", "MODEL", "model_card", {"pipeline": result.get("pipeline_stats")})
+    if not CARD_FILE.exists():
+        raise HTTPException(404, "no labelled data to evaluate against")
+    return {"status": "evaluated", "source": CARD_FILE.name, **json.loads(CARD_FILE.read_text())}

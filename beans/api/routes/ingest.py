@@ -15,18 +15,15 @@ router = APIRouter(prefix="/ingest", tags=["Ingestion & Pipeline"])
 
 ALLOWED = {".csv", ".json", ".ndjson", ".jsonl", ".xml"}
 INBOX = settings.DATA_DIR / "inbox"
-DATA_TABLES = ["transactions", "net_observations", "wallet_profiles", "alerts", "feedback"]
+DATA_TABLES = ["transactions", "net_observations", "wallet_profiles", "alerts", "feedback", "seeds"]
 
 
 def _ingest(path: Path, source: str) -> Dict[str, Any]:
-    had_data = bool(db.scalar("SELECT COUNT(*) FROM transactions"))
-    result = ForensicPipeline().run_file_ingestion(path)
+    result = ForensicPipeline().run_file_ingestion(path)   # scores the whole DB, not just this file
     db.execute("INSERT INTO ingest_log (file, sha256, size_bytes, records, source) VALUES (?, ?, ?, ?, ?)",
                [path.name, hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size,
                 result.get("records_ingested", 0), source])
     db.audit("INGEST", "FILE", path.name, {"records": result.get("records_ingested"), "source": source})
-    if had_data:  # the pipeline scored only this file; rebuild alerts over the whole dataset
-        result["rescore"] = rescore_all()
     return result
 
 
@@ -52,9 +49,5 @@ def generate_synth_demo(n_tx: int = 1000, reset: bool = True) -> Dict[str, Any]:
             db.execute(f"DELETE FROM {t}")
     demo_dir = settings.DATA_DIR / "synth" / "demo"
     manifest = SyntheticDatasetWriter.generate_dataset(demo_dir, n_tx=n_tx)
-    result = _ingest(demo_dir / "transactions.csv", "SYNTHETIC_DEMO")
-    # synthetic data has ground truth → refresh the model card automatically
-    from beans.score.model_card import build_model_card
-    with db.connection() as conn:
-        build_model_card(conn, demo_dir / "labels.csv")
+    result = _ingest(demo_dir / "transactions.csv", "SYNTHETIC_DEMO")   # also trains + refreshes the model card
     return {"status": "success", "manifest": manifest, "pipeline_result": result}

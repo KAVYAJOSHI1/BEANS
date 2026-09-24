@@ -1,91 +1,131 @@
-from typing import Dict, Any, List, Tuple
+"""Fusion: wallet-level P(illicit) from all engine outputs + behaviour + network features.
+
+Training (when ground truth is available):
+  * StratifiedGroupKFold by entity: a criminal's wallets are never on both the train and test side.
+  * inside each fold: LightGBM on 75% of the training entities, isotonic calibration on the other 25%.
+  * out-of-fold calibrated probabilities are what the dashboard shows and what metrics are computed on.
+  * ablation: the same procedure without network-layer features (does network ↔ chain correlation help?).
+  * a second LightGBM predicts the typology (ransomware, peel chain, …) of illicit-looking wallets.
+Without labels, the persisted models from the last training run are applied.
+"""
+import warnings
+
+import joblib
+import numpy as np
+import pandas as pd
+from lightgbm import LGBMClassifier
+from sklearn.isotonic import IsotonicRegression
+from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.model_selection import GroupKFold, GroupShuffleSplit, StratifiedGroupKFold
+
 from beans.config import settings
 
-class MetaFusionEngine:
-    """
-    Fuses outputs from all 4 ML Engines + Network First-Spy Telemetry:
-    - E1: Cluster Risk Max/Mean
-    - E2: Anomaly Score (Isolation Forest)
-    - E3: Typology Probabilities (LightGBM/RF)
-    - E4: PPR Proximity & Decayed Taint
-    - Network: Bulletproof ASN, Impossible Travel, First-Spy Lead Time
-    """
+FUSION_MODEL = settings.MODELS_DIR / "fusion.joblib"
+warnings.filterwarnings("ignore", message=".*does not have valid feature names.*")
 
-    @classmethod
-    def fuse_entity_score(
-        cls,
-        address: str,
-        cluster_id: str,
-        e2_anomaly: float,
-        e3_typology: str,
-        e3_conf: float,
-        e4_ppr: float,
-        e4_taint: float,
-        network_meta: Dict[str, Any]
-    ) -> Tuple[float, float, str, Dict[str, float]]:
-        """
-        Returns: (risk_score_0_to_100, calibrated_confidence, severity, score_components)
-        """
-        # Engine contributions
-        e2_contrib = e2_anomaly * 25.0
-        
-        # Typology multiplier
-        typology_weight = 0.0
-        if e3_typology == "RANSOMWARE":
-            typology_weight = 35.0 * e3_conf
-        elif e3_typology == "PEEL_CHAIN":
-            typology_weight = 30.0 * e3_conf
-        elif e3_typology == "COINJOIN":
-            typology_weight = 20.0 * e3_conf
-        elif e3_typology == "EXCHANGE_SWEEP":
-            typology_weight = 0.0 # Legitimate baseline
 
-        # Seed proximity & taint
-        e4_contrib = (e4_ppr * 15.0) + (e4_taint * 15.0)
+def _lgbm(pos_weight: float):
+    return LGBMClassifier(n_estimators=250, learning_rate=0.05, num_leaves=15, min_child_samples=10,
+                          subsample=0.9, subsample_freq=1, colsample_bytree=0.8, scale_pos_weight=pos_weight,
+                          verbose=-1, random_state=42)
 
-        # Network indicators
-        net_contrib = 0.0
-        if network_meta.get("asn_type") == "BULLETPROOF":
-            net_contrib += 10.0
-        if network_meta.get("has_impossible_travel", False):
-            net_contrib += 10.0
-        if network_meta.get("asn_type") in ["VPN", "TOR_EXIT"]:
-            net_contrib += 5.0
 
-        raw_score = e2_contrib + typology_weight + e4_contrib + net_contrib
-        
-        # Dampen if legitimate exchange sweep
-        if e3_typology == "EXCHANGE_SWEEP":
-            raw_score = min(raw_score * 0.15, 12.0)
-
-        risk_score = round(min(100.0, max(0.0, raw_score)), 1)
-
-        # Calibrated Confidence calculation (model agreement + data completeness)
-        engines_active = sum([
-            1 if e2_anomaly > 0.4 else 0,
-            1 if e3_conf > 0.6 and e3_typology != "NORMAL" else 0,
-            1 if e4_taint > 0.1 or e4_ppr > 0.2 else 0,
-            1 if net_contrib > 0 else 0
-        ])
-        base_conf = 0.60 + (engines_active * 0.09)
-        calibrated_conf = round(min(0.98, max(0.50, base_conf)), 2)
-
-        # Severity classification
-        if risk_score >= settings.RISK_CRITICAL_MIN:
-            severity = "CRITICAL"
-        elif risk_score >= settings.RISK_HIGH_MIN:
-            severity = "HIGH"
-        elif risk_score >= settings.RISK_MEDIUM_MIN:
-            severity = "MEDIUM"
+def _oof(X: pd.DataFrame, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, members: list = None) -> np.ndarray:
+    pw = max(1.0, (y == 0).sum() / max((y == 1).sum(), 1))
+    oof = np.zeros(len(X))
+    for tr, te in StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42).split(X, y, groups):
+        fit_i, cal_i = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=1).split(tr, groups=groups[tr]))
+        fit_i, cal_i = tr[fit_i], tr[cal_i]
+        clf = _lgbm(pw).fit(X.iloc[fit_i], y[fit_i])
+        iso = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1)
+        if len(set(y[cal_i])) > 1:
+            iso.fit(clf.predict_proba(X.iloc[cal_i])[:, 1], y[cal_i])
         else:
-            severity = "LOW"
+            iso = None
+        raw = clf.predict_proba(X.iloc[te])[:, 1]
+        oof[te] = iso.predict(raw) if iso is not None else raw
+        if members is not None:
+            members.append((clf, iso))
+    return oof
 
-        components = {
-            "e2_anomaly_score": round(e2_contrib, 1),
-            "e3_typology_score": round(typology_weight, 1),
-            "e4_seed_proximity_score": round(e4_contrib, 1),
-            "network_sigint_score": round(net_contrib, 1),
-            "total_risk_score": risk_score
-        }
 
-        return risk_score, calibrated_conf, severity, components
+def _metrics(y, p) -> dict:
+    order = np.argsort(-p)
+    bins = np.linspace(0, 1, 11)
+    idx = np.clip(np.digitize(p, bins) - 1, 0, 9)
+    rel, ece = [], 0.0
+    for b in range(10):
+        m = idx == b
+        if m.any():
+            rel.append({"bin": f"{bins[b]:.1f}-{bins[b + 1]:.1f}", "n": int(m.sum()),
+                        "mean_predicted": round(float(p[m].mean()), 4), "observed_rate": round(float(y[m].mean()), 4)})
+            ece += m.mean() * abs(p[m].mean() - y[m].mean())
+    return {"pr_auc": round(float(average_precision_score(y, p)), 4), "roc_auc": round(float(roc_auc_score(y, p)), 4),
+            "precision_at_50": round(float(y[order[:50]].mean()), 4),
+            "precision_at_100": round(float(y[order[:100]].mean()), 4),
+            "recall_at_p50": round(float(((p >= 0.5) & (y == 1)).sum() / max(y.sum(), 1)), 4),
+            "precision_at_p50": round(float(y[p >= 0.5].mean()), 4) if (p >= 0.5).any() else None,
+            "ece": round(float(ece), 4), "base_rate": round(float(y.mean()), 4), "reliability": rel}
+
+
+def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series, network_cols: list[str]) -> tuple[pd.Series, pd.Series, dict]:
+    yv, gv = y.values.astype(int), groups.values
+    members: list = []
+    oof = _oof(X, yv, gv, members=members)
+    report = {"wallets": int(len(X)), "illicit_wallets": int(yv.sum()), "entities": int(pd.Series(gv).nunique()),
+              "illicit_entities": int(pd.Series(gv[yv == 1]).nunique()), **_metrics(yv, oof)}
+    no_net = [c for c in X.columns if c not in network_cols]
+    report["ablation"] = {"pr_auc_with_network": report["pr_auc"],
+                          "pr_auc_without_network": round(float(average_precision_score(yv, _oof(X[no_net], yv, gv))), 4)}
+
+    # typology of illicit wallets (grouped CV again)
+    ill = yv == 1
+    Xi, ti, gi = X[ill], typology.values[ill], gv[ill]
+    typ_oof = pd.Series("UNKNOWN", index=X.index)
+    typ_acc = None
+    if len(set(ti)) > 1 and pd.Series(gi).nunique() >= 4:
+        pred = np.empty(len(Xi), dtype=object)
+        k = min(4, pd.Series(gi).nunique())
+        for tr, te in GroupKFold(n_splits=k).split(Xi, groups=gi):
+            if len(set(ti[tr])) < 2:
+                pred[te] = ti[tr][0]
+                continue
+            m = LGBMClassifier(n_estimators=150, learning_rate=0.08, num_leaves=15, min_child_samples=3,
+                               class_weight="balanced", verbose=-1, random_state=42).fit(Xi.iloc[tr], ti[tr])
+            pred[te] = m.predict(Xi.iloc[te])
+        typ_acc = round(float((pred == ti).mean()), 4)
+        typ_oof.loc[Xi.index] = pred
+    report["typology_accuracy_grouped_cv"] = typ_acc
+
+    pw = max(1.0, (yv == 0).sum() / max(yv.sum(), 1))
+    final = _lgbm(pw).fit(X, yv)   # used for SHAP explanations
+    typ_model = (LGBMClassifier(n_estimators=150, learning_rate=0.08, num_leaves=15, min_child_samples=3,
+                                class_weight="balanced", verbose=-1, random_state=42).fit(Xi, ti)
+                 if len(set(ti)) > 1 else None)
+    FUSION_MODEL.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump({"model": final, "members": members, "features": list(X.columns), "typology_model": typ_model,
+                 "typology_default": ti[0] if len(ti) else "UNKNOWN"}, FUSION_MODEL)
+    # wallets flagged by the OOF model but not illicit in truth still need a typology guess for display
+    if typ_model is not None:
+        need = (typ_oof == "UNKNOWN") & (oof >= 0.3)
+        if need.any():
+            typ_oof.loc[need] = typ_model.predict(X[need.values])
+    return pd.Series(oof, index=X.index), typ_oof, report
+
+
+def predict(X: pd.DataFrame) -> tuple[pd.Series, pd.Series, dict]:
+    if not FUSION_MODEL.exists():
+        return pd.Series(0.0, index=X.index), pd.Series("UNKNOWN", index=X.index), {"unavailable": "no trained fusion model"}
+    b = joblib.load(FUSION_MODEL)
+    Xf = X.reindex(columns=b["features"], fill_value=0)
+    # calibrated ensemble of the cross-validation members (each: LightGBM + its isotonic calibrator)
+    ps = [iso.predict(clf.predict_proba(Xf)[:, 1]) if iso is not None else clf.predict_proba(Xf)[:, 1]
+          for clf, iso in b["members"]]
+    p = pd.Series(np.mean(ps, axis=0), index=X.index)
+    typ = pd.Series(b["typology_model"].predict(Xf) if b["typology_model"] is not None else b["typology_default"],
+                    index=X.index)
+    return p, typ, {"used_persisted_model": FUSION_MODEL.name}
+
+
+def final_model():
+    return joblib.load(FUSION_MODEL)["model"] if FUSION_MODEL.exists() else None

@@ -4,15 +4,15 @@ from fastapi.testclient import TestClient
 
 from beans.config import settings
 
-FIXTURE = settings.DATA_DIR / "synth" / "test_fixture" / "transactions.csv"
-
-
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
+def client(tmp_path_factory, dataset):
     settings.DB_PATH = tmp_path_factory.mktemp("db") / "api_test.duckdb"
     from beans.api.main import app
+    from beans.ingest.pipeline import ForensicPipeline
+    from beans.store.duck import DuckStore
+    ForensicPipeline(DuckStore(settings.DB_PATH)).load_sidecars(dataset)   # ground truth + seeds for training
     c = TestClient(app)
-    with open(FIXTURE, "rb") as fh:
+    with open(dataset / "transactions.csv", "rb") as fh:
         r = c.post("/api/ingest/upload", files={"file": ("fixture.csv", fh, "text/csv")})
     assert r.status_code == 200, r.text
     return c
@@ -54,9 +54,8 @@ def test_model_card_never_invents_numbers(client):
         assert card["engine_metrics"] == []
 
 
-def test_model_card_evaluation_measures_real_metrics(client):
-    labels = FIXTURE.parent / "labels.csv"
-    r = client.post("/api/modelcard/evaluate", params={"labels": str(labels)})
+def test_model_card_evaluation_measures_real_metrics(client, dataset):
+    r = client.post("/api/modelcard/evaluate")
     assert r.status_code == 200, r.text
     card = r.json()
     assert card["status"] == "evaluated" and card["engine_metrics"]
