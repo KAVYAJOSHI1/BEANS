@@ -1,4 +1,5 @@
 # BEANS — Master Roadmap & Solution Architecture
+#### **B**itcoin **E**ncryption, **A**nalysis & **N**etwork **S**ecurity
 ### SIH PS **26146** · AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic · NTRO
 
 > **What this file is.** It is the single source of truth for the team. It covers what the problem statement actually asks for, what our existing docs get right and wrong, the final architecture, every feature (prioritised), the ML design, the synthetic-data plan, the repo layout, the week-by-week build plan, the demo script, and the write-up outline.
@@ -9,7 +10,7 @@
 
 ## 0. TL;DR
 
-We build **BEANS**, an **offline, Linux-native** forensic pipeline:
+We build **BEANS (Bitcoin Encryption, Analysis & Network Security)**, an **offline, Linux-native** forensic pipeline:
 
 ```
 CSV/JSON/XML  →  Ingest + Validate + GeoIP/ASN enrich  →  Heterogeneous graph (IP ↔ TX ↔ Wallet ↔ ASN)
