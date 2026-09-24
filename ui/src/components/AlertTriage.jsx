@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, Filter, AlertCircle, CheckCircle, ExternalLink, X, ShieldAlert, Sparkles, Network, ArrowRight } from 'lucide-react';
 
-export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, setActiveTab, onInspectEntity }) {
+export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, onInspectEntity, onOpenGraph, onOpenTimeline, cases, onAddToCase, onCreateCase }) {
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,48 +196,62 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
           {selectedAlert.shap_top_features?.length > 0 && (
             <div>
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
-                SHAP Feature Attribution Waterfall
+                Feature contributions (SHAP): red pushes risk up, green pushes it down
               </span>
               <div className="space-y-1.5">
-                {selectedAlert.shap_top_features.map((sf, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200 text-xs">
-                    <span className="font-mono text-slate-700">{sf.feature}</span>
-                    <span className="font-bold text-rose-600">{sf.impact}</span>
+                {(() => {
+                  const feats = selectedAlert.shap_top_features.map((sf) => ({ ...sf, v: parseFloat(sf.impact) || 0 }));
+                  const max = Math.max(...feats.map((f) => Math.abs(f.v)), 1e-9);
+                  return feats.map((sf, idx) => (
+                    <div key={idx} className="text-xs">
+                      <div className="flex justify-between">
+                        <span className="font-mono text-slate-700">{sf.feature} <span className="text-slate-400">= {String(sf.value)}</span></span>
+                        <span className={`font-bold ${sf.v >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{sf.v >= 0 ? '+' : ''}{sf.v.toFixed(3)}</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded mt-0.5">
+                        <div className={`h-1.5 rounded ${sf.v >= 0 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${(Math.abs(sf.v) / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
+
+          {/* Engine Sub-Scores */}
+          {Object.keys(selectedAlert.engine_scores || {}).length > 0 && (
+            <div>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Engine scores</span>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {Object.entries(selectedAlert.engine_scores).map(([k, v]) => (
+                  <div key={k} className="p-2 rounded bg-slate-50 border border-slate-200 flex justify-between">
+                    <span className="text-slate-500">{k.replace(/_/g, ' ')}</span>
+                    <span className="font-bold text-slate-900">{typeof v === 'number' ? v.toFixed(2) : String(v)}</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Engine Sub-Scores */}
+          {/* Evidence */}
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
-              4-Engine Multi-Factor Breakdown
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500">E2 Anomaly:</span>
-                <span className="font-bold text-slate-900 ml-1">
-                  {selectedAlert.engine_scores?.e2_anomaly_score || 0} pts
-                </span>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Evidence</span>
+            <div className="text-xs space-y-1.5 bg-slate-50 border border-slate-200 rounded-lg p-3">
+              {selectedAlert.evidence?.txid && (
+                <div><span className="text-slate-500">Transaction: </span><span className="font-mono break-all">{selectedAlert.evidence.txid}</span></div>
+              )}
+              <div>
+                <span className="text-slate-500">First-relaying IP: </span>
+                <span className="font-mono">{selectedAlert.evidence?.first_spy_ip || 'unknown'}</span>
+                {selectedAlert.evidence?.first_spy_confidence != null && (
+                  <span className="text-slate-500"> (confidence {Number(selectedAlert.evidence.first_spy_confidence).toFixed(2)})</span>
+                )}
               </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500">E3 Typology:</span>
-                <span className="font-bold text-slate-900 ml-1">
-                  {selectedAlert.engine_scores?.e3_typology_score || 0} pts
-                </span>
-              </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500">E4 Seed Proximity:</span>
-                <span className="font-bold text-slate-900 ml-1">
-                  {selectedAlert.engine_scores?.e4_seed_proximity_score || 0} pts
-                </span>
-              </div>
-              <div className="p-2.5 rounded bg-slate-50 border border-slate-200">
-                <span className="text-slate-500">Network SIGINT:</span>
-                <span className="font-bold text-slate-900 ml-1">
-                  {selectedAlert.engine_scores?.network_sigint_score || 0} pts
-                </span>
+              <div>
+                <span className="text-slate-500">Path to seed: </span>
+                {selectedAlert.evidence?.path_to_seed?.length
+                  ? <span className="font-mono break-all">{selectedAlert.evidence.path_to_seed.map((a) => `${a.slice(0, 10)}…`).join(' → ')}</span>
+                  : <span className="text-slate-400">none found</span>}
               </div>
             </div>
           </div>
@@ -245,10 +259,10 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
           {/* Status Updater */}
           <div className="border-t border-slate-200 pt-4">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
-              Investigator Triage Action
+              Analyst verdict (confirmed / false-positive verdicts feed model retraining)
             </span>
             <div className="grid grid-cols-2 gap-2">
-              {['INVESTIGATING', 'RESOLVED', 'FALSE_POSITIVE'].map((st) => (
+              {['INVESTIGATING', 'CONFIRMED', 'FALSE_POSITIVE', 'RESOLVED'].map((st) => (
                 <button
                   key={st}
                   onClick={() => onUpdateStatus(selectedAlert.alert_id, st)}
@@ -264,18 +278,40 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
             </div>
           </div>
 
-          {/* Direct Navigation */}
-          <div className="pt-2 flex space-x-2">
+          {/* Case */}
+          <div className="flex items-center gap-2 text-xs">
+            <select id="case-pick" className="flex-1 border border-slate-200 rounded-lg px-2 py-2 bg-white">
+              <option value="">Add to case…</option>
+              {(cases || []).map((c) => <option key={c.id} value={c.id}>#{c.id} {c.case_name}</option>)}
+              <option value="new">+ New case from this alert</option>
+            </select>
             <button
+              className="px-3 py-2 rounded-lg bg-slate-900 text-white font-semibold"
               onClick={() => {
-                onInspectEntity(selectedAlert.entity_id);
-                setActiveTab('entity');
+                const v = document.getElementById('case-pick').value;
+                if (v === 'new') {
+                  onCreateCase({ case_name: `${selectedAlert.alert_type} · ${selectedAlert.entity_id.slice(0, 12)}`,
+                    incident_type: selectedAlert.alert_type.replace('_PATTERN', ''), notes: (selectedAlert.reasons || []).join('; '),
+                    suspect_entities: [selectedAlert.entity_id] });
+                } else if (v) {
+                  onAddToCase(v, selectedAlert.entity_id);
+                }
               }}
-              className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-xs shadow-md hover:bg-blue-700 transition-all flex items-center justify-center space-x-2"
             >
-              <span>Inspect in Entity 360</span>
-              <ArrowRight className="w-4 h-4" />
+              Add
             </button>
+          </div>
+
+          {/* Direct Navigation */}
+          <div className="pt-2 grid grid-cols-3 gap-2">
+            <button onClick={() => onInspectEntity(selectedAlert.entity_id)}
+              className="py-2.5 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 flex items-center justify-center gap-1">
+              Entity 360 <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onOpenGraph(selectedAlert.entity_id)}
+              className="py-2.5 rounded-xl bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200">Link graph</button>
+            <button onClick={() => onOpenTimeline(selectedAlert.entity_id)}
+              className="py-2.5 rounded-xl bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200">Timeline</button>
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
   const [caseName, setCaseName] = useState('');
   const [incidentType, setIncidentType] = useState('RANSOMWARE');
   const [notes, setNotes] = useState('');
+  const [suspects, setSuspects] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState(null);
 
   const handleCreate = (e) => {
@@ -14,10 +15,11 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
         case_name: caseName,
         incident_type: incidentType,
         notes: notes,
-        suspect_entities: []
+        suspect_entities: suspects.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean),
       });
       setCaseName('');
       setNotes('');
+      setSuspects('');
     }
   };
 
@@ -37,9 +39,10 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
       {/* Header */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Law Enforcement Case Files & Evidence Dossiers</h2>
+          <h2 className="text-lg font-bold text-slate-900">Cases & Evidence Packs</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Group suspect clusters, track chain of custody, and export court-admissible forensic packages with dataset SHA-256 hashes.
+            Group flagged entities into a case and export an evidence pack (PDF / JSON / Markdown). Each pack includes the
+            SHA-256 of the source files, an audit trail and a SHA-256 over the evidence itself.
           </p>
         </div>
       </div>
@@ -57,7 +60,7 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
               <label className="font-semibold text-slate-700 block mb-1">Case Operation Title:</label>
               <input
                 type="text"
-                placeholder="e.g., Operation LockBit Eclipse"
+                placeholder="e.g., Peel chain cluster C-812"
                 value={caseName}
                 onChange={(e) => setCaseName(e.target.value)}
                 className="w-full p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
@@ -72,10 +75,12 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                 onChange={(e) => setIncidentType(e.target.value)}
                 className="w-full p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white text-xs"
               >
-                <option value="RANSOMWARE">Ransomware Extortion</option>
-                <option value="THEFT_HACK">Exchange Hack / Theft</option>
-                <option value="MIXING_TUMBLER">Illicit Mixing Syndicate</option>
-                <option value="DARKNET_MARKET">Darknet Marketplace</option>
+                <option value="RANSOMWARE">Ransomware</option>
+                <option value="PEEL_CHAIN">Peel chain</option>
+                <option value="COINJOIN">Mixing / CoinJoin</option>
+                <option value="HACK_LAUNDERING">Hack / theft laundering</option>
+                <option value="DARKNET_MARKET">Darknet market</option>
+                <option value="UNKNOWN">Other</option>
               </select>
             </div>
 
@@ -87,6 +92,17 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="w-full p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="font-semibold text-slate-700 block mb-1">Suspect entities (wallets / IPs, one per line):</label>
+              <textarea
+                rows={3}
+                placeholder="bc1q…  (or use 'Add to case' from an alert)"
+                value={suspects}
+                onChange={(e) => setSuspects(e.target.value)}
+                className="w-full p-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white text-xs font-mono"
               />
             </div>
 
@@ -106,6 +122,7 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
           </span>
 
           <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+            {cases.length === 0 && <div className="p-6 text-center text-xs text-slate-400">No cases yet. Create one here or from an alert.</div>}
             {cases.map((c) => (
               <div key={c.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:bg-slate-50 transition-colors">
                 <div>
@@ -116,17 +133,25 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                       {c.incident_type}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-1">{c.notes || 'Forensic investigation case active.'}</p>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-1">{c.notes || 'No notes.'}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {(c.suspect_entities || []).length} suspect entities · {c.alert_count || 0} linked alerts · {c.status}
+                  </p>
                 </div>
 
                 <div className="flex items-center space-x-2 w-full sm:w-auto">
                   <button
                     onClick={() => onExportDossier(c.id)}
-                    className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-slate-900 text-white font-semibold text-xs shadow-sm hover:bg-slate-800 transition-all flex items-center justify-center space-x-1.5"
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export Dossier</span>
+                    Preview
                   </button>
+                  <a href={`/api/cases/${c.id}/export?fmt=pdf`}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold text-xs hover:bg-slate-800 flex items-center gap-1">
+                    <Download className="w-3.5 h-3.5" /> PDF
+                  </a>
+                  <a href={`/api/cases/${c.id}/export?fmt=json`} download={`BEANS_case_${c.id}.json`}
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200">JSON</a>
                 </div>
               </div>
             ))}
@@ -138,10 +163,10 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-bold text-slate-900 uppercase">LE Dossier Generated: {exportResult.case_name}</span>
+                  <span className="text-xs font-bold text-slate-900">{exportResult.case_name} · evidence SHA-256 <span className="font-mono">{exportResult.evidence_sha256?.slice(0, 16)}…</span></span>
                 </div>
                 <button
-                  onClick={() => downloadReportFile(exportResult.markdown, `BEANS_LE_DOSSIER_${exportResult.case_id}.md`)}
+                  onClick={() => downloadReportFile(exportResult.markdown, `BEANS_case_${exportResult.case_id}.md`)}
                   className="px-3 py-1 rounded bg-blue-600 text-white text-xs font-bold shadow-sm hover:bg-blue-700 flex items-center space-x-1"
                 >
                   <ArrowDownToLine className="w-3.5 h-3.5" />

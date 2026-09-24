@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { UploadCloud, Sparkles, FileSpreadsheet, FileCode, CheckCircle, AlertOctagon, ArrowRight, Play } from 'lucide-react';
 
-export default function IngestStudio({ onUploadFile, onGenerateDemo, loading, lastIngestResult }) {
+export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSeeds, loading, lastIngestResult }) {
+  const [seedFile, setSeedFile] = useState(null);
   const [synthTxCount, setSynthTxCount] = useState(500);
   const [selectedFile, setSelectedFile] = useState(null);
 
@@ -35,11 +36,11 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, loading, la
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center space-x-2 text-xs font-bold text-blue-600 uppercase tracking-wider">
             <Sparkles className="w-4 h-4" />
-            <span>Autonomous Forensic Simulation Generator (beans synth)</span>
+            <span>Synthetic dataset generator (beans synth)</span>
           </div>
 
           <p className="text-xs text-slate-600 leading-relaxed">
-            Synthesizes realistic UTXO ledgers containing LockBit ransomware extortions, Wasabi CoinJoin mixer syndicates, automated peel chain laundering, and legitimate exchange cold sweeps.
+            Generates a labelled synthetic dataset (legitimate users and exchanges plus ransomware, peel-chain, CoinJoin and other laundering patterns) and runs the full pipeline on it. This replaces the current data.
           </p>
 
           <div className="space-y-2 pt-2">
@@ -98,33 +99,49 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, loading, la
         </div>
       </div>
 
+      {/* Seed wallets (roadmap S8) */}
+      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <div className="text-xs font-bold text-rose-600 uppercase tracking-wider">Known-illicit seed wallets → risk propagation</div>
+        <p className="text-xs text-slate-600">
+          Upload a CSV with an <span className="font-mono">address</span> column (optional <span className="font-mono">label</span>,
+          <span className="font-mono"> confidence</span>). Engine E4 re-propagates risk from these seeds across the whole graph and the
+          alert list is rebuilt. Analyst verdicts are kept.
+        </p>
+        <form className="flex items-center gap-3" onSubmit={(e) => { e.preventDefault(); if (seedFile) onUploadSeeds(seedFile); }}>
+          <input type="file" accept=".csv" onChange={(e) => setSeedFile(e.target.files?.[0] || null)} className="text-xs" />
+          <button disabled={!seedFile || loading} className="px-4 py-2 rounded-lg bg-rose-600 text-white text-xs font-semibold disabled:opacity-50">
+            {loading ? 'Re-scoring…' : 'Load seeds & re-propagate'}
+          </button>
+        </form>
+      </div>
+
       {/* Ingestion Results Card */}
-      {lastIngestResult && (
-        <div className="p-5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-2">
-          <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
-            <CheckCircle className="w-4 h-4" />
-            <span>Ingestion & AI/ML Pipeline Complete</span>
+      {lastIngestResult && (() => {
+        const r = lastIngestResult.pipeline_result || lastIngestResult;
+        const stats = r.rescore?.pipeline_stats || r.pipeline_stats || {};
+        const cells = [
+          ['Records', r.records_ingested ?? r.rescore?.records_rescored],
+          ['Alerts', stats.alerts_generated],
+          ['Clusters (CIOH)', stats.clusters_computed],
+          ['Seeds used', stats.seeds_propagated ?? r.seeds_loaded],
+        ];
+        return (
+          <div className="p-5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-2">
+            <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800 uppercase tracking-wider">
+              <CheckCircle className="w-4 h-4" />
+              <span>Pipeline run complete</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-semibold text-emerald-950 pt-2">
+              {cells.map(([label, v]) => (
+                <div key={label} className="p-2.5 rounded bg-white/80 border border-emerald-200">
+                  <span className="text-slate-500 block text-[10px]">{label}</span>
+                  <span className="font-bold text-sm">{v ?? '—'}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-semibold text-emerald-950 pt-2">
-            <div className="p-2.5 rounded bg-white/80 border border-emerald-200">
-              <span className="text-slate-500 block text-[10px]">Processed:</span>
-              <span className="font-bold text-sm">{lastIngestResult.records_ingested || lastIngestResult.pipeline_result?.records_ingested || 100} TXs</span>
-            </div>
-            <div className="p-2.5 rounded bg-white/80 border border-emerald-200">
-              <span className="text-slate-500 block text-[10px]">Alerts Emitted:</span>
-              <span className="font-bold text-sm text-rose-600">{lastIngestResult.pipeline_stats?.alerts_generated || 17} Alerts</span>
-            </div>
-            <div className="p-2.5 rounded bg-white/80 border border-emerald-200">
-              <span className="text-slate-500 block text-[10px]">CIOH Clusters:</span>
-              <span className="font-bold text-sm text-indigo-600">{lastIngestResult.pipeline_stats?.clusters_computed || 312}</span>
-            </div>
-            <div className="p-2.5 rounded bg-white/80 border border-emerald-200">
-              <span className="text-slate-500 block text-[10px]">Offline GeoIP:</span>
-              <span className="font-bold text-sm text-emerald-700">100% Enriched</span>
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

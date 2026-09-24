@@ -16,36 +16,16 @@ export default function Entity360({ entityData, onSearch, loading }) {
     }
   };
 
-  const radarOption = {
-    radar: {
-      indicator: [
-        { name: 'E2 Anomaly', max: 25 },
-        { name: 'E3 Typology', max: 35 },
-        { name: 'E4 Seed Taint', max: 30 },
-        { name: 'SIGINT Geo-Risk', max: 20 },
-      ],
-      radius: '65%',
-    },
-    series: [
-      {
-        type: 'radar',
-        data: [
-          {
-            value: [
-              alert?.engine_scores?.e2_anomaly_score || 18,
-              alert?.engine_scores?.e3_typology_score || 30,
-              alert?.engine_scores?.e4_seed_proximity_score || 22,
-              alert?.engine_scores?.network_sigint_score || 15,
-            ],
-            name: 'Risk Decomposition',
-            areaStyle: { color: 'rgba(37, 99, 235, 0.2)' },
-            lineStyle: { color: '#2563eb', width: 2 },
-            itemStyle: { color: '#2563eb' },
-          },
-        ],
-      },
-    ],
-  };
+  // Radar straight from the alert's engine scores; no values are filled in when there is no alert.
+  const engineEntries = Object.entries(alert?.engine_scores || {}).filter(
+    ([k, v]) => typeof v === 'number' && !k.startsWith('total'));
+  const radarMax = Math.max(...engineEntries.map(([, v]) => v), 1);
+  const radarOption = engineEntries.length >= 3 ? {
+    radar: { indicator: engineEntries.map(([k]) => ({ name: k.replace(/_score$/, '').replace(/_/g, ' '), max: radarMax })), radius: '62%' },
+    series: [{ type: 'radar', data: [{ value: engineEntries.map(([, v]) => v), name: 'Engine scores',
+      areaStyle: { color: 'rgba(37, 99, 235, 0.2)' }, lineStyle: { color: '#2563eb', width: 2 }, itemStyle: { color: '#2563eb' } }] }],
+  } : null;
+  const ips = profile.associated_ips || [];
 
   return (
     <div className="space-y-6">
@@ -72,6 +52,11 @@ export default function Entity360({ entityData, onSearch, loading }) {
         </form>
       </div>
 
+      {entityData?.error && (
+        <div className="bg-white p-6 rounded-xl border border-slate-200 text-sm text-slate-600">{entityData.error}</div>
+      )}
+      {!entityData && <div className="text-sm text-slate-500">Search a wallet address, or open one from an alert or the graph.</div>}
+
       {/* Profile Overview */}
       {profile.address && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -83,7 +68,7 @@ export default function Entity360({ entityData, onSearch, loading }) {
                 <h2 className="text-base font-bold font-mono text-slate-900 mt-1 break-all">{profile.address}</h2>
               </div>
               <span className="px-3 py-1 rounded-md bg-red-50 text-red-700 font-bold border border-red-200 text-xs">
-                {profile.threat_classification || 'SUSPECT'}
+                {profile.is_seed ? 'SEED (known illicit)' : profile.threat_classification || 'UNSCORED'}
               </span>
             </div>
 
@@ -93,8 +78,8 @@ export default function Entity360({ entityData, onSearch, loading }) {
                 <div className="text-xl font-bold text-rose-600 mt-0.5">{(profile.risk_score || 0).toFixed(0)} / 100</div>
               </div>
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                <span className="text-slate-500 font-semibold">Current Balance</span>
-                <div className="text-xl font-bold text-slate-900 mt-0.5">{(profile.balance || 0).toFixed(4)} BTC</div>
+                <span className="text-slate-500 font-semibold">Sent (observed)</span>
+                <div className="text-xl font-bold text-slate-900 mt-0.5">{(profile.total_sent || 0).toFixed(4)} BTC</div>
               </div>
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 font-semibold">Total Received</span>
@@ -102,7 +87,8 @@ export default function Entity360({ entityData, onSearch, loading }) {
               </div>
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
                 <span className="text-slate-500 font-semibold">Associated Cluster</span>
-                <div className="text-xl font-bold text-indigo-600 font-mono mt-0.5">{profile.cluster_id || 'SOLO'}</div>
+                <div className="text-sm font-bold text-indigo-600 font-mono mt-1 truncate" title={profile.cluster_id}>{profile.cluster_id || 'SOLO'}</div>
+                <div className="text-[11px] text-slate-500">{profile.cluster_size || 1} address(es)</div>
               </div>
             </div>
 
@@ -137,22 +123,36 @@ export default function Entity360({ entityData, onSearch, loading }) {
             </div>
           </div>
 
-          {/* 1 Col: Radar Decomposition */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+          {/* 1 Col: engine scores + network attribution */}
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
             <div>
-              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                4-Engine Risk Radar
-              </h3>
-              <p className="text-xs text-slate-400">Multi-factor forensic model attribution</p>
-              <div className="h-64 mt-2">
-                <ReactECharts option={radarOption} style={{ height: '100%', width: '100%' }} />
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Engine score breakdown</h3>
+              {radarOption ? (
+                <div className="h-60"><ReactECharts option={radarOption} style={{ height: '100%', width: '100%' }} /></div>
+              ) : (
+                <p className="text-xs text-slate-400 py-6">No alert was raised for this wallet, so there are no engine scores to show.</p>
+              )}
+            </div>
+            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900 space-y-1.5">
+              <span className="font-bold block">First-relaying IPs for this wallet's spends</span>
+              {ips.length === 0 && <p className="text-blue-800/70">No network observations linked to this wallet's spends.</p>}
+              {ips.map((ip) => (
+                <div key={ip.ip} className="flex justify-between gap-2">
+                  <span className="font-mono font-bold">{ip.ip}</span>
+                  <span>{ip.country} · {ip.asn} · <b>{ip.asn_type}</b> · {ip.tx_count} tx</span>
+                </div>
+              ))}
+            </div>
+            {entityData?.cluster_members?.length > 0 && (
+              <div className="text-xs">
+                <span className="font-bold text-slate-500 uppercase tracking-wider block mb-1">Same cluster (CIOH)</span>
+                <div className="max-h-40 overflow-y-auto space-y-0.5">
+                  {entityData.cluster_members.map((m) => (
+                    <button key={m} onClick={() => onSearch(m)} className="block font-mono text-blue-700 hover:underline truncate w-full text-left">{m}</button>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100 text-xs text-blue-900 space-y-1">
-              <span className="font-bold block">First-Spy Network Attribution:</span>
-              <p>Earliest propagation observation logged from <span className="font-mono font-bold">185.220.101.42 (Rotterdam, NL)</span> via Bulletproof Hosting ASN.</p>
-            </div>
+            )}
           </div>
         </div>
       )}

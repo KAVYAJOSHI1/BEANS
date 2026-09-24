@@ -13,7 +13,17 @@ import IngestStudio from './components/IngestStudio';
 const API_BASE = '/api';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const tabFromHash = () => (window.location.hash || '#overview').slice(1).split('?')[0] || 'overview';
+  const [activeTab, setActiveTabState] = useState(tabFromHash);
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    if (window.location.hash.slice(1) !== tab) window.history.replaceState(null, '', `#${tab}`);
+  };
+  useEffect(() => {
+    const onHash = () => setActiveTabState(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [loading, setLoading] = useState(false);
 
   // Global State
@@ -76,11 +86,39 @@ export default function App() {
     }
   };
 
+  const loadGraph = async ({ center = null, hops = 2, minRisk = 0 } = {}) => {
+    const params = new URLSearchParams({ hops, min_risk: minRisk, limit: 150 });
+    if (center) params.set('center', center);
+    try {
+      const r = await fetch(`${API_BASE}/graph/topology?${params}`);
+      if (r.ok) setGraphData(await r.json());
+      else alert(`Nothing found for ${center}`);
+    } catch (e) {
+      console.error('Error loading graph:', e);
+    }
+  };
+
+  const openTimeline = async (entity) => {
+    const r = await fetch(`${API_BASE}/timeline/sequence?limit=100&entity=${encodeURIComponent(entity)}`);
+    if (r.ok) setTimelineEvents(await r.json());
+    setActiveTab('timeline');
+  };
+
+  const inspectEntity = async (address) => {
+    await fetchEntity360(address);
+    setActiveTab('entity');
+  };
+
+  const openGraphFor = async (entity) => {
+    await loadGraph({ center: entity, hops: 2 });
+    setActiveTab('graph');
+  };
+
   const fetchEntity360 = async (address) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/entity/wallet/${address}`).then((r) => r.json());
-      setEntityData(res);
+      const r = await fetch(`${API_BASE}/entity/wallet/${encodeURIComponent(address)}`);
+      setEntityData(r.ok ? await r.json() : { error: `No wallet found for ${address}` });
     } catch (e) {
       console.error('Error fetching entity 360:', e);
     } finally {
@@ -120,6 +158,16 @@ export default function App() {
     }
   };
 
+  const handleAddToCase = async (caseId, entityId) => {
+    await fetch(`${API_BASE}/cases/${caseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ add_entities: [entityId] }),
+    });
+    const casesRes = await fetch(`${API_BASE}/cases`).then((r) => r.json()).catch(() => []);
+    if (Array.isArray(casesRes)) setCases(casesRes);
+  };
+
   const handleExportDossier = async (caseId) => {
     try {
       const res = await fetch(`${API_BASE}/cases/${caseId}/export`).then((r) => r.json());
@@ -145,20 +193,36 @@ export default function App() {
     }
   };
 
+  const handleUploadSeeds = async (file) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const r = await fetch(`${API_BASE}/seeds/upload`, { method: 'POST', body: formData });
+      const res = await r.json();
+      if (!r.ok) throw new Error(res.detail || 'seed upload failed');
+      setLastIngestResult(res);
+      await fetchAllData();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleUploadFile = async (file) => {
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`${API_BASE}/ingest/upload`, {
-        method: 'POST',
-        body: formData,
-      }).then((r) => r.json());
+      const r = await fetch(`${API_BASE}/ingest/upload`, { method: 'POST', body: formData });
+      const res = await r.json();
+      if (!r.ok) throw new Error(res.detail || 'upload failed');
       setLastIngestResult(res);
       await fetchAllData();
       setActiveTab('alerts');
     } catch (e) {
-      console.error('Error uploading file:', e);
+      alert(`Ingest failed: ${e.message}`);
     } finally {
       setLoading(false);
     }
@@ -194,7 +258,12 @@ export default function App() {
             onCloseDrawer={() => setSelectedAlert(null)}
             onUpdateStatus={handleUpdateStatus}
             setActiveTab={setActiveTab}
-            onInspectEntity={(addr) => fetchEntity360(addr)}
+            onInspectEntity={inspectEntity}
+            onOpenGraph={openGraphFor}
+            onOpenTimeline={openTimeline}
+            cases={cases}
+            onAddToCase={handleAddToCase}
+            onCreateCase={handleCreateCase}
           />
         )}
 
@@ -203,6 +272,9 @@ export default function App() {
             graphData={graphData}
             selectedNode={selectedNode}
             onSelectNode={(n) => setSelectedNode(n)}
+            onLoadGraph={loadGraph}
+            onInspectEntity={inspectEntity}
+            onOpenTimeline={openTimeline}
           />
         )}
 
@@ -233,11 +305,17 @@ export default function App() {
           <IngestStudio
             onUploadFile={handleUploadFile}
             onGenerateDemo={handleGenerateDemo}
+            onUploadSeeds={handleUploadSeeds}
             loading={loading}
             lastIngestResult={lastIngestResult}
           />
         )}
       </main>
+
+      <footer className="text-center text-[11px] text-slate-400 py-4">
+        BEANS · SIH PS 26146 · runs fully offline · IP geolocation by{' '}
+        <a href="https://db-ip.com" className="underline">DB-IP</a> (CC BY 4.0) · all data shown is synthetic
+      </footer>
     </div>
   );
 }
