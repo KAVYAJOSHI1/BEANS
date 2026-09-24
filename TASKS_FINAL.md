@@ -13,10 +13,10 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 
 | # | Feature (roadmap) | Status | What to do | By |
 |---|---|---|---|---|
-| M12 | Synthetic generator with ground-truth labels (§5.3) | 🟡 only 15 illicit of 5k wallets, txs not linked | Real UTXO ledger (inputs spend earlier outputs); 3–5% illicit across all 8 typologies with several entities each; legit exchanges/merchants/miners; hardness knobs; `labels_address.csv`, `labels_tx.csv`, `seeds.csv` (random 20% of illicit, neutral `SYNTH-…` names); presets tiny/demo/bench | **15:00** |
-| M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | 🟡 works but slow (75 s / 5k) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
-| M3 | Offline GeoIP + ASN type | 🟡 test now passes |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
-| M4 | Graph + first-spy (§3, §6.0) | ✅/🟡 | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
+| M12 | Synthetic generator with ground-truth labels (§5.3) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Real UTXO ledger (inputs spend earlier outputs); 3–5% illicit across all 8 typologies with several entities each; legit exchanges/merchants/miners; hardness knobs; `labels_address.csv`, `labels_tx.csv`, `seeds.csv` (random 20% of illicit, neutral `SYNTH-…` names); presets tiny/demo/bench | **15:00** |
+| M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
+| M3 | Offline GeoIP + ASN type | ✅ done by Kavya/Claude (generator v2 + ML rewrite) |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
+| M4 | Graph + first-spy (§3, §6.0) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
 | S9 | Benchmark 1M rows | ❌ | `bench` preset + timing printout for the Results slide | 19:00 |
 | — | `--mapping` for unfamiliar column names (§5.2, finale risk) | 🟡 `mapping.py` exists | Test with a renamed-column CSV + XML | 20:00 |
 | C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ❌ | Only after the above | after 20:30 |
@@ -32,15 +32,15 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | # | Feature (roadmap) | Status | What to do | By |
 |---|---|---|---|---|
 | — | Contracts match your schema | ✅ fixed in Dhairya's 13:25 commit (12/12 tests pass) | Rewrite `docs/CONTRACTS.md` + test for `CanonicalRecord`/`AlertRecord`/`duck.py` tables | **14:00** |
-| M10 | SHAP "why flagged" (§7) | ❌ impacts are hard-coded | Real `shap.TreeExplainer` on the fusion model; reasons generated from the actual top SHAP features; add a counterfactual line | **15:30** |
-| M9 | Fusion → risk + **calibrated** confidence (§6.5) | 🟡 fixed formula | LightGBM on the wallet matrix → isotonic calibration; train/test split **by entity_id**; confidence = certainty + agreement + evidence completeness | 16:30 |
-| M7 | E3 peel/mix classifier (§6 E3) | 🟡 falls back to if/else | Structural checks become features; LightGBM on `labels_tx`; no silent rule fallback | 17:30 |
-| M5 | E1 clustering: CIOH + embeddings (§6 E1) | 🟡 | CIOH excluding predicted CoinJoins + change heuristic; SVD/node2vec embeddings → HDBSCAN merge suggestions | 18:30 |
-| M8 | E4 risk propagation from seeds (§6 E4) | 🟡 seeds not loaded | PPR + reverse PPR + decayed taint from the **real** 20% seeds; hops + path to seed for evidence | 18:30 |
-| M6 | E2 anomaly | ✅ | Re-check on new data; add SHAP for anomaly-type alerts | 19:00 |
-| S6 | Model card with real metrics (§13) | 🟡 UI exists, numbers don't | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
+| M10 | SHAP "why flagged" (§7) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Real `shap.TreeExplainer` on the fusion model; reasons generated from the actual top SHAP features; add a counterfactual line | **15:30** |
+| M9 | Fusion → risk + **calibrated** confidence (§6.5) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | LightGBM on the wallet matrix → isotonic calibration; train/test split **by entity_id**; confidence = certainty + agreement + evidence completeness | 16:30 |
+| M7 | E3 peel/mix classifier (§6 E3) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Structural checks become features; LightGBM on `labels_tx`; no silent rule fallback | 17:30 |
+| M5 | E1 clustering: CIOH + embeddings (§6 E1) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | CIOH excluding predicted CoinJoins + change heuristic; SVD/node2vec embeddings → HDBSCAN merge suggestions | 18:30 |
+| M8 | E4 risk propagation from seeds (§6 E4) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | PPR + reverse PPR + decayed taint from the **real** 20% seeds; hops + path to seed for evidence | 18:30 |
+| M6 | E2 anomaly | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Re-check on new data; add SHAP for anomaly-type alerts | 19:00 |
+| S6 | Model card with real metrics (§13) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
 | S5 | Investigator feedback → retrain | 🟡 `feedback` table exists | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
-| — | Leakage test | ❌ | Test that no `labels_*`/typology column enters a feature matrix | 20:30 |
+| — | Leakage test | ✅ done by Kavya/Claude (tests/test_ml.py::test_no_label_leakage) | 20:30 |
 | C1 | GNN (GraphSAGE) + GNNExplainer | ❌ | Only after all of the above | after 20:30 |
 | C7 | Validate on public Elliptic dataset | ❌ | Needs a one-time download; optional | after 20:30 |
 

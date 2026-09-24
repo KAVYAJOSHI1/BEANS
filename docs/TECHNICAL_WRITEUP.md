@@ -2,7 +2,7 @@
 **Bitcoin Encryption, Analysis & Network Security** · SIH 2026 · Problem Statement 26146 (NTRO)
 *AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic*
 
-> Status: draft (24 Sep, 14:40). Sections marked **⟨TO FILL⟩** are completed from the evaluation run (`models/model_card.json`) at the 20:30 feature freeze. No number appears in this document unless it was measured.
+> Status: 24 Sep, 16:00. Every number below was measured by the pipeline itself (`models/model_card.json`, regenerated on each run). Fusion and classifier metrics are out-of-fold, grouped by entity.
 
 ---
 
@@ -37,7 +37,9 @@ Offline IP → country and IP → ASN from **DB-IP Lite** (`.mmdb`, CC BY 4.0, b
 
 ### 2.3 Synthetic dataset
 The PS provides no dataset ("Dataset Link: Nil"), so BEANS includes a labelled generator (`beans synth`). It simulates legitimate actors (retail users with change outputs, exchanges with consolidations and batch payouts) and illicit typologies (ransomware collection → split → mix, peel chains, CoinJoin-like equal-denomination transactions, fan-out structuring and others), each with network behaviour (hosting/Tor/VPN relays, off-hours broadcasting). The generator writes ground-truth labels and a **seed list containing only a fraction of the illicit wallets**. The rest stay hidden so propagation can be evaluated on wallets the model was never told about.
-**⟨TO FILL: final typology table, dataset sizes, illicit share, hardness settings⟩**
+Generator v2 (`beans/synth/sim.py`) is an event-driven simulation with a real UTXO ledger: every input spends an earlier output, so flows form a connected graph. Legitimate actors are miners, exchanges (withdrawal batches, deposit sweeps, cold→hot refills), merchants, retail users and privacy users who use CoinJoin legitimately. Illicit actors cover seven typologies. IPs are sampled from real prefixes of the bundled DB-IP databases per ASN type, and each transaction is seen by 1–4 relaying peers. Hardness settings: exchange payouts look like smurfing fan-outs, legitimate users also CoinJoin, 15% of illicit transactions have their origin IP unobserved, and some residential IPs are shared behind NAT.
+
+Demo dataset (`--n-tx 5000 --seed 42`): 4,032 transactions, 11,897 network observations, 13,542 wallets, of which 891 (6.6%) are illicit, belonging to 30 illicit entities (6 ransomware operators, 8 peel-chain operators, 3 hack launderers, a darknet market with 3 vendors, 3 smurfers, 4 round-trippers, 2 dusters). Seeds: 17 addresses from 9 of the 30 illicit entities. The other 21 entities are never revealed to the model. Transaction shapes: 464 peel hops, 225 fan-out, 109 fan-in, 45 round-trip, 37 CoinJoin, 3,152 normal.
 
 ## 3. Correlation: linking the network layer to wallets
 
@@ -49,12 +51,12 @@ The PS provides no dataset ("Dataset Link: Nil"), so BEANS includes a labelled g
 
 | PS focus area | BEANS engine | Method |
 |---|---|---|
-| Entity clustering (common-input-ownership + graph embeddings) | E1 | CIOH union-find over transaction inputs, **excluding transactions E3 classifies as CoinJoin** (otherwise unrelated participants merge) + conservative change heuristic; graph embeddings for merge suggestions **⟨TO FILL: embedding method⟩** |
+| Entity clustering (common-input-ownership + graph embeddings) | E1 | CIOH union-find over transaction inputs, **excluding transactions E3 classifies as CoinJoin** (otherwise unrelated participants merge) + conservative change heuristic (single full-precision output); truncated-SVD embeddings of the normalised cluster flow graph + behaviour → HDBSCAN merge *suggestions* |
 | Anomaly detection | E2 | Isolation Forest on transaction and wallet features (unsupervised, needs no labels) |
-| Peeling-chain / mixing detection | E3 | Structural features (equal-output groups, peel ratio and chain length, fan-in/out, time-to-respend) → supervised classifier **⟨TO FILL: final model⟩** |
+| Peeling-chain / mixing detection | E3 | Structural features (equal-output groups, peel ratio and chain length, fan-in/out, time-to-respend) → LightGBM multiclass (normal / peel / coinjoin / fan-out / fan-in / round-trip), no rule fallback |
 | Risk scoring propagated from seed wallets | E4 | Personalised PageRank from seed wallets on the value-weighted flow graph + decayed taint; path to nearest seed kept as evidence |
 
-**Fusion.** Engine outputs and network features feed a combined model that outputs P(illicit). Risk = 100 · P. Confidence reflects calibration, engine agreement and evidence completeness. Severity bands: CRITICAL ≥ 85, HIGH ≥ 65, MEDIUM ≥ 40. **⟨TO FILL: fusion model + calibration method⟩**
+**Fusion.** Engine outputs and network features feed a combined model that outputs P(illicit). Risk = 100 · P. Confidence reflects calibration, engine agreement and evidence completeness. Severity bands: CRITICAL ≥ 85, HIGH ≥ 65, MEDIUM ≥ 40. The fusion model is LightGBM over 40 wallet features (behaviour, E2 anomaly, E3 probabilities aggregated per wallet and per cluster, E4 PPR/taint/hops, network features). It uses 5-fold StratifiedGroupKFold by entity. Inside each fold, a model is fitted on 75% of the training entities and **isotonic calibration** on the other 25%. The five calibrated fold models are persisted and averaged for data without labels. A second LightGBM assigns the typology shown on each alert. Alerts are raised per CIOH cluster (its riskiest wallet) when calibrated P ≥ 0.4.
 
 **Leakage control.** Ground-truth labels are used only as training targets and for evaluation, never as features. Train/test splits are made by entity, so one actor's wallets never appear on both sides.
 
@@ -62,7 +64,7 @@ The PS provides no dataset ("Dataset Link: Nil"), so BEANS includes a labelled g
 
 For every alert BEANS stores and shows:
 - **Why flagged:** plain-English reasons generated from the strongest contributing features (e.g. *"Participated in a CoinJoin-like transaction with 10 equal-value outputs"*, *"Relayed through a Tor exit in CH"*).
-- **Feature contributions:** per-alert SHAP values, shown as signed bars (red = raises risk, green = lowers it). **⟨TO FILL: confirm TreeExplainer on the fusion model⟩**
+- **Feature contributions:** per-alert SHAP values from `shap.TreeExplainer` on the fusion model (log-odds), shown as signed bars (red = raises risk, green = lowers it). Reason sentences are generated only from features with positive contributions.
 - **Engine scores:** the contribution of each engine.
 - **Evidence:** the transaction, the first-relaying IP with its confidence, and the path to the nearest seed wallet. The link graph highlights this path.
 - **Model card:** global metrics and feature importance. The dashboard shows only measured values and states plainly when no evaluation has run.
@@ -83,19 +85,28 @@ Analyst verdicts (*confirmed* / *false positive*) are stored as labelled feedbac
 
 Stack: Python 3.12, DuckDB (embedded, single file), NetworkX, scikit-learn, FastAPI, React + Cytoscape.js + ECharts (pre-built into `ui/dist`, so no Node.js is needed to run), WeasyPrint for PDF. The world map ships inside the UI bundle (Natural Earth outlines); no CDN or remote fonts.
 
-## 8. Results
+## 8. Results (demo dataset, measured)
 
-**⟨TO FILL from `models/model_card.json`⟩**
+| Engine | Metric | Value | Reference |
+|---|---|---|---|
+| Fusion | PR-AUC, out-of-fold by entity | **0.967** | random ranking = 0.066 |
+| Fusion | ROC-AUC | 0.990 | |
+| Fusion | Precision@50 | **1.00** | |
+| Fusion | Recall of illicit wallets at P ≥ 0.5 | 0.816 | |
+| Fusion | Expected calibration error | **0.009** | |
+| **Ablation** | PR-AUC **without** network-layer features | 0.902 | with = 0.967 → the network ↔ chain correlation adds value |
+| Alert list | Alerts that are illicit | **99.7 %** (299/300) | |
+| Alert list | Illicit entities with ≥ 1 alert | 83 % (25/30) | |
+| E3 | Macro-F1, grouped CV | **0.993** | peel 0.997 · CoinJoin 1.00 · round-trip 0.989 · fan-in 0.977 |
+| E1 | Homogeneity on illicit wallets (no cluster mixes two actors) | 1.00 | |
+| E1 | Completeness (an actor's wallets in one cluster) | 0.47 | fresh-address churn splits actors; change heuristic merged 2,846 |
+| E4 | Hidden (non-seed) illicit wallets reached from seeds | 0.18 | legitimate wallets reached: 0.10 |
+| Typology | Accuracy on illicit wallets, grouped CV | 0.66 | |
+| Throughput | Ingest + all engines + training, 11.9k observations | **16 s** | 8-core laptop |
 
-| Engine | Metric | Value |
-|---|---|---|
-| E1 clustering | Adjusted Rand Index vs ground-truth entities | |
-| E2 anomaly | PR-AUC / precision@100 | |
-| E3 peel/mix | macro-F1 | |
-| E4 propagation | recall of hidden illicit wallets (seeds = 20 %) | |
-| Fusion | PR-AUC, precision@50, calibration error | |
-| Ablation | fusion PR-AUC with vs without network features | |
-| Throughput | rows/s ingest + score on an 8-core laptop | |
+Most important features (mean |SHAP|): cluster share of Tor/VPN/bulletproof relays, cluster size, reverse PPR to seeds, wallet share of risky relays, peel probability, anomaly score, equal-output share, PPR.
+
+**Reading these numbers honestly.** The data is synthetic and generated by the same team, so absolute scores are optimistic. The meaningful signals are *relative*: the network-layer ablation (+0.065 PR-AUC), the grouped (by entity) evaluation, calibration, and the weaker engines, which we report rather than hide (E1 completeness, E4 reach, typology).
 
 ## 9. Limitations and responsible use
 
