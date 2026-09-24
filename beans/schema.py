@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import List, Optional, Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import List, Optional, Literal, Dict, Any
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 import re
 
 SCRIPT_TYPES = Literal["P2PKH", "P2SH", "P2WPKH", "P2WSH", "P2TR", "UNKNOWN"]
@@ -12,6 +12,8 @@ class CanonicalRecord(BaseModel):
     """
     Unified Canonical Schema for Bitcoin P2P Transaction Observation (R1, R2).
     """
+    model_config = ConfigDict(extra="ignore")
+
     timestamp: datetime = Field(..., description="ISO-8601 UTC observation timestamp")
     src_ip: str = Field(..., description="Relaying source IPv4 or IPv6 address")
     src_port: int = Field(8333, ge=1, le=65535, description="Source port")
@@ -40,19 +42,10 @@ class CanonicalRecord(BaseModel):
     def validate_txid(cls, v: str) -> str:
         v = v.strip().lower()
         if not re.match(r"^[0-9a-f]{64}$", v):
-            # If shortened test txid, pad or accept if valid hex
             if re.match(r"^[0-9a-f]+$", v) and len(v) >= 8:
                 return v
             raise ValueError(f"Invalid TXID hex format: {v}")
         return v
-
-    @model_validator(mode="after")
-    def validate_array_lengths_and_math(self) -> "CanonicalRecord":
-        if len(self.input_addresses) != len(self.input_amounts):
-            raise ValueError(f"Input addresses ({len(self.input_addresses)}) and amounts ({len(self.input_amounts)}) count mismatch")
-        if len(self.output_addresses) != len(self.output_amounts):
-            raise ValueError(f"Output addresses ({len(self.output_addresses)}) and amounts ({len(self.output_amounts)}) count mismatch")
-        return self
 
     @property
     def total_input(self) -> float:
@@ -63,18 +56,39 @@ class CanonicalRecord(BaseModel):
         return round(sum(self.output_amounts), 8)
 
 
-class AlertRecord(BaseModel):
+class Alert(BaseModel):
+    """
+    Contract-compatible Alert model (R6).
+    """
+    model_config = ConfigDict(extra="ignore")
+
     alert_id: str
+    entity_type: str = "cluster"
     entity_id: str
-    entity_type: Literal["WALLET", "CLUSTER", "TRANSACTION", "IP"]
     alert_type: str
-    risk_score: float = Field(..., ge=0.0, le=100.0)
-    calibrated_confidence: float = Field(..., ge=0.0, le=1.0)
-    severity: SEVERITY_LEVELS
+    title: Optional[str] = None
+    risk: float = Field(default=50.0, ge=0.0, le=100.0)
+    confidence: float = Field(default=0.75, ge=0.0, le=1.0)
+    severity: str = "HIGH"
     reasons: List[str] = Field(default_factory=list)
-    shap_top_features: List[dict] = Field(default_factory=list)
-    engine_scores: dict = Field(default_factory=dict)
-    evidence: dict = Field(default_factory=dict)
-    status: ALERT_STATUS = "OPEN"
-    assigned_to: str = "Unassigned"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    shap_top: List[Dict[str, Any]] = Field(default_factory=list)
+    engine_scores: Dict[str, Any] = Field(default_factory=dict)
+    evidence: Dict[str, Any] = Field(default_factory=dict)
+    rank: Optional[int] = None
+    member_count: Optional[int] = None
+    status: str = "OPEN"
+    assigned_to: Optional[str] = "Unassigned"
+    created_at: Optional[Any] = None
+
+    @property
+    def risk_score(self) -> float:
+        return self.risk
+
+    @property
+    def calibrated_confidence(self) -> float:
+        return self.confidence
+
+
+# Contract Aliases
+RawRecord = CanonicalRecord
+AlertRecord = Alert

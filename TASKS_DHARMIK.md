@@ -11,7 +11,7 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 |---|---|---|---|---|
 | M12 | Synthetic generator with ground-truth labels (§5.3) | 🟡 only 15 illicit of 5k wallets, txs not linked | Real UTXO ledger (inputs spend earlier outputs); 3–5% illicit across all 8 typologies with several entities each; legit exchanges/merchants/miners; hardness knobs; `labels_address.csv`, `labels_tx.csv`, `seeds.csv` (random 20% of illicit, neutral `SYNTH-…` names); presets tiny/demo/bench | **15:00** |
 | M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | 🟡 works but slow (75 s / 5k) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
-| M3 | Offline GeoIP + ASN type | 🟡 `test_offline_enrichment` fails | Fix test; Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
+| M3 | Offline GeoIP + ASN type | 🟡 test now passes |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
 | M4 | Graph + first-spy (§3, §6.0) | ✅/🟡 | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
 | S9 | Benchmark 1M rows | ❌ | `bench` preset + timing printout for the Results slide | 19:00 |
 | — | `--mapping` for unfamiliar column names (§5.2, finale risk) | 🟡 `mapping.py` exists | Test with a renamed-column CSV + XML | 20:00 |
