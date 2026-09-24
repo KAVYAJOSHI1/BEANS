@@ -1,0 +1,8 @@
+{
+  "dataset_name": "test_tiny",
+  "total_transactions": 100,
+  "illicit_transactions": 13,
+  "seeds_count": 2,
+  "csv_sha256": "a64148e0e7e87536124dbec7e63ab530db6c3e7115dcfab94241acecf72be599",
+  "generated_at": "2026-09-24T07:06:01.293816"
+}
