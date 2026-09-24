@@ -15,7 +15,7 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 |---|---|---|---|---|
 | M12 | Synthetic generator with ground-truth labels (§5.3) | 🟡 only 15 illicit of 5k wallets, txs not linked | Real UTXO ledger (inputs spend earlier outputs); 3–5% illicit across all 8 typologies with several entities each; legit exchanges/merchants/miners; hardness knobs; `labels_address.csv`, `labels_tx.csv`, `seeds.csv` (random 20% of illicit, neutral `SYNTH-…` names); presets tiny/demo/bench | **15:00** |
 | M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | 🟡 works but slow (75 s / 5k) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
-| M3 | Offline GeoIP + ASN type | 🟡 `test_offline_enrichment` fails | Fix test; Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
+| M3 | Offline GeoIP + ASN type | 🟡 test now passes |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
 | M4 | Graph + first-spy (§3, §6.0) | ✅/🟡 | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
 | S9 | Benchmark 1M rows | ❌ | `bench` preset + timing printout for the Results slide | 19:00 |
 | — | `--mapping` for unfamiliar column names (§5.2, finale risk) | 🟡 `mapping.py` exists | Test with a renamed-column CSV + XML | 20:00 |
@@ -31,7 +31,7 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 
 | # | Feature (roadmap) | Status | What to do | By |
 |---|---|---|---|---|
-| — | Contracts match your schema | ❌ `test_contracts.py` fails | Rewrite `docs/CONTRACTS.md` + test for `CanonicalRecord`/`AlertRecord`/`duck.py` tables | **14:00** |
+| — | Contracts match your schema | ✅ fixed in Dhairya's 13:25 commit (12/12 tests pass) | Rewrite `docs/CONTRACTS.md` + test for `CanonicalRecord`/`AlertRecord`/`duck.py` tables | **14:00** |
 | M10 | SHAP "why flagged" (§7) | ❌ impacts are hard-coded | Real `shap.TreeExplainer` on the fusion model; reasons generated from the actual top SHAP features; add a counterfactual line | **15:30** |
 | M9 | Fusion → risk + **calibrated** confidence (§6.5) | 🟡 fixed formula | LightGBM on the wallet matrix → isotonic calibration; train/test split **by entity_id**; confidence = certainty + agreement + evidence completeness | 16:30 |
 | M7 | E3 peel/mix classifier (§6 E3) | 🟡 falls back to if/else | Structural checks become features; LightGBM on `labels_tx`; no silent rule fallback | 17:30 |
