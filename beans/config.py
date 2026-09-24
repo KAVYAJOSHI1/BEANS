@@ -34,3 +34,14 @@ class BeansSettings(BaseSettings):
         extra = "ignore"
 
 settings = BeansSettings()
+
+# Module-level path aliases for contract compatibility
+BASE_DIR = settings.BASE_DIR
+DATA_DIR = settings.DATA_DIR
+DB_PATH = settings.DB_PATH
+GEOIP_DIR = settings.GEOIP_DIR
+INTEL_DIR = settings.INTEL_DIR
+SEEDS_DIR = settings.SEEDS_DIR
+SYNTH_DIR = settings.SYNTH_DIR
+MODELS_DIR = settings.MODELS_DIR
+QUARANTINE_FILE = settings.QUARANTINE_FILE
