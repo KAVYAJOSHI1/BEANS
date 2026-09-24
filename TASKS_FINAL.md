@@ -17,10 +17,10 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
 | M3 | Offline GeoIP + ASN type | ✅ done by Kavya/Claude (generator v2 + ML rewrite) |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
 | M4 | Graph + first-spy (§3, §6.0) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
-| S9 | Benchmark 1M rows | ❌ | `bench` preset + timing printout for the Results slide | 19:00 |
-| — | `--mapping` for unfamiliar column names (§5.2, finale risk) | 🟡 `mapping.py` exists | Test with a renamed-column CSV + XML | 20:00 |
-| C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ❌ | Only after the above | after 20:30 |
-| C5 | Neo4j CSV export + STIX 2.1 indicator export | ❌ | `beans export --neo4j / --stix` | after 20:30 |
+| S9 | Benchmark 1M rows | ✅ docs/BENCHMARK.md: scoring ≈3.3k rows/s, linear to 117k rows (1M needs ~16 GB RAM or chunking) | `bench` preset + timing printout for the Results slide | 19:00 |
+| — | `--mapping` for unfamiliar column names (§5.2, finale risk) | ✅ CLI/API/UI + tests (docs/DATA_FORMATS.md) | Test with a renamed-column CSV + XML | 20:00 |
+| C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ✅ `beans watch <folder>` | Only after the above | after 20:30 |
+| C5 | Neo4j CSV export + STIX 2.1 indicator export | ✅ `beans export --neo4j/--stix` | `beans export --neo4j / --stix` | after 20:30 |
 
 **Hand-off at 15:00:** merge the new generator to `penultimate` and tell Dhairya.
 
@@ -39,7 +39,7 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | M8 | E4 risk propagation from seeds (§6 E4) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | PPR + reverse PPR + decayed taint from the **real** 20% seeds; hops + path to seed for evidence | 18:30 |
 | M6 | E2 anomaly | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Re-check on new data; add SHAP for anomaly-type alerts | 19:00 |
 | S6 | Model card with real metrics (§13) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
-| S5 | Investigator feedback → retrain | 🟡 `feedback` table exists | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
+| S5 | Investigator feedback → retrain | ✅ verdicts override labels / extend saved training set and retrain | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
 | — | Leakage test | ✅ done by Kavya/Claude (tests/test_ml.py::test_no_label_leakage) | 20:30 |
 | C1 | GNN (GraphSAGE) + GNNExplainer | ❌ | Only after all of the above | after 20:30 |
 | C7 | Validate on public Elliptic dataset | ❌ | Needs a one-time download; optional | after 20:30 |

@@ -13,10 +13,10 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 | M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
 | M3 | Offline GeoIP + ASN type | ✅ done by Kavya/Claude (generator v2 + ML rewrite) |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
 | M4 | Graph + first-spy (§3, §6.0) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
-| S9 | Benchmark 1M rows | ❌ | `bench` preset + timing printout for the Results slide | 19:00 |
-| — | `--mapping` for unfamiliar column names (§5.2, finale risk) | 🟡 `mapping.py` exists | Test with a renamed-column CSV + XML | 20:00 |
-| C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ❌ | Only after the above | after 20:30 |
-| C5 | Neo4j CSV export + STIX 2.1 indicator export | ❌ | `beans export --neo4j / --stix` | after 20:30 |
+| S9 | Benchmark 1M rows | ✅ docs/BENCHMARK.md: scoring ≈3.3k rows/s, linear to 117k rows (1M needs ~16 GB RAM or chunking) | `bench` preset + timing printout for the Results slide | 19:00 |
+| — | `--mapping` for unfamiliar column names (§5.2, finale risk) | ✅ CLI/API/UI + tests (docs/DATA_FORMATS.md) | Test with a renamed-column CSV + XML | 20:00 |
+| C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ✅ `beans watch <folder>` | Only after the above | after 20:30 |
+| C5 | Neo4j CSV export + STIX 2.1 indicator export | ✅ `beans export --neo4j/--stix` | `beans export --neo4j / --stix` | after 20:30 |
 
 **Hand-off at 15:00:** merge the new generator to `penultimate` and tell Dhairya.
 
