@@ -52,5 +52,9 @@ def generate_synth_demo(n_tx: int = 1000, reset: bool = True) -> Dict[str, Any]:
             db.execute(f"DELETE FROM {t}")
     demo_dir = settings.DATA_DIR / "synth" / "demo"
     manifest = SyntheticDatasetWriter.generate_dataset(demo_dir, n_tx=n_tx)
-    return {"status": "success", "manifest": manifest,
-            "pipeline_result": _ingest(demo_dir / "transactions.csv", "SYNTHETIC_DEMO")}
+    result = _ingest(demo_dir / "transactions.csv", "SYNTHETIC_DEMO")
+    # synthetic data has ground truth → refresh the model card automatically
+    from beans.score.model_card import build_model_card
+    with db.connection() as conn:
+        build_model_card(conn, demo_dir / "labels.csv")
+    return {"status": "success", "manifest": manifest, "pipeline_result": result}

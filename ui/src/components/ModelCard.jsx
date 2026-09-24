@@ -1,8 +1,24 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Cpu, AlertCircle } from 'lucide-react';
+import { Cpu, AlertCircle, Play } from 'lucide-react';
 
 const KNOWN = new Set(['status', 'source', 'message', 'model_overview', 'engine_metrics', 'confusion_matrix', 'feature_importances']);
+
+// "target": ">= 0.80" → true/false/null
+const meets = (score, target) => {
+  const m = /^(>=|<=)\s*([\d.]+)/.exec(target || '');
+  if (!m || typeof score !== 'number') return null;
+  return m[1] === '>=' ? score >= parseFloat(m[2]) : score <= parseFloat(m[2]);
+};
+
+function EvalButton({ onEvaluate, loading, label }) {
+  return (
+    <button onClick={onEvaluate} disabled={loading}
+      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-50">
+      <Play className="w-4 h-4" /> {loading ? 'Evaluating…' : label}
+    </button>
+  );
+}
 
 function Value({ v }) {
   if (v === null || v === undefined) return <span className="text-slate-400">—</span>;
@@ -12,7 +28,7 @@ function Value({ v }) {
   return <pre className="text-[11px] bg-slate-50 p-2 rounded overflow-x-auto">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-export default function ModelCard({ modelCard }) {
+export default function ModelCard({ modelCard, onEvaluate, loading }) {
   if (!modelCard) return <div className="text-sm text-slate-500">Loading model card…</div>;
 
   if (modelCard.status !== 'evaluated') {
@@ -24,6 +40,7 @@ export default function ModelCard({ modelCard }) {
           {modelCard.message || 'Run the evaluation step to measure the engines on held-out labelled data.'} This page only
           shows measured metrics. Nothing on it is hard-coded.
         </p>
+        <EvalButton onEvaluate={onEvaluate} loading={loading} label="Run evaluation now" />
       </div>
     );
   }
@@ -35,10 +52,10 @@ export default function ModelCard({ modelCard }) {
     <div className="space-y-5">
       <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-start gap-3">
         <Cpu className="w-6 h-6 text-blue-600 mt-0.5" />
-        <div>
+        <div className="flex-1">
           <h2 className="text-lg font-bold text-slate-900">{modelCard.model_overview?.name || 'Model card'}</h2>
           <p className="text-xs text-slate-500">
-            Measured on held-out synthetic data with ground-truth labels · source: {modelCard.source}
+            Measured against the synthetic dataset’s ground-truth labels · red = below target · source: {modelCard.source}
           </p>
           {modelCard.model_overview && (
             <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -48,21 +65,25 @@ export default function ModelCard({ modelCard }) {
             </div>
           )}
         </div>
+        <EvalButton onEvaluate={onEvaluate} loading={loading} label="Re-evaluate" />
       </div>
 
       {modelCard.engine_metrics?.length > 0 && (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
-              <tr><th className="text-left p-3">Engine</th><th className="text-left p-3">Metric</th><th className="text-right p-3">Score</th><th className="text-right p-3">Target</th></tr>
+              <tr><th className="text-left p-3">Engine</th><th className="text-left p-3">Metric</th><th className="text-right p-3">Score</th><th className="text-right p-3">Target</th><th className="text-right p-3">Random baseline</th></tr>
             </thead>
             <tbody>
               {modelCard.engine_metrics.map((m, i) => (
                 <tr key={i} className="border-t border-slate-100">
                   <td className="p-3 font-semibold text-slate-800">{m.engine}</td>
                   <td className="p-3 text-slate-600">{m.metric}</td>
-                  <td className="p-3 text-right font-mono font-bold">{typeof m.score === 'number' ? m.score.toFixed(3) : m.score}</td>
+                  <td className={`p-3 text-right font-mono font-bold ${{ true: 'text-emerald-600', false: 'text-rose-600' }[meets(m.score, m.target)] || 'text-slate-900'}`}>
+                    {typeof m.score === 'number' ? m.score.toFixed(3) : m.score}
+                  </td>
                   <td className="p-3 text-right text-slate-500">{m.target ?? '—'}</td>
+                  <td className="p-3 text-right text-slate-400 font-mono">{typeof m.baseline === 'number' ? m.baseline.toFixed(3) : '—'}</td>
                 </tr>
               ))}
             </tbody>

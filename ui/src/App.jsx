@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import TopBar from './components/TopBar';
 import OverviewDashboard from './components/OverviewDashboard';
 import AlertTriage from './components/AlertTriage';
 import LinkGraph from './components/LinkGraph';
@@ -228,16 +229,39 @@ export default function App() {
     }
   };
 
+  const handleEvaluate = async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API_BASE}/modelcard/evaluate`, { method: 'POST' });
+      const res = await r.json();
+      if (!r.ok) throw new Error(res.detail || 'evaluation failed');
+      setModelCardData(res);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const counts = {
+    alerts: alerts.filter((a) => a.status === 'OPEN').length,
+    cases: cases.length,
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
-      <Navbar
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} counts={counts} />
+      <div className="flex-1 min-w-0 flex flex-col">
+      <TopBar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onRefresh={fetchAllData}
+        stats={stats}
         loading={loading}
+        onRefresh={fetchAllData}
+        onSearchWallet={inspectEntity}
+        onSearchGraph={openGraphFor}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 w-full max-w-[1500px] mx-auto px-6 py-6">
         {activeTab === 'overview' && (
           <OverviewDashboard
             stats={stats}
@@ -299,7 +323,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'modelcard' && <ModelCard modelCard={modelCardData} />}
+        {activeTab === 'modelcard' && <ModelCard modelCard={modelCardData} onEvaluate={handleEvaluate} loading={loading} />}
 
         {activeTab === 'ingest' && (
           <IngestStudio
@@ -316,6 +340,7 @@ export default function App() {
         BEANS · SIH PS 26146 · runs fully offline · IP geolocation by{' '}
         <a href="https://db-ip.com" className="underline">DB-IP</a> (CC BY 4.0) · all data shown is synthetic
       </footer>
+      </div>
     </div>
   );
 }

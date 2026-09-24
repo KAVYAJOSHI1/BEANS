@@ -1,7 +1,7 @@
 import json
 from typing import Any, Dict
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from beans.api import db
 from beans.config import settings
@@ -37,3 +37,18 @@ def get_model_card() -> Dict[str, Any]:
         "model_overview": {"name": "BEANS multi-engine forensic suite"},
         "engine_metrics": [], "feature_importances": [], "confusion_matrix": None,
     }
+
+
+@router.post("/evaluate")
+def run_evaluation(labels: str | None = None) -> Dict[str, Any]:
+    """Measure the stored pipeline output against a labels.csv (default: newest synthetic dataset)."""
+    from pathlib import Path
+
+    from beans.score.model_card import build_model_card, default_labels_path
+    path = Path(labels) if labels else default_labels_path()
+    if not path or not path.exists():
+        raise HTTPException(404, "no labels.csv found; generate a synthetic dataset first")
+    with db.connection() as conn:
+        card = build_model_card(conn, path)
+    db.audit("MODEL_EVALUATE", "MODEL", "model_card", {"labels": str(path.name)})
+    return {"status": "evaluated", "source": CARD_FILE.name, **card}
