@@ -9,14 +9,14 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 
 | # | Feature (roadmap) | Status | What to do | By |
 |---|---|---|---|---|
-| — | Repo cleanup | ❌ | Delete the unused `backend/` (check `grep -rn backend beans ui/src` first), root `approach (1).md` / `setup.md` / `prototype_plan.md`; Makefile uses `.venv`; README without false claims | **14:30** |
-| M11 | Dashboard: alerts, entity evidence, link graph (§8) | 🟡 components exist | Check each page against real API data; relative `API_BASE="/api"`; empty and error states | **16:00** |
-| M13 | Offline, one-command demo (§10.1) | 🟡 | `npm run build` → FastAPI serves `ui/dist` with SPA fallback; no CDN/remote fonts; `make demo`; `docker run --network none` test | 17:30 |
-| S7 | Graph filters + expand + path/peel highlight | 🟡 | Min-risk/typology/country/ASN filters; click to expand; highlight path-to-seed and peel chain | 18:00 |
-| S1 | Timeline + peel-chain replay | 🟡 component exists | Wire to real flow data | 18:30 |
-| S2 | Geo map + impossible-travel arcs | 🟡 component exists | Offline world GeoJSON; wire to API | 18:30 |
-| S3/S4 | Cases + evidence pack PDF/JSON with SHA-256 | 🟡 `pdf_export.py` exists | End to end from the UI; include SHAP, reasons, evidence, input hash | 19:30 |
-| S8 | Seed upload → live re-propagation | 🟡 route exists | UI upload + progress + refreshed alerts | 20:00 |
+| — | Repo cleanup | ✅ done | Delete the unused `backend/` (check `grep -rn backend beans ui/src` first), root `approach (1).md` / `setup.md` / `prototype_plan.md`; Makefile uses `.venv`; README without false claims | **14:30** |
+| M11 | Dashboard: alerts, entity evidence, link graph (§8) | ✅ all pages on real API data, fakes removed | Check each page against real API data; relative `API_BASE="/api"`; empty and error states | **16:00** |
+| M13 | Offline, one-command demo (§10.1) | ✅ `make demo`, `make docker-offline-test` (passes with --network none), `make bundle` | `npm run build` → FastAPI serves `ui/dist` with SPA fallback; no CDN/remote fonts; `make demo`; `docker run --network none` test | 17:30 |
+| S7 | Graph filters + expand + path/peel highlight | ✅ center/hops/min-risk, click-expand, evidence highlight | Min-risk/typology/country/ASN filters; click to expand; highlight path-to-seed and peel chain | 18:00 |
+| S1 | Timeline + peel-chain replay | 🟡 API follows a wallet; UI replay unchanged | Wire to real flow data | 18:30 |
+| S2 | Geo map + impossible-travel arcs | ✅ offline world map, arcs computed from data | Offline world GeoJSON; wire to API | 18:30 |
+| S3/S4 | Cases + evidence pack PDF/JSON with SHA-256 | ✅ PDF/JSON/MD, source hashes, audit trail | End to end from the UI; include SHAP, reasons, evidence, input hash | 19:30 |
+| S8 | Seed upload → live re-propagation | ✅ CSV upload, rescore keeps analyst verdicts | UI upload + progress + refreshed alerts | 20:00 |
 | M14 | Technical write-up (§12) + README | ❌ | 6–8 pages; metrics from Dhairya's model card; screenshots; export PDF | 22:00 |
 | — | Demo rehearsal (§14) with Wi-Fi off | ❌ | Twice | 22:30 |
 | C6 | Login with analyst/supervisor roles | ❌ | Only if everything else is done | after 20:30 |

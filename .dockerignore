@@ -1,0 +1,9 @@
+.git
+.venv
+**/__pycache__
+ui/node_modules
+data/*.duckdb*
+data/synth
+data/inbox
+wheelhouse
+*.tar.gz
