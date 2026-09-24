@@ -1,0 +1,24 @@
+[project]
+name = "beans"
+version = "0.1.0"
+description = "BEANS: Bitcoin Encryption, Analysis & Network Security. Offline Bitcoin transaction/network forensics (SIH PS 26146)"
+requires-python = ">=3.10"
+
+[project.scripts]
+beans = "beans.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["beans*"]
+
+[tool.setuptools.package-data]
+beans = ["store/*.sql", "explain/*.yaml", "report/templates/*"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
