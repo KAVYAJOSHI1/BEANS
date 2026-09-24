@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Play, Pause, RotateCcw, ArrowRight, Clock, ShieldCheck, ShieldAlert, Cpu } from 'lucide-react';
 
-export default function TimelineReplay({ timelineEvents }) {
+export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [entity, setEntity] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
 
   const events = timelineEvents || [];
@@ -19,8 +20,14 @@ export default function TimelineReplay({ timelineEvents }) {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Chronological Transaction Flow & Peel Replay</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Step-by-step investigative replay of fund dissemination, peel chains, and CoinJoin tumbler cycles.
+            Step through every transaction of one wallet in time order
+            {events[0]?.entity ? <> · following <span className="font-mono">{events[0].entity.slice(0, 20)}…</span></> : ''}.
           </p>
+          <form className="flex gap-2 mt-2" onSubmit={(e) => { e.preventDefault(); if (entity.trim()) { setCurrentStep(0); onLoadTimeline(entity.trim()); } }}>
+            <input value={entity} onChange={(e) => setEntity(e.target.value)} placeholder="wallet address to follow"
+              className="text-xs font-mono border border-slate-200 rounded-md px-2 py-1 w-96 bg-slate-50" />
+            <button className="px-3 py-1 rounded-md bg-slate-900 text-white text-xs font-semibold">Follow</button>
+          </form>
         </div>
 
         {/* Playback Controls */}
