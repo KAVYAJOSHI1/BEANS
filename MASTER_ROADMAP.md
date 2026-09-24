@@ -4,7 +4,7 @@
 
 > **What this file is.** It is the single source of truth for the team. It covers what the problem statement actually asks for, what our existing docs get right and wrong, the final architecture, every feature (prioritised), the ML design, the synthetic-data plan, the repo layout, the week-by-week build plan, the demo script, and the write-up outline.
 >
-> Repo: `git@github.com:KAVYAJOSHI1/BEANS.git` · Source docs: `approach (1).md`, `setup.md`, `SIH_PS_26146.pdf`
+> Repo: `git@github.com:KAVYAJOSHI1/BEANS.git` · Source docs: `docs/archive/` (approach.md, setup.md, SIH_PS_26146.pdf)
 
 ---
 

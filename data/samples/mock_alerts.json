@@ -1,0 +1,366 @@
+[
+  {
+    "alert_id": "A-C-bbae72c4b6",
+    "rank": 1,
+    "entity_type": "cluster",
+    "entity_id": "C-000812",
+    "alert_type": "PEEL_CHAIN",
+    "title": "14-hop peeling chain 2 hops from a ransomware seed",
+    "risk": 93,
+    "confidence": 0.88,
+    "severity": "CRITICAL",
+    "reasons": [
+      "Part of a 14-hop peeling chain (avg peel 3.1% per hop, avg hop interval 6 min)",
+      "2 hops from seed wallet (RANSOMWARE), taint 62%",
+      "Broadcast from 3 countries in 40 min via Tor exit ASN 60729 (impossible travel)",
+      "Received 4.2 BTC 11 h after first appearance, held < 2 h"
+    ],
+    "shap_top": [
+      {
+        "feature": "peel_chain_length",
+        "value": 14,
+        "impact": 0.31
+      },
+      {
+        "feature": "ppr_from_seed",
+        "value": 0.0031,
+        "impact": 0.22
+      },
+      {
+        "feature": "n_countries_1h",
+        "value": 3,
+        "impact": 0.12
+      },
+      {
+        "feature": "hold_time_h",
+        "value": 1.6,
+        "impact": 0.09
+      },
+      {
+        "feature": "fee_rate_pctl",
+        "value": 0.42,
+        "impact": -0.03
+      }
+    ],
+    "engine_scores": {
+      "E2_anomaly": 0.91,
+      "E3_peel": 0.97,
+      "E4_ppr": 0.74,
+      "E4_taint": 0.62
+    },
+    "evidence": {
+      "txids": [
+        "bb44a0e0a319d1f032e54381a8ddfdf1a1bab7e39ec4611ba4cba69ee9124eb7",
+        "eadb221abcaef8e525c3afcc8ec694d728475e992a4684d743c4d0abf7229765",
+        "b9dff44513228e0dca5bafca1f7487e8a9f125a085b949de01989a96afda13ba",
+        "76c133d1e7a56ab109a71686a6e200ede65917bbcf5a311583de62b8d2cf0a61"
+      ],
+      "addresses": [
+        "bc1q7f03f3f2febc46f3fa832d98251b0c98f64bc1",
+        "bc1q787d41d9c35c57ef9e4aba799bacefac312149"
+      ],
+      "ips": [
+        "185.220.101.4",
+        "49.36.12.7"
+      ],
+      "seed": "bc1qafc97ea131fd7e2695a98ef34013608f97f34e",
+      "path_to_seed": [
+        "bc1q7f03f3f2febc46f3fa832d98251b0c98f64bc1",
+        "bc1qf83a383c0fa81f295d057f8f5ed0ba46109478",
+        "bc1qafc97ea131fd7e2695a98ef34013608f97f34e"
+      ],
+      "peel_chain": [
+        "bb44a0e0a319d1f032e54381a8ddfdf1a1bab7e39ec4611ba4cba69ee9124eb7",
+        "eadb221abcaef8e525c3afcc8ec694d728475e992a4684d743c4d0abf7229765",
+        "b9dff44513228e0dca5bafca1f7487e8a9f125a085b949de01989a96afda13ba",
+        "76c133d1e7a56ab109a71686a6e200ede65917bbcf5a311583de62b8d2cf0a61"
+      ],
+      "subgraph_center": "cluster:C-000812"
+    },
+    "member_count": 14,
+    "created_at": "2026-09-24T12:00:00"
+  },
+  {
+    "alert_id": "A-W-efec4c2a2b",
+    "rank": 2,
+    "entity_type": "wallet",
+    "entity_id": "bc1qdbc0f004854457f59fb16ab863a3a1722cef55",
+    "alert_type": "RANSOMWARE_PATTERN",
+    "title": "Fresh wallet: large inflow, split to 12 outputs, then mixed",
+    "risk": 89,
+    "confidence": 0.81,
+    "severity": "CRITICAL",
+    "reasons": [
+      "Wallet first seen 9 h before receiving 3.8 BTC from a single source",
+      "Split into 12 outputs within 2 h; 9 of them entered CoinJoin-like transactions",
+      "All broadcasts from hosting/VPN ASNs, 83% outside 09:00-18:00 actor-local time"
+    ],
+    "shap_top": [
+      {
+        "feature": "peel_chain_length",
+        "value": 14,
+        "impact": 0.31
+      },
+      {
+        "feature": "ppr_from_seed",
+        "value": 0.0031,
+        "impact": 0.22
+      },
+      {
+        "feature": "n_countries_1h",
+        "value": 3,
+        "impact": 0.12
+      },
+      {
+        "feature": "hold_time_h",
+        "value": 1.6,
+        "impact": 0.09
+      },
+      {
+        "feature": "fee_rate_pctl",
+        "value": 0.42,
+        "impact": -0.03
+      }
+    ],
+    "engine_scores": {
+      "E2_anomaly": 0.88,
+      "E3_peel": 0.41,
+      "E4_ppr": 0.66,
+      "E4_taint": 0.35
+    },
+    "evidence": {
+      "txids": [
+        "265f8fd7c7087a83c100d65be143fab08334d45995c464a0352206a17f9f79ce",
+        "d49aa1c886527b52e026c2d1460fd1fc105c539e9cb5dd7f898d0f059d952d10",
+        "6b869ccf2f4d5c5388745f33626bf9ce8bee985dae6af53c09798f0069441449",
+        "b365df77a96c9ec59185f69970a90cdbd150fe819b7e3259475fb1ef40d8d4f7"
+      ],
+      "addresses": [
+        "bc1q1e7b95c5614637fdcde70eb7f2d109134c95c6",
+        "bc1qcd0613ba91fbab0c5af2827e308e487e267d28"
+      ],
+      "ips": [
+        "185.220.101.4",
+        "49.36.12.7"
+      ],
+      "seed": "bc1qafc97ea131fd7e2695a98ef34013608f97f34e",
+      "path_to_seed": null,
+      "peel_chain": null,
+      "subgraph_center": "wallet:bc1qdbc0f004854457f59fb16ab863a3a1722cef55"
+    },
+    "member_count": 1,
+    "created_at": "2026-09-24T12:00:00"
+  },
+  {
+    "alert_id": "A-T-3519fbff66",
+    "rank": 3,
+    "entity_type": "tx",
+    "entity_id": "034db0d302a891f4157d9665eb817b9993af401416fdcbcd90f722f36c4eeeac",
+    "alert_type": "MIXING",
+    "title": "CoinJoin-like transaction: 23 inputs, 20 equal 0.1 BTC outputs",
+    "risk": 71,
+    "confidence": 0.9,
+    "severity": "HIGH",
+    "reasons": [
+      "20 of 24 outputs have identical value 0.1 BTC",
+      "23 inputs from 21 unrelated clusters",
+      "Inputs trace to 2 flagged clusters within 3 hops"
+    ],
+    "shap_top": [
+      {
+        "feature": "peel_chain_length",
+        "value": 14,
+        "impact": 0.31
+      },
+      {
+        "feature": "ppr_from_seed",
+        "value": 0.0031,
+        "impact": 0.22
+      },
+      {
+        "feature": "n_countries_1h",
+        "value": 3,
+        "impact": 0.12
+      },
+      {
+        "feature": "hold_time_h",
+        "value": 1.6,
+        "impact": 0.09
+      },
+      {
+        "feature": "fee_rate_pctl",
+        "value": 0.42,
+        "impact": -0.03
+      }
+    ],
+    "engine_scores": {
+      "E2_anomaly": 0.64,
+      "E3_coinjoin": 0.99,
+      "E4_ppr": 0.31
+    },
+    "evidence": {
+      "txids": [
+        "917748ce201b375db56ecbf7937f2db1b588d06ab72c596fad3815e3a3c2d807",
+        "ec3cc7bb208431ea43ecca0fa0ebbf81a1ee08d4bd46643544a3906732047fc7",
+        "3c4b6f29fd0c1a5af6c6bd0893f8798b1da43194ce82d82c932954e8ff6c941b",
+        "7f33b1618ba181210f8cc25b53a49d187f64b150a9f00b80a148f6a1bd9d91ab"
+      ],
+      "addresses": [
+        "bc1qa165fbd61c277745f187eaac7182d9c05d0d11",
+        "bc1qbbcbb1e844266f4abdfc29b3d8a64628607fa4"
+      ],
+      "ips": [
+        "185.220.101.4",
+        "49.36.12.7"
+      ],
+      "seed": null,
+      "path_to_seed": null,
+      "peel_chain": null,
+      "subgraph_center": "tx:034db0d302a891f4157d9665eb817b9993af401416fdcbcd90f722f36c4eeeac"
+    },
+    "member_count": 1,
+    "created_at": "2026-09-24T12:00:00"
+  },
+  {
+    "alert_id": "A-I-5de50dad46",
+    "rank": 4,
+    "entity_type": "ip",
+    "entity_id": "185.220.101.4",
+    "alert_type": "NETWORK_ANOMALY",
+    "title": "Tor exit first-relayed 41 transactions of 6 flagged clusters",
+    "risk": 68,
+    "confidence": 0.63,
+    "severity": "HIGH",
+    "reasons": [
+      "IP is a known Tor exit (offline snapshot 2026-09)",
+      "First-spy for 41 txs linked to 6 flagged clusters",
+      "Non-standard source port pattern (ephemeral range reuse)"
+    ],
+    "shap_top": [
+      {
+        "feature": "peel_chain_length",
+        "value": 14,
+        "impact": 0.31
+      },
+      {
+        "feature": "ppr_from_seed",
+        "value": 0.0031,
+        "impact": 0.22
+      },
+      {
+        "feature": "n_countries_1h",
+        "value": 3,
+        "impact": 0.12
+      },
+      {
+        "feature": "hold_time_h",
+        "value": 1.6,
+        "impact": 0.09
+      },
+      {
+        "feature": "fee_rate_pctl",
+        "value": 0.42,
+        "impact": -0.03
+      }
+    ],
+    "engine_scores": {
+      "E2_anomaly": 0.72,
+      "network": 0.81
+    },
+    "evidence": {
+      "txids": [
+        "ea6840f937e9677ca372d6a859bf434dcc1fab8575461f2bbd827fe655e1c6bf",
+        "325089ba841b7820a841be8e4befe36ca467f4f1c21e7ffd70d6be61ae02e5d1",
+        "2bc7652f91e20ec715b611e6db788b29b02db74f1653cd7bec915e418f230bf7",
+        "a12ef962ea3a6957a3ed4eefa9ca1e11ab4feba855acbeeaff7356e2c7116d1d"
+      ],
+      "addresses": [
+        "bc1q1cc641954099c249e0e4ef0402da3fd0364d95",
+        "bc1q79816ecb0a75e0b29ec93a3e4845cf4f0b5d4d"
+      ],
+      "ips": [
+        "185.220.101.4",
+        "49.36.12.7"
+      ],
+      "seed": null,
+      "path_to_seed": null,
+      "peel_chain": null,
+      "subgraph_center": "ip:185.220.101.4"
+    },
+    "member_count": 1,
+    "created_at": "2026-09-24T12:00:00"
+  },
+  {
+    "alert_id": "A-C-453fc332e9",
+    "rank": 5,
+    "entity_type": "cluster",
+    "entity_id": "C-001377",
+    "alert_type": "SEED_PROXIMITY",
+    "title": "Exchange-like cluster receiving funds 3 hops from seed",
+    "risk": 47,
+    "confidence": 0.52,
+    "severity": "MEDIUM",
+    "reasons": [
+      "Receives 1.4 BTC that traces to a seed wallet in 3 hops (taint 8%)",
+      "Behaviour otherwise matches exchange consolidation (weekly sweeps, no mixing)"
+    ],
+    "shap_top": [
+      {
+        "feature": "peel_chain_length",
+        "value": 14,
+        "impact": 0.31
+      },
+      {
+        "feature": "ppr_from_seed",
+        "value": 0.0031,
+        "impact": 0.22
+      },
+      {
+        "feature": "n_countries_1h",
+        "value": 3,
+        "impact": 0.12
+      },
+      {
+        "feature": "hold_time_h",
+        "value": 1.6,
+        "impact": 0.09
+      },
+      {
+        "feature": "fee_rate_pctl",
+        "value": 0.42,
+        "impact": -0.03
+      }
+    ],
+    "engine_scores": {
+      "E2_anomaly": 0.22,
+      "E4_ppr": 0.41,
+      "E4_taint": 0.08
+    },
+    "evidence": {
+      "txids": [
+        "0055ccff451a3baf8a7fbd2a37e108013fbf9f8638be6a6dfdcd50b0c7607141",
+        "586d8924cc11f7711283f1b468859e48a38e041f533946f1423f80f80e6d6fb2",
+        "34805bd1a120388ef26bf81470cedcff330233eaf9646b7a1880553d9261d250",
+        "c72c40efd179a2a046fda0069448f0054c2ecccf789dd5ff0292a255a0cd266b"
+      ],
+      "addresses": [
+        "bc1q5f1cd7c3fb68ae7c679f8c33966610670d32ff",
+        "bc1q9a3d6127374af09c22015bf3ede3ac00a36e3e"
+      ],
+      "ips": [
+        "185.220.101.4",
+        "49.36.12.7"
+      ],
+      "seed": "bc1qafc97ea131fd7e2695a98ef34013608f97f34e",
+      "path_to_seed": [
+        "bc1q5f1cd7c3fb68ae7c679f8c33966610670d32ff",
+        "bc1qf83a383c0fa81f295d057f8f5ed0ba46109478",
+        "bc1qafc97ea131fd7e2695a98ef34013608f97f34e"
+      ],
+      "peel_chain": null,
+      "subgraph_center": "cluster:C-001377"
+    },
+    "member_count": 212,
+    "created_at": "2026-09-24T12:00:00"
+  }
+]
