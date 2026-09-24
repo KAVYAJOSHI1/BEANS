@@ -278,7 +278,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'timeline' && <TimelineReplay timelineEvents={timelineEvents} />}
+        {activeTab === 'timeline' && <TimelineReplay timelineEvents={timelineEvents} onLoadTimeline={openTimeline} />}
 
         {activeTab === 'geomap' && <GeoMap geoData={geoData} />}
 
