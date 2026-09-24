@@ -1,2 +1,6 @@
-"""BEANS: Bitcoin Encryption, Analysis & Network Security."""
-__version__ = "0.1.0"
+"""
+BEANS — AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic
+SIH PS 26146 · NTRO
+"""
+
+__version__ = "1.0.0"

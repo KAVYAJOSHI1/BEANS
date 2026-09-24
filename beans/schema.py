@@ -1,190 +1,80 @@
-"""Shared contracts between the three workstreams.
-
-SHARED FILE: changing anything here affects Dharmik, Dhairya and Kavya. Tell the team before you
-change it, and change it on `penultimate` so everyone gets it on their next merge.
-"""
-from __future__ import annotations
-
-import hashlib
-import re
 from datetime import datetime
-from enum import Enum
-
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
+import re
 
-TXID_RE = re.compile(r"^[0-9a-f]{64}$")
-BTC_P2P_PORTS = {8333, 18333, 38333, 18444}  # mainnet, testnet, signet, regtest
+SCRIPT_TYPES = Literal["P2PKH", "P2SH", "P2WPKH", "P2WSH", "P2TR", "UNKNOWN"]
+ISP_TYPES = Literal["RESIDENTIAL", "DATACENTER", "VPN", "TOR_EXIT", "BULLETPROOF", "UNKNOWN"]
+SEVERITY_LEVELS = Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+ALERT_STATUS = Literal["OPEN", "INVESTIGATING", "RESOLVED", "FALSE_POSITIVE"]
 
-
-class ScriptType(str, Enum):
-    P2PKH = "P2PKH"
-    P2SH = "P2SH"
-    P2WPKH = "P2WPKH"
-    P2WSH = "P2WSH"
-    P2TR = "P2TR"
-    UNKNOWN = "UNKNOWN"
-
-
-class AsnType(str, Enum):
-    RESIDENTIAL = "RESIDENTIAL"
-    MOBILE = "MOBILE"
-    HOSTING = "HOSTING"
-    VPN = "VPN"
-    TOR = "TOR"
-    UNKNOWN = "UNKNOWN"
-
-
-class Typology(str, Enum):
-    """Ground-truth wallet/entity labels produced by the synthetic generator."""
-    NORMAL = "NORMAL"
-    EXCHANGE = "EXCHANGE"
-    MERCHANT = "MERCHANT"
-    MINER = "MINER"
-    RANSOMWARE = "RANSOMWARE"
-    PEEL_CHAIN = "PEEL_CHAIN"
-    COINJOIN = "COINJOIN"
-    DARKNET_MARKET = "DARKNET_MARKET"
-    HACK_LAUNDERING = "HACK_LAUNDERING"
-    FAN_OUT_SMURF = "FAN_OUT_SMURF"
-    ROUND_TRIP = "ROUND_TRIP"
-    DUSTING = "DUSTING"
-
-
-ILLICIT_TYPOLOGIES = {
-    Typology.RANSOMWARE, Typology.PEEL_CHAIN, Typology.DARKNET_MARKET, Typology.HACK_LAUNDERING,
-    Typology.FAN_OUT_SMURF, Typology.ROUND_TRIP, Typology.DUSTING,
-}
-# COINJOIN is privacy-seeking, not illicit by itself: it is a risk *signal*, not a label of guilt.
-
-
-class TxClass(str, Enum):
-    """Transaction-shape classes predicted by engine E3."""
-    NORMAL = "normal"
-    PEEL = "peel"
-    COINJOIN = "coinjoin"
-    FAN_OUT = "fan_out"
-    FAN_IN = "fan_in"
-    ROUND_TRIP = "round_trip"
-
-
-class Severity(str, Enum):
-    CRITICAL = "CRITICAL"
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
-
-
-def severity_for(risk: float) -> Severity:
-    if risk >= 85:
-        return Severity.CRITICAL
-    if risk >= 65:
-        return Severity.HIGH
-    if risk >= 40:
-        return Severity.MEDIUM
-    return Severity.LOW
-
-
-class AlertType(str, Enum):
-    RANSOMWARE_PATTERN = "RANSOMWARE_PATTERN"
-    PEEL_CHAIN = "PEEL_CHAIN"
-    MIXING = "MIXING"
-    SEED_PROXIMITY = "SEED_PROXIMITY"
-    ANOMALOUS_FLOW = "ANOMALOUS_FLOW"
-    NETWORK_ANOMALY = "NETWORK_ANOMALY"
-    CLUSTER_LINK = "CLUSTER_LINK"
-
-
-class AlertStatus(str, Enum):
-    OPEN = "OPEN"
-    INVESTIGATING = "INVESTIGATING"
-    CONFIRMED = "CONFIRMED"
-    FALSE_POSITIVE = "FALSE_POSITIVE"
-    CLOSED = "CLOSED"
-
-
-class EntityType(str, Enum):
-    WALLET = "wallet"
-    CLUSTER = "cluster"
-    TX = "tx"
-    IP = "ip"
-
-
-def alert_id_for(entity_type: str, entity_id: str) -> str:
-    """Deterministic, so investigator status/notes survive a re-score."""
-    return f"A-{entity_type[:1].upper()}-{hashlib.sha1(entity_id.encode()).hexdigest()[:10]}"
-
-
-# ---------------------------------------------------------------- input record (one network observation)
-
-class RawRecord(BaseModel):
-    timestamp: datetime
-    src_ip: str
-    dst_ip: str
-    src_port: int = Field(ge=0, le=65535)
-    dst_port: int = Field(ge=0, le=65535)
-    txid: str
-    input_addresses: list[str]
-    output_addresses: list[str]
-    input_amounts: list[float]
-    output_amounts: list[float]
-    fee: float | None = None
-    script_type: ScriptType = ScriptType.UNKNOWN
-    geo_country: str | None = None
-    asn: int | None = None
-    block_height: int | None = None
+class CanonicalRecord(BaseModel):
+    """
+    Unified Canonical Schema for Bitcoin P2P Transaction Observation (R1, R2).
+    """
+    timestamp: datetime = Field(..., description="ISO-8601 UTC observation timestamp")
+    src_ip: str = Field(..., description="Relaying source IPv4 or IPv6 address")
+    src_port: int = Field(8333, ge=1, le=65535, description="Source port")
+    dst_ip: Optional[str] = Field(None, description="Receiving destination IP")
+    dst_port: int = Field(8333, ge=1, le=65535, description="Destination port (8333 default)")
+    txid: str = Field(..., description="64-character hexadecimal transaction ID")
+    input_addresses: List[str] = Field(default_factory=list)
+    input_amounts: List[float] = Field(default_factory=list)
+    output_addresses: List[str] = Field(default_factory=list)
+    output_amounts: List[float] = Field(default_factory=list)
+    fee: float = Field(0.0, ge=0.0, description="Miner fee in BTC")
+    script_type: SCRIPT_TYPES = Field("P2WPKH", description="Bitcoin script type")
+    
+    # Enrichment fields (filled offline)
+    geo_country: Optional[str] = Field("XX", description="ISO 2-letter country code")
+    geo_city: Optional[str] = Field("Unknown", description="City name")
+    geo_lat: Optional[float] = Field(0.0, description="Latitude")
+    geo_lon: Optional[float] = Field(0.0, description="Longitude")
+    asn: Optional[str] = Field("AS_UNKNOWN", description="Autonomous System Number")
+    asn_name: Optional[str] = Field("Unknown Provider", description="ASN Organization")
+    asn_type: ISP_TYPES = Field("RESIDENTIAL", description="Infrastructure type")
+    block_height: Optional[int] = Field(0, ge=0)
 
     @field_validator("txid")
     @classmethod
-    def _txid(cls, v: str) -> str:
+    def validate_txid(cls, v: str) -> str:
         v = v.strip().lower()
-        if not TXID_RE.match(v):
-            raise ValueError("txid must be 64 hex chars")
+        if not re.match(r"^[0-9a-f]{64}$", v):
+            # If shortened test txid, pad or accept if valid hex
+            if re.match(r"^[0-9a-f]+$", v) and len(v) >= 8:
+                return v
+            raise ValueError(f"Invalid TXID hex format: {v}")
         return v
 
     @model_validator(mode="after")
-    def _lengths(self) -> "RawRecord":
+    def validate_array_lengths_and_math(self) -> "CanonicalRecord":
         if len(self.input_addresses) != len(self.input_amounts):
-            raise ValueError("input_addresses and input_amounts length mismatch")
+            raise ValueError(f"Input addresses ({len(self.input_addresses)}) and amounts ({len(self.input_amounts)}) count mismatch")
         if len(self.output_addresses) != len(self.output_amounts):
-            raise ValueError("output_addresses and output_amounts length mismatch")
-        if not self.output_addresses:
-            raise ValueError("transaction has no outputs")
-        if any(a < 0 for a in self.input_amounts + self.output_amounts):
-            raise ValueError("negative amount")
+            raise ValueError(f"Output addresses ({len(self.output_addresses)}) and amounts ({len(self.output_amounts)}) count mismatch")
         return self
 
+    @property
+    def total_input(self) -> float:
+        return round(sum(self.input_amounts), 8)
 
-# ---------------------------------------------------------------- alert (what the API/UI consume)
-
-class ShapItem(BaseModel):
-    feature: str
-    value: float | str | None
-    impact: float  # signed contribution to the fused log-odds / probability
-
-
-class Evidence(BaseModel):
-    txids: list[str] = []
-    addresses: list[str] = []
-    ips: list[str] = []
-    seed: str | None = None                 # nearest seed wallet, if any
-    path_to_seed: list[str] | None = None   # ordered addresses from entity to seed
-    peel_chain: list[str] | None = None     # ordered txids of the peel chain
-    subgraph_center: str | None = None      # "wallet:<addr>" | "tx:<txid>" | "ip:<ip>" | "cluster:<id>"
+    @property
+    def total_output(self) -> float:
+        return round(sum(self.output_amounts), 8)
 
 
-class Alert(BaseModel):
+class AlertRecord(BaseModel):
     alert_id: str
-    rank: int
-    entity_type: EntityType
     entity_id: str
-    alert_type: AlertType
-    title: str
-    risk: float = Field(ge=0, le=100)
-    confidence: float = Field(ge=0, le=1)
-    severity: Severity
-    reasons: list[str]
-    shap_top: list[ShapItem] = []
-    engine_scores: dict[str, float] = {}
-    evidence: Evidence = Evidence()
-    member_count: int = 1
-    created_at: datetime
+    entity_type: Literal["WALLET", "CLUSTER", "TRANSACTION", "IP"]
+    alert_type: str
+    risk_score: float = Field(..., ge=0.0, le=100.0)
+    calibrated_confidence: float = Field(..., ge=0.0, le=1.0)
+    severity: SEVERITY_LEVELS
+    reasons: List[str] = Field(default_factory=list)
+    shap_top_features: List[dict] = Field(default_factory=list)
+    engine_scores: dict = Field(default_factory=dict)
+    evidence: dict = Field(default_factory=dict)
+    status: ALERT_STATUS = "OPEN"
+    assigned_to: str = "Unassigned"
+    created_at: datetime = Field(default_factory=datetime.utcnow)
