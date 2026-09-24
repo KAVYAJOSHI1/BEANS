@@ -1,41 +1,29 @@
-# OWNER: Kavya (others: add targets for your own module at the bottom, one line each)
-PY ?= .venv/bin/python
-BEANS = $(PY) -m beans.cli
-DB ?= data/beans.duckdb
+.PHONY: help synth ingest train serve demo test build-ui
 
-.PHONY: venv install test lint synth-tiny synth-demo pipeline-tiny pipeline-demo serve serve-mock ui demo
+help:
+	@echo "BEANS — AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic"
+	@echo "Commands:"
+	@echo "  make synth     Generate synthetic forensic datasets (CSV, JSON, XML)"
+	@echo "  make ingest    Ingest dataset and execute full AI/ML pipeline"
+	@echo "  make serve     Start FastAPI backend server on http://127.0.0.1:8000"
+	@echo "  make demo      1-Click end-to-end demo execution"
+	@echo "  make test      Run automated PyTest test suite"
+	@echo "  make build-ui  Build React production static frontend bundle"
 
-venv:
-	python3 -m venv .venv && .venv/bin/pip install -U pip
+synth:
+	python -m beans.cli synth --n-tx 2000 --out data/synth/demo
 
-install: venv
-	.venv/bin/pip install -r requirements.txt && .venv/bin/pip install -e . --no-deps
-
-test:
-	$(PY) -m pytest -q
-
-lint:
-	$(PY) -m ruff check beans tests
-
-synth-tiny:
-	$(BEANS) synth --preset tiny
-
-synth-demo:
-	$(BEANS) synth --preset demo
-
-pipeline-tiny: synth-tiny
-	$(BEANS) pipeline data/synth/tiny/transactions.csv --db $(DB)
-
-pipeline-demo: synth-demo
-	$(BEANS) pipeline data/synth/demo/transactions.csv --db $(DB)
+ingest:
+	python -m beans.cli ingest data/synth/demo/transactions.csv
 
 serve:
-	$(BEANS) serve --db $(DB)
+	python -m beans.cli serve --port 8000
 
-serve-mock:
-	BEANS_MOCK=1 $(BEANS) serve
+demo:
+	python -m beans.cli demo --n-tx 1000 --port 8000
 
-ui:
-	cd ui && npm ci && npm run build
+test:
+	python -m pytest tests/ -v
 
-demo: pipeline-demo serve
+build-ui:
+	cd ui && npm run build

@@ -1,0 +1,8 @@
+{
+  "dataset_name": "test_fixture",
+  "total_transactions": 30,
+  "illicit_transactions": 13,
+  "seeds_count": 2,
+  "csv_sha256": "c1eb1e9065215de6048576eb8d50d0aa37ac8fd5d635d273ee85717ac8fc083d",
+  "generated_at": "2026-09-24T07:24:19.003165"
+}
