@@ -24,19 +24,22 @@ class Frames:
 
 
 def load_frames(conn) -> Frames:
-    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type FROM transactions").df()
-    tin = conn.execute("""SELECT txid, timestamp AS ts, unnest(input_addresses) AS address,
-                          unnest(input_amounts) AS amount FROM transactions""").df()
-    tout = conn.execute("""SELECT txid, timestamp AS ts, generate_subscripts(output_addresses, 1) AS idx,
-                           unnest(output_addresses) AS address, unnest(output_amounts) AS amount
-                           FROM transactions""").df()
+    # every query is explicitly ordered: DuckDB's parallel scans return rows in varying order, and row order
+    # changes model training (bagging) → results must be reproducible run to run
+    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type FROM transactions ORDER BY txid").df()
+    tin = conn.execute("""SELECT * FROM (SELECT txid, timestamp AS ts, generate_subscripts(input_addresses, 1) AS idx,
+                          unnest(input_addresses) AS address, unnest(input_amounts) AS amount FROM transactions)
+                          ORDER BY txid, idx""").df().drop(columns="idx")
+    tout = conn.execute("""SELECT * FROM (SELECT txid, timestamp AS ts, generate_subscripts(output_addresses, 1) AS idx,
+                           unnest(output_addresses) AS address, unnest(output_amounts) AS amount FROM transactions)
+                           ORDER BY txid, idx""").df()
     spy = conn.execute("""
-        WITH o AS (SELECT *, row_number() OVER (PARTITION BY txid ORDER BY timestamp) AS rn,
+        WITH o AS (SELECT *, row_number() OVER (PARTITION BY txid ORDER BY timestamp, src_ip) AS rn,
                           count(*) OVER (PARTITION BY txid) AS n FROM net_observations)
         SELECT a.txid, a.src_ip AS spy_ip, a.src_port AS spy_port, a.geo_country AS spy_country,
                a.asn AS spy_asn, a.asn_type AS spy_asn_type, a.n AS n_obs,
                (epoch_ms(b.timestamp) - epoch_ms(a.timestamp)) / 1000.0 AS spy_delta
-        FROM o a LEFT JOIN o b ON a.txid = b.txid AND b.rn = 2 WHERE a.rn = 1""").df()
+        FROM o a LEFT JOIN o b ON a.txid = b.txid AND b.rn = 2 WHERE a.rn = 1 ORDER BY a.txid""").df()
     return Frames(tx, tin, tout, spy)
 
 

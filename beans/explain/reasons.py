@@ -43,7 +43,9 @@ def reasons_from_shap(contribs: list, typology: str, p: float, max_n: int = 4) -
         fn = TEMPLATES.get(c["feature"])
         if fn:
             try:
-                out.append(fn(c["value"]))
+                text = fn(c["value"])
+                if text:
+                    out.append(text)
             except (TypeError, ValueError):
                 pass
     return out or [f"Fused probability of illicit activity {p:.0%}"]

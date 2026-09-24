@@ -55,10 +55,10 @@ def _run(conn, t0) -> dict:
 
     labels_tx = labels_addr = None
     if _table(conn, "labels_tx"):
-        labels_tx = conn.execute("SELECT txid, tx_class, entity_id FROM labels_tx").df().set_index("txid")
+        labels_tx = conn.execute("SELECT txid, tx_class, entity_id FROM labels_tx ORDER BY txid").df().set_index("txid")
     if _table(conn, "labels_address"):
         labels_addr = conn.execute("SELECT address, typology, entity_id, CAST(is_illicit AS INT) AS is_illicit "
-                                   "FROM labels_address").df().set_index("address")
+                                   "FROM labels_address ORDER BY address").df().set_index("address")
     seeds = {r[0] for r in conn.execute("SELECT address FROM seeds").fetchall()}
     # analyst verdicts (latest per wallet): CONFIRMED → illicit, FALSE_POSITIVE → legitimate (roadmap S5)
     feedback = {r[0]: int(r[1] == "TRUE_POSITIVE") for r in conn.execute(
@@ -97,6 +97,10 @@ def _run(conn, t0) -> dict:
     W = W.join(e4df, how="left")
     W[["ppr", "ppr_reverse", "taint"]] = W[["ppr", "ppr_reverse", "taint"]].fillna(0)
     W[["hops_from_seed", "hops_to_seed"]] = W[["hops_from_seed", "hops_to_seed"]].fillna(99).clip(upper=20)
+    # a CIOH cluster is one owner: wallets sharing a cluster with a seed count as reached (evaluation + evidence).
+    # Not a model input: in A/B tests, cluster-level seed features made the model over-trust cluster membership.
+    seed_clusters = set(W.loc[W.index.isin(seeds), "cluster_id"])
+    in_seed_cluster = W["cluster_id"].isin(seed_clusters)
     timings["e4"] = round(time.time() - t0, 2)
 
     # ---- E1 embeddings (suggestions only)
@@ -163,7 +167,7 @@ def _run(conn, t0) -> dict:
     }
     if labels_addr is not None and len(labels_addr):
         report["e1"].update(_cluster_quality(W, labels_addr))
-        report["e4"] = _propagation_quality(W, labels_addr, seeds)
+        report["e4"] = _propagation_quality(W, labels_addr, seeds, in_seed_cluster)
         report["alert_quality"] = _alert_quality(alerts, labels_addr)
     settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2, default=str))
@@ -274,14 +278,14 @@ def _cluster_quality(W, labels) -> dict:
     return out
 
 
-def _propagation_quality(W, labels, seeds) -> dict:
+def _propagation_quality(W, labels, seeds, in_seed_cluster) -> dict:
     lab = labels.reindex(W.index)
     hidden = lab[(lab["is_illicit"] == 1) & (~lab.index.isin(seeds))].index
     legit = lab[lab["is_illicit"] == 0].index
     if not len(hidden):
         return {}
     reach = lambda idx: float(((W.loc[idx, "taint"] > 0.01) | (W.loc[idx, "hops_from_seed"] <= 4) |
-                               (W.loc[idx, "hops_to_seed"] <= 4)).mean())
+                               (W.loc[idx, "hops_to_seed"] <= 4) | in_seed_cluster.loc[idx]).mean())
     return {"hidden_illicit_wallets": int(len(hidden)), "hidden_reached": round(reach(hidden), 4),
             "legit_reached": round(reach(legit), 4), "hidden_flagged_p50": round(float((W.loc[hidden, "p"] >= 0.5).mean()), 4)}
 
