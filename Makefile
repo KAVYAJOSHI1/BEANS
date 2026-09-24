@@ -1,29 +1,45 @@
-.PHONY: help synth ingest train serve demo test build-ui
+# BEANS: Bitcoin Encryption, Analysis & Network Security
+PY   ?= .venv/bin/python
+BEANS = $(PY) -m beans.cli
+NPM  ?= npm
+N_TX ?= 5000
+
+.PHONY: help install venv synth ingest pipeline serve demo test build-ui clean-db
 
 help:
-	@echo "BEANS — AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic"
-	@echo "Commands:"
-	@echo "  make synth     Generate synthetic forensic datasets (CSV, JSON, XML)"
-	@echo "  make ingest    Ingest dataset and execute full AI/ML pipeline"
-	@echo "  make serve     Start FastAPI backend server on http://127.0.0.1:8000"
-	@echo "  make demo      1-Click end-to-end demo execution"
-	@echo "  make test      Run automated PyTest test suite"
-	@echo "  make build-ui  Build React production static frontend bundle"
+	@echo "make install    create .venv and install Python deps"
+	@echo "make synth      generate a synthetic dataset (N_TX=$(N_TX)) into data/synth/demo"
+	@echo "make ingest     ingest data/synth/demo/transactions.csv and run the ML pipeline"
+	@echo "make pipeline   clean DB + synth + ingest"
+	@echo "make serve      API + dashboard on http://127.0.0.1:8000"
+	@echo "make demo       pipeline + serve (one command)"
+	@echo "make test       run tests"
+	@echo "make build-ui   rebuild ui/dist (needs Node >= 20.19)"
+
+venv:
+	python3 -m venv .venv && .venv/bin/pip install -U pip
+
+install: venv
+	.venv/bin/pip install -r requirements.txt
 
 synth:
-	python -m beans.cli synth --n-tx 2000 --out data/synth/demo
+	$(BEANS) synth --n-tx $(N_TX) --out data/synth/demo
 
 ingest:
-	python -m beans.cli ingest data/synth/demo/transactions.csv
+	$(BEANS) ingest data/synth/demo/transactions.csv
+
+clean-db:
+	rm -f data/beans.duckdb data/beans.duckdb.wal
+
+pipeline: clean-db synth ingest
 
 serve:
-	python -m beans.cli serve --port 8000
+	$(BEANS) serve --port 8000
 
-demo:
-	python -m beans.cli demo --n-tx 1000 --port 8000
+demo: pipeline serve
 
 test:
-	python -m pytest tests/ -v
+	$(PY) -m pytest -q
 
 build-ui:
-	cd ui && npm run build
+	cd ui && $(NPM) ci && $(NPM) run build

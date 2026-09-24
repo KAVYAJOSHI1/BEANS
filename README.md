@@ -1,107 +1,58 @@
-# BEANS — AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic
-### **Smart India Hackathon (SIH) · Problem Statement PS 26146 · NTRO**
+# BEANS: Bitcoin Encryption, Analysis & Network Security
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![100% Offline](https://img.shields.io/badge/Offline-Native-emerald.svg)]()
-[![Tests: Passing](https://img.shields.io/badge/Tests-8%2F8%20Passing-success.svg)]()
+Offline, Linux-native system for monitoring and analysing Bitcoin transaction traffic.
+**Smart India Hackathon · PS 26146 · National Technical Research Organisation (NTRO)**
 
-> **BEANS** is an offline, air-gapped forensic intelligence pipeline that ingests multi-format Bitcoin P2P telemetry (CSV, JSON, XML), enriches with offline GeoIP/ASN databases, builds an in-memory heterogeneous correlation graph (IP ↔ TX ↔ Wallet ↔ ASN), executes **4 official AI/ML engines**, and produces human-explainable alerts with calibrated confidence, SHAP attribution, and court-admissible Law Enforcement dossiers.
+BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). It enriches every IP offline with country and ASN, and links IPs, transactions and wallets in one graph. Four ML engines then run: **entity clustering, anomaly detection, peel-chain / mixing detection, and risk propagation from seed wallets**. The result is a ranked, explainable alert list, viewed in an investigator dashboard with link-analysis, timeline, map and case views.
 
----
+- Vision, architecture, feature plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) ([PDF](MASTER_ROADMAP.pdf))
+- Team task split: [`TASKS_FINAL.md`](TASKS_FINAL.md)
+- Interfaces: [`docs/CONTRACTS.md`](docs/CONTRACTS.md)
 
-## 🌟 Key Capabilities & Architectural Pillars
-
-- **1. Multi-Format Streaming Ingestion (R1, R2):** Ingests CSV, JSON (Array & NDJSON), and XML with streaming parsers (`pyarrow`, `ijson`, `lxml.iterparse`). Automatically routes malformed records to `quarantine.csv` with diagnostic reasons.
-- **2. 100% Offline-Native (R3, R8):** DB-IP Lite country & ASN enrichment (`.mmdb` / `maxminddb`), offline Tor/VPN/Bulletproof hosting snapshot lists, and embedded DuckDB storage. Zero cloud dependencies.
-- **3. First-Spy Network Attribution (R4):** Discovers the earliest relaying IP peer per transaction ($\min(t_{\text{relay}})$) to infer originator nodes with propagation lead-time confidence.
-- **4. 4 AI/ML Forensic Engines (R5):**
-  - **E1: Entity Clustering:** Common Input Ownership Heuristic (CIOH) + Change Heuristic + Graph Embeddings $\rightarrow$ HDBSCAN (with strict CoinJoin bypass to prevent artificial super-clustering).
-  - **E2: Anomaly Detection:** Unsupervised Isolation Forest on transaction dimensions (fee-rate, UTXO age, output count) and wallet velocity metrics.
-  - **E3: Peeling-Chain & Mixing Typology Classifier:** Structural sequence walkers + LightGBM/Random Forest classifying `{NORMAL, PEEL_CHAIN, COINJOIN, RANSOMWARE, EXCHANGE_SWEEP}`.
-  - **E4: Risk Propagation from Seeds:** Personalized PageRank (PPR) + Decayed Haircut Taint Tracking from known illicit seed addresses.
-- **5. Explainable AI & Calibrated Scoring (R6):** Isotonic regression probability calibration + SHAP TreeExplainer feature impacts + plain-English narrative reason generator.
-- **6. Modern Light-Themed Investigator UI (R7):** Built with React 18, Tailwind CSS, Cytoscape.js (Cose/Dagre graph canvas), and ECharts.
-- **7. Case Dossier Export (S3, R10):** Generates Law Enforcement forensic evidence packages in Markdown & PDF with input dataset SHA-256 verification.
-
----
-
-## 🚀 Quickstart & One-Command Demo
-
-### 1. Installation
-```bash
-# Clone repository
-git clone https://github.com/KAVYAJOSHI1/BEANS.git
-cd BEANS
-
-# Install dependencies
-pip install -r requirements.txt
-cd ui && npm install && npm run build && cd ..
-```
-
-### 2. Run 1-Click Offline Demo
-```bash
-python -m beans.cli demo --n-tx 2000 --port 8000
-```
-Open **`http://127.0.0.1:8000`** in your browser to explore the full dashboard!
-
----
-
-## 🛠️ CLI Reference
+## Quickstart (Linux)
 
 ```bash
-# 1. Synthesize multi-format forensic dataset (CSV, JSON, XML, labels, seeds)
-python -m beans.cli synth --n-tx 5000 --illicit-rate 0.05 --out data/synth/demo
-
-# 2. Ingest transaction file and execute AI/ML pipeline
-python -m beans.cli ingest data/synth/demo/transactions.csv
-python -m beans.cli ingest data/synth/demo/transactions.json
-python -m beans.cli ingest data/synth/demo/transactions.xml
-
-# 3. Start backend server
-python -m beans.cli serve --port 8000
-
-# 4. Run automated test suite
-python -m pytest tests/ -v
+make install        # .venv + Python dependencies
+make demo           # synthetic data → ingest → 4 ML engines → alerts → dashboard
+# open http://127.0.0.1:8000
 ```
 
----
+`make demo` runs fully offline. The dashboard is served from the pre-built `ui/dist/`, so Node.js is only needed to rebuild the UI (`make build-ui`, Node ≥ 20.19).
 
-## 📊 Verification & Evaluation Benchmark
+## CLI
 
-| AI/ML Engine Component | Evaluation Metric | Target | Achieved Score |
-|---|---|---|---|
-| **E1: Entity Clustering (CIOH)** | Adjusted Rand Index (ARI) | $\ge 0.80$ | **0.89** |
-| **E2: Anomaly Detection (IForest)** | Precision @ 100 | $\ge 0.70$ | **0.76** |
-| **E3: Peeling/Mixing Classifier** | Macro F1-Score | $\ge 0.85$ | **0.92** |
-| **E4: Seed Propagation (PPR)** | Recall @ 200 (20% seeds) | $\ge 0.75$ | **0.84** |
-| **Meta-Fusion Model** | PR-AUC (Calibrated) | $\ge 0.90$ | **0.94** |
+```bash
+.venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
+.venv/bin/python -m beans.cli ingest data/synth/demo/transactions.xml      # ingest + enrich + graph + ML + alerts
+.venv/bin/python -m beans.cli serve --port 8000                            # API (/api, docs at /docs) + dashboard
+```
 
----
+## Evaluation
 
-## 🏛️ Repository Layout
+Metrics are produced by the evaluation step on held-out synthetic data (labels are never used as model inputs) and shown on the **Model Card** page of the dashboard. Numbers will be added here once they're measured.
+
+## Repository layout
 
 ```
-BEANS/
-├── MASTER_ROADMAP.md            ← Single Source of Truth specification
-├── README.md                    ← Quickstart & documentation
-├── Makefile                     ← CLI build & test commands
-├── beans/                       ← Python core package
-│   ├── cli.py                   ← Typer CLI entrypoint
-│   ├── config.py                ← Settings & thresholds
-│   ├── schema.py                ← Pydantic canonical schema
-│   ├── ingest/                  ← Streaming CSV/JSON/XML parsers & quarantine
-│   ├── enrich/                  ← Offline GeoIP & ASN classifiers
-│   ├── store/                   ← Embedded DuckDB storage
-│   ├── graph/                   ← Heterogeneous graph & First-Spy logic
-│   ├── features/                ← Feature extractors
-│   ├── engines/                 ← E1, E2, E3, E4 AI/ML engines
-│   ├── score/                   ← Meta-fusion & calibration
-│   ├── explain/                 ← SHAP explainability & reasons
-│   ├── report/                  ← Law Enforcement dossier exporter
-│   ├── synth/                   ← Stateful UTXO synthetic generator
-│   └── api/                     ← FastAPI REST API & route handlers
-├── ui/                          ← React + Vite + Tailwind + Cytoscape.js
-├── tests/                       ← Automated PyTest test suite
-└── docs/                        ← Technical write-up & data format specs
+beans/
+  cli.py  config.py  schema.py
+  synth/      labelled synthetic dataset generator (UTXO ledger, illicit typologies)
+  ingest/     streaming CSV / JSON / XML parsers, validation, quarantine
+  enrich/     offline GeoIP (DB-IP Lite) + ASN type classification
+  store/      embedded DuckDB storage
+  graph/      IP ↔ TX ↔ wallet graph, first-spy attribution
+  features/   transaction / wallet / network features
+  engines/    E1 clustering · E2 anomaly · E3 peel/mix · E4 risk propagation
+  score/      fusion + calibration → risk and confidence
+  explain/    SHAP-based reasons
+  report/     case evidence pack export
+  api/        FastAPI routes
+ui/           React + Vite + Tailwind + Cytoscape.js + ECharts (built into ui/dist)
+data/geoip/   DB-IP Lite country + ASN databases (offline)
+tests/        pytest suite
+docs/         contracts, write-up, archived source docs
 ```
+
+## Attribution
+
+IP geolocation by [DB-IP](https://db-ip.com), licensed CC BY 4.0. All data in this repository is synthetic.
