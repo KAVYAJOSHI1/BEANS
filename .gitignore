@@ -17,3 +17,4 @@ dist/
 ui/node_modules/
 .env
 *.log
+models/model_card.json

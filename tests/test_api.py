@@ -52,3 +52,13 @@ def test_model_card_never_invents_numbers(client):
     assert card["status"] in {"evaluated", "not_evaluated"}
     if card["status"] == "not_evaluated":
         assert card["engine_metrics"] == []
+
+
+def test_model_card_evaluation_measures_real_metrics(client):
+    labels = FIXTURE.parent / "labels.csv"
+    r = client.post("/api/modelcard/evaluate", params={"labels": str(labels)})
+    assert r.status_code == 200, r.text
+    card = r.json()
+    assert card["status"] == "evaluated" and card["engine_metrics"]
+    assert all(0.0 <= m["score"] <= 1.0 for m in card["engine_metrics"])
+    assert client.get("/api/modelcard").json()["status"] == "evaluated"

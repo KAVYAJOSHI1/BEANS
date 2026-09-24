@@ -1,213 +1,161 @@
 import React from 'react';
-import { AlertOctagon, TrendingUp, ShieldAlert, Cpu, ArrowUpRight, Network, Radio } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import { ArrowRight, Database, Wallet, Server, Boxes, AlertTriangle, Crosshair, UploadCloud } from 'lucide-react';
+
+const SEV = [
+  ['CRITICAL', 'critical_alerts', '#dc2626'],
+  ['HIGH', 'high_alerts', '#ea580c'],
+  ['MEDIUM', 'medium_alerts', '#ca8a04'],
+  ['LOW', 'low_alerts', '#16a34a'],
+];
+const SEV_BADGE = {
+  CRITICAL: 'bg-red-50 text-red-700 border-red-200', HIGH: 'bg-orange-50 text-orange-700 border-orange-200',
+  MEDIUM: 'bg-yellow-50 text-yellow-800 border-yellow-200', LOW: 'bg-green-50 text-green-700 border-green-200',
+};
+const RISKY = new Set(['TOR_EXIT', 'BULLETPROOF', 'VPN']);
+
+function Kpi({ icon: Icon, label, value, sub, tone = 'text-slate-900' }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
+        {label}<Icon className="w-4 h-4 text-slate-400" />
+      </div>
+      <div className={`text-2xl font-bold mt-1.5 ${tone}`}>{value}</div>
+      {sub && <div className="text-[11px] text-slate-500 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function Card({ title, sub, children, action }) {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+          {sub && <p className="text-[11px] text-slate-500">{sub}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+const Empty = ({ text }) => <div className="h-full min-h-[160px] flex items-center justify-center text-xs text-slate-400">{text}</div>;
 
 export default function OverviewDashboard({ stats, alerts, onSelectAlert, setActiveTab }) {
-  const kpis = stats?.kpis || {
-    total_transactions: 0,
-    total_volume_btc: 0,
-    total_wallets: 0,
-    total_alerts: 0,
-    critical_alerts: 0,
-    high_alerts: 0,
-    active_seeds: 0,
-  };
+  if (!stats) return <div className="text-sm text-slate-500">Loading…</div>;
+  const k = stats.kpis;
 
-  const typologyData = stats?.typology_distribution || [
-    { name: 'Ransomware', value: 35 },
-    { name: 'Peel Chain', value: 45 },
-    { name: 'CoinJoin', value: 20 },
-  ];
+  if (!k.total_transactions) {
+    return (
+      <div className="bg-white rounded-xl border border-slate-200 p-10 text-center space-y-3">
+        <UploadCloud className="w-10 h-10 text-blue-500 mx-auto" />
+        <h2 className="text-lg font-bold text-slate-900">No data loaded yet</h2>
+        <p className="text-sm text-slate-600">Upload a CSV / JSON / XML file or generate a labelled synthetic dataset to start.</p>
+        <button onClick={() => setActiveTab('ingest')} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold">
+          Go to Ingest
+        </button>
+      </div>
+    );
+  }
 
-  const donutOption = {
-    tooltip: { trigger: 'item' },
-    legend: { bottom: '0%', left: 'center' },
-    color: ['#ef4444', '#f97316', '#3b82f6', '#10b981', '#8b5cf6'],
-    series: [
-      {
-        name: 'Threat Typologies',
-        type: 'pie',
-        radius: ['45%', '70%'],
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
-        label: { show: false },
-        data: typologyData,
-      },
-    ],
-  };
+  const top = [...(alerts || [])].sort((a, b) => b.risk_score - a.risk_score).slice(0, 6);
+  const typology = stats.typology_distribution || [];
+  const activity = stats.activity || [];
+  const asn = stats.asn_types || [];
+  const countries = stats.top_countries || [];
 
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-slate-900 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="px-2.5 py-1 rounded-md bg-white/20 text-xs font-semibold backdrop-blur-md">
-              OFFLINE FORENSIC SENTINEL
-            </span>
-            <span className="text-xs text-blue-200">SIH PS 26146 · NTRO</span>
-          </div>
-          <h1 className="text-2xl font-bold mt-2">Forensic Intelligence & Traffic Monitoring</h1>
-          <p className="text-blue-100 text-sm mt-1 max-w-2xl">
-            Offline correlation of Bitcoin P2P network telemetry (SIGINT) with blockchain ledger flows and calibrated AI/ML threat detection engines.
-          </p>
-        </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setActiveTab('ingest')}
-            className="px-4 py-2.5 rounded-xl bg-white text-blue-700 font-semibold text-sm shadow-md hover:bg-blue-50 transition-all flex items-center space-x-2"
-          >
-            <span>Ingest & Simulate</span>
-            <ArrowUpRight className="w-4 h-4" />
-          </button>
-        </div>
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <Kpi icon={Database} label="Transactions" value={k.total_transactions.toLocaleString()} sub={`${k.total_observations?.toLocaleString() ?? '—'} network observations`} />
+        <Kpi icon={Boxes} label="Volume" value={`${k.total_volume_btc.toLocaleString()} ₿`} sub="total output value" />
+        <Kpi icon={Wallet} label="Wallets" value={k.total_wallets.toLocaleString()} sub={`${k.total_clusters?.toLocaleString() ?? '—'} clusters (CIOH)`} />
+        <Kpi icon={Server} label="Relaying IPs" value={k.total_ips?.toLocaleString() ?? '—'} sub="first-seen broadcasters" />
+        <Kpi icon={AlertTriangle} label="Alerts" value={k.total_alerts} tone="text-rose-600" sub={`${k.open_alerts ?? 0} open · ${k.critical_alerts} critical`} />
+        <Kpi icon={Crosshair} label="Seed wallets" value={k.active_seeds} tone={k.active_seeds ? 'text-slate-900' : 'text-amber-600'}
+          sub={k.active_seeds ? 'risk propagated from these' : 'none loaded: add seeds'} />
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Analyzed Ledger Volume</span>
-            <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-slate-900">{kpis.total_volume_btc.toLocaleString()}</span>
-            <span className="text-xs font-semibold text-slate-500 ml-1">BTC</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{kpis.total_transactions.toLocaleString()} total transactions evaluated</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Critical Risk Flags</span>
-            <div className="p-2 rounded-lg bg-rose-50 text-rose-600">
-              <AlertOctagon className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-rose-600">{kpis.critical_alerts}</span>
-            <span className="text-xs font-semibold text-slate-500 ml-1">/ {kpis.total_alerts} Total Alerts</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{kpis.high_alerts} High-Severity escalations</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Entity Clusters</span>
-            <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
-              <Network className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-slate-900">{kpis.total_wallets.toLocaleString()}</span>
-            <span className="text-xs font-semibold text-slate-500 ml-1">Wallets</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">CIOH Disjoint-Set Clusters indexed</p>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Seed Taint Propagation</span>
-            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
-              <Radio className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-3">
-            <span className="text-2xl font-bold text-emerald-600">{kpis.active_seeds}</span>
-            <span className="text-xs font-semibold text-slate-500 ml-1">Active Illicit Seeds</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">PPR + Decayed Taint propagated</p>
-        </div>
-      </div>
-
-      {/* Main Grid: Threat Typology + Priority Feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 1 Col: Donut Chart */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Threat Typology Breakdown</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Machine-classified illicit transaction patterns (E3)</p>
-          <div className="mt-4 h-64">
-            <ReactECharts option={donutOption} style={{ height: '100%', width: '100%' }} />
-          </div>
-        </div>
-
-        {/* Right 2 Cols: High Priority Alerts */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">High-Priority Alert Stream</h2>
-                <p className="text-xs text-slate-500">Ranked by calibrated composite risk score</p>
-              </div>
-              <button
-                onClick={() => setActiveTab('alerts')}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                View All Alerts &rarr;
-              </button>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {alerts.slice(0, 5).map((a) => (
-                <div
-                  key={a.alert_id}
-                  onClick={() => onSelectAlert(a)}
-                  className="py-3 px-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        a.severity === 'CRITICAL' ? 'bg-red-500 animate-pulse' : 'bg-orange-500'
-                      }`}
-                    />
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-mono text-xs font-semibold text-slate-900">
-                          {a.entity_id.substring(0, 16)}...
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {a.alert_type.replace('_PATTERN', '')}
-                        </span>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <div className="xl:col-span-2">
+          <Card title="Highest-risk alerts" sub="Ranked by fused risk score"
+            action={<button onClick={() => setActiveTab('alerts')} className="text-xs font-semibold text-blue-600 flex items-center gap-1">All alerts <ArrowRight className="w-3.5 h-3.5" /></button>}>
+            {top.length === 0 ? <Empty text="No alerts" /> : (
+              <div className="divide-y divide-slate-100">
+                {top.map((a) => (
+                  <button key={a.alert_id} onClick={() => onSelectAlert(a)} className="w-full text-left py-2.5 flex items-center gap-3 hover:bg-slate-50 px-1 rounded">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${SEV_BADGE[a.severity] || ''}`}>{a.severity}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-slate-800 truncate">{a.entity_id}</span>
+                        <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 rounded">{a.alert_type.replace('_PATTERN', '')}</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
-                        {a.reasons?.[0] || 'Correlated high-risk anomaly detected'}
-                      </p>
+                      <div className="text-[11px] text-slate-500 truncate">{a.reasons?.[0] || '—'}</div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    <div className="text-right">
+                    <div className="text-right shrink-0">
                       <div className="text-sm font-bold text-slate-900">{a.risk_score.toFixed(0)}</div>
-                      <div className="text-[10px] text-slate-500">{(a.calibrated_confidence * 100).toFixed(0)}% Conf</div>
+                      <div className="text-[10px] text-slate-500">{(a.calibrated_confidence * 100).toFixed(0)}% conf</div>
                     </div>
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-md font-bold ${
-                        a.severity === 'CRITICAL'
-                          ? 'bg-red-50 text-red-700 border border-red-200'
-                          : 'bg-orange-50 text-orange-700 border border-orange-200'
-                      }`}
-                    >
-                      {a.severity}
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {alerts.length === 0 && (
-                <div className="py-12 text-center text-slate-400 text-sm">
-                  No alerts detected yet. Run ingestion in Ingest Studio to process data.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Engines: E1 clustering · E2 anomaly · E3 peel/mix · E4 seed risk propagation</span>
-            <span>Runs fully offline</span>
-          </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
+
+        <Card title="Alerts by severity & type">
+          {k.total_alerts === 0 ? <Empty text="No alerts" /> : (
+            <ReactECharts style={{ height: 290 }} option={{
+              tooltip: { trigger: 'item' },
+              legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10 } },
+              series: [
+                { type: 'pie', radius: ['0%', '32%'], center: ['50%', '42%'], label: { show: false },
+                  data: SEV.map(([n, key, color]) => ({ name: n, value: k[key], itemStyle: { color } })).filter((d) => d.value) },
+                { type: 'pie', radius: ['45%', '62%'], center: ['50%', '42%'], label: { show: false },
+                  itemStyle: { borderColor: '#fff', borderWidth: 2 },
+                  color: ['#6366f1', '#0ea5e9', '#a855f7', '#14b8a6', '#f43f5e', '#84cc16'], data: typology },
+              ],
+            }} />
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+        <Card title="Transaction activity" sub="Transactions per hour (bars) and BTC volume (line)">
+          {activity.length === 0 ? <Empty text="No activity" /> : (
+            <ReactECharts style={{ height: 230 }} option={{
+              tooltip: { trigger: 'axis' }, grid: { left: 40, right: 45, top: 15, bottom: 30 },
+              xAxis: { type: 'category', data: activity.map((a) => a.hour.slice(5)), axisLabel: { fontSize: 9 } },
+              yAxis: [{ type: 'value', axisLabel: { fontSize: 9 } }, { type: 'value', axisLabel: { fontSize: 9 }, splitLine: { show: false } }],
+              series: [
+                { type: 'bar', data: activity.map((a) => a.transactions), itemStyle: { color: '#93c5fd' } },
+                { type: 'line', yAxisIndex: 1, smooth: true, symbol: 'none', data: activity.map((a) => a.volume_btc), itemStyle: { color: '#1d4ed8' } },
+              ],
+            }} />
+          )}
+        </Card>
+        <Card title="Relay infrastructure" sub="Network observations by ASN type">
+          {asn.length === 0 ? <Empty text="No network data" /> : (
+            <ReactECharts style={{ height: 230 }} option={{
+              tooltip: {}, grid: { left: 90, right: 20, top: 10, bottom: 20 },
+              xAxis: { type: 'value', axisLabel: { fontSize: 9 } },
+              yAxis: { type: 'category', inverse: true, data: asn.map((a) => a.asn_type), axisLabel: { fontSize: 10 } },
+              series: [{ type: 'bar', data: asn.map((a) => ({ value: a.count, itemStyle: { color: RISKY.has(a.asn_type) ? '#dc2626' : '#64748b' } })) }],
+            }} />
+          )}
+        </Card>
+        <Card title="Top relay countries" sub="Network observations by source country">
+          {countries.length === 0 ? <Empty text="No network data" /> : (
+            <ReactECharts style={{ height: 230 }} option={{
+              tooltip: {}, grid: { left: 40, right: 20, top: 10, bottom: 20 },
+              xAxis: { type: 'value', axisLabel: { fontSize: 9 } },
+              yAxis: { type: 'category', inverse: true, data: countries.map((c) => c.country), axisLabel: { fontSize: 10 } },
+              series: [{ type: 'bar', data: countries.map((c) => c.count), itemStyle: { color: '#0ea5e9' } }],
+            }} />
+          )}
+        </Card>
       </div>
     </div>
   );
