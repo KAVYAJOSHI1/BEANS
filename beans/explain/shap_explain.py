@@ -1,4 +1,6 @@
 """Per-wallet SHAP explanations of the fusion model (shap.TreeExplainer, exact for tree ensembles)."""
+import warnings
+
 import numpy as np
 import pandas as pd
 import shap
@@ -8,7 +10,9 @@ def explain(model, X: pd.DataFrame, top_k: int = 6) -> tuple[dict, list]:
     """Returns ({address: [{feature, value, impact}]}, global importance list). Impact is in log-odds."""
     if model is None or X.empty:
         return {}, []
-    sv = shap.TreeExplainer(model).shap_values(X)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sv = shap.TreeExplainer(model).shap_values(X)
     if isinstance(sv, list):          # older shap: [class0, class1]
         sv = sv[1]
     sv = np.asarray(sv)

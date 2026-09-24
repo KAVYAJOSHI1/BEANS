@@ -26,7 +26,8 @@ def synth(
 
 @app.command()
 def ingest(
-    file_path: str = typer.Argument(..., help="Path to CSV, JSON, or XML file to ingest")
+    file_path: str = typer.Argument(..., help="Path to CSV, JSON, or XML file to ingest"),
+    mapping: str = typer.Option(None, "--mapping", "-m", help="YAML column mapping for unfamiliar files (see beans/ingest/mapping.py)")
 ):
     """Ingest multi-format transaction file, enrich offline, and execute AI/ML pipeline."""
     p = Path(file_path)
@@ -35,10 +36,57 @@ def ingest(
         raise typer.Exit(code=1)
 
     console.print(f"[bold green]Ingesting and running forensic ML pipeline on {p.name}...[/bold green]")
-    pipeline = ForensicPipeline()
+    pipeline = ForensicPipeline(mapping=Path(mapping) if mapping else None)
     result = pipeline.run_file_ingestion(p)
     console.print(f"[bold cyan]Ingestion complete![/bold cyan]")
     console.print(result)
+
+@app.command()
+def watch(
+    folder: str = typer.Argument("data/inbox", help="Folder to watch for new CSV/JSON/XML files"),
+    interval: float = typer.Option(10.0, "--interval", "-i", help="Seconds between scans"),
+    mapping: str = typer.Option(None, "--mapping", "-m", help="YAML column mapping applied to every file"),
+    once: bool = typer.Option(False, "--once", help="Process what is there now and exit"),
+):
+    """Monitoring mode: ingest + score every new file dropped into a folder (moved to processed/ afterwards)."""
+    import shutil
+    import time
+    inbox, done = Path(folder), Path(folder) / "processed"
+    inbox.mkdir(parents=True, exist_ok=True)
+    done.mkdir(exist_ok=True)
+    console.print(f"[bold green]Watching {inbox} every {interval:.0f}s (Ctrl+C to stop)…[/bold green]")
+    while True:
+        files = sorted(f for f in inbox.iterdir() if f.is_file() and f.suffix.lower() in {".csv", ".json", ".ndjson", ".jsonl", ".xml"})
+        for f in files:
+            console.print(f"→ {f.name}")
+            try:
+                res = ForensicPipeline(mapping=Path(mapping) if mapping else None).run_file_ingestion(f)
+                console.print(f"  {res['records_ingested']} rows, {res['rows_quarantined']} quarantined, "
+                              f"{res['pipeline_stats'].get('alerts_generated')} alerts")
+            except Exception as e:  # keep watching; the file stays for inspection
+                console.print(f"  [red]failed: {e}[/red]")
+                continue
+            shutil.move(str(f), done / f"{time.strftime('%Y%m%d_%H%M%S')}_{f.name}")
+        if once:
+            break
+        time.sleep(interval)
+
+
+@app.command()
+def export(
+    neo4j: str = typer.Option(None, "--neo4j", help="Output folder for neo4j-admin import CSVs"),
+    stix: str = typer.Option(None, "--stix", help="Output file for a STIX 2.1 bundle of alert indicators"),
+    min_risk: float = typer.Option(65.0, "--min-risk", help="STIX: only alerts at or above this risk"),
+):
+    """Export the graph (Neo4j) and/or alert indicators (STIX 2.1)."""
+    from beans import export as ex
+    if not (neo4j or stix):
+        raise typer.BadParameter("give --neo4j DIR and/or --stix FILE")
+    if neo4j:
+        console.print(ex.neo4j(Path(neo4j)))
+    if stix:
+        console.print(ex.stix(Path(stix), min_risk))
+
 
 @app.command()
 def serve(

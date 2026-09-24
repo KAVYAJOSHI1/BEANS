@@ -61,3 +61,21 @@ def test_model_card_evaluation_measures_real_metrics(client, dataset):
     assert card["status"] == "evaluated" and card["engine_metrics"]
     assert all(0.0 <= m["score"] <= 1.0 for m in card["engine_metrics"])
     assert client.get("/api/modelcard").json()["status"] == "evaluated"
+
+
+def test_upload_with_column_mapping(client, dataset):
+    """An export with foreign column names ingests through the API when a mapping YAML is attached."""
+    import csv as _csv
+    import io
+    rows = list(_csv.DictReader(open(dataset / "transactions.csv")))[:50]
+    buf = io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(["time", "tx_hash", "peer", "vin", "vin_amt", "vout", "vout_amt"])
+    for r in rows:
+        w.writerow([r["timestamp"], r["txid"], r["src_ip"], r["input_addresses"], r["input_amounts"],
+                    r["output_addresses"], r["output_amounts"]])
+    mapping = b"peer: src_ip\nvin_amt: input_amounts\nvout_amt: output_amounts\nvin: input_addresses\nvout: output_addresses\n"
+    r = client.post("/api/ingest/upload", files={"file": ("export.csv", buf.getvalue().encode(), "text/csv"),
+                                                  "mapping": ("m.yaml", mapping, "application/x-yaml")})
+    assert r.status_code == 200, r.text
+    assert r.json()["records_ingested"] == 50 and r.json()["rows_quarantined"] == 0

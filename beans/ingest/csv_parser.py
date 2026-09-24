@@ -34,47 +34,16 @@ class StreamingCSVParser:
         self.mapper = mapper or ColumnMapper()
 
     def parse(self, file_path: Path) -> Generator[CanonicalRecord, None, Tuple[int, int]]:
-        """
-        Yields valid CanonicalRecord objects.
-        Returns total_processed, valid_count upon completion.
-        """
-        total = 0
-        valid = 0
-
-        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                total += 1
-                norm_row = self.mapper.normalize_row(row)
-                
+        """Yields valid records; invalid rows go to quarantine with the reason. Counts in self.total / self.valid."""
+        self.total = self.valid = 0
+        with open(file_path, "r", encoding="utf-8-sig", errors="replace", newline="") as f:
+            for row in csv.DictReader(f):
+                self.total += 1
                 try:
-                    # Convert types
-                    ts = norm_row.get("timestamp")
-                    if isinstance(ts, str):
-                        ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    
-                    in_addrs = _parse_list_field(norm_row.get("input_addresses", []), str)
-                    in_amts = _parse_list_field(norm_row.get("input_amounts", []), float)
-                    out_addrs = _parse_list_field(norm_row.get("output_addresses", []), str)
-                    out_amts = _parse_list_field(norm_row.get("output_amounts", []), float)
-                    
-                    record = CanonicalRecord(
-                        timestamp=ts,
-                        src_ip=str(norm_row.get("src_ip", "127.0.0.1")).strip(),
-                        src_port=int(norm_row.get("src_port", 8333)),
-                        dst_ip=str(norm_row.get("dst_ip", "")) if norm_row.get("dst_ip") else None,
-                        dst_port=int(norm_row.get("dst_port", 8333)),
-                        txid=str(norm_row.get("txid", "")).strip(),
-                        input_addresses=in_addrs,
-                        input_amounts=in_amts,
-                        output_addresses=out_addrs,
-                        output_amounts=out_amts,
-                        fee=float(norm_row.get("fee", 0.0)),
-                        script_type=norm_row.get("script_type", "P2WPKH")
-                    )
-                    valid += 1
-                    yield record
+                    rec = self.mapper.build_record(row)
                 except Exception as e:
-                    QuarantineLogger.log_bad_row(row, f"CSV Parse/Validation Error: {str(e)}", str(file_path))
-
-        return total, valid
+                    QuarantineLogger.log_bad_row(row, f"CSV row rejected: {e}", str(file_path))
+                    continue
+                self.valid += 1
+                yield rec
+        return self.total, self.valid
