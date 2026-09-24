@@ -60,7 +60,7 @@ class Alert(BaseModel):
     """
     Contract-compatible Alert model (R6).
     """
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     alert_id: str
     entity_type: str = "cluster"
@@ -80,6 +80,18 @@ class Alert(BaseModel):
     assigned_to: Optional[str] = "Unassigned"
     created_at: Optional[Any] = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if "risk_score" in values and "risk" not in values:
+                values["risk"] = values["risk_score"]
+            if "calibrated_confidence" in values and "confidence" not in values:
+                values["confidence"] = values["calibrated_confidence"]
+            if "shap_top_features" in values and "shap_top" not in values:
+                values["shap_top"] = values["shap_top_features"]
+        return values
+
     @property
     def risk_score(self) -> float:
         return self.risk
@@ -87,6 +99,10 @@ class Alert(BaseModel):
     @property
     def calibrated_confidence(self) -> float:
         return self.confidence
+
+    @property
+    def shap_top_features(self) -> List[Dict[str, Any]]:
+        return self.shap_top
 
 
 # Contract Aliases

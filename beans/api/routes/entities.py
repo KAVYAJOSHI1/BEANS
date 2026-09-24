@@ -32,7 +32,7 @@ def get_wallet_360(address: str) -> Dict[str, Any]:
 
     transactions = []
     for t in tx_df.to_dict(orient="records"):
-        in_addrs = t.get("input_addresses") or []
+        in_addrs = list(t.get("input_addresses")) if t.get("input_addresses") is not None else []
         role = "SENDER" if address in in_addrs else "RECIPIENT"
         transactions.append({
             "txid": t.get("txid"),
