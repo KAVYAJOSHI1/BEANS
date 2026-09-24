@@ -133,3 +133,7 @@ make install && make demo        # http://127.0.0.1:8000
 make test                         # pytest suite
 make docker-offline-test          # proves the product runs with networking disabled
 ```
+
+## References
+
+The methods, datasets and tools cited in this write-up are listed with verified links in [`docs/REFERENCES.md`](REFERENCES.md).

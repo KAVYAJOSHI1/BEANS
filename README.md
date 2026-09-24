@@ -8,6 +8,7 @@ BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). 
 - Vision, architecture, feature plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) ([PDF](MASTER_ROADMAP.pdf))
 - Team task split: [`TASKS_FINAL.md`](TASKS_FINAL.md)
 - Interfaces: [`docs/CONTRACTS.md`](docs/CONTRACTS.md)
+- Technical write-up: [`docs/TECHNICAL_WRITEUP.md`](docs/TECHNICAL_WRITEUP.md) · data formats: [`docs/DATA_FORMATS.md`](docs/DATA_FORMATS.md) · benchmark: [`docs/BENCHMARK.md`](docs/BENCHMARK.md) · references: [`docs/REFERENCES.md`](docs/REFERENCES.md)
 
 ## Quickstart (Linux)
 
