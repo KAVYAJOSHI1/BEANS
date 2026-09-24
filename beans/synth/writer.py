@@ -1,193 +1,118 @@
-import csv
-import json
-import xml.etree.ElementTree as ET
-from pathlib import Path
-from datetime import datetime, timedelta
-import hashlib
-from typing import List, Dict, Any
+"""Write a labelled synthetic dataset (generator v2, see beans/synth/sim.py).
 
-from beans.config import settings
-from beans.schema import CanonicalRecord
-from beans.synth.ledger import UTXOPool
-from beans.synth.typologies import ForensicTypologyGenerator
-from beans.synth.actors import LegitimateActorGenerator
+Files in output_dir:
+  transactions.csv / .json / .xml   one row per network observation (same tx seen from several peers)
+  labels_address.csv                address, typology, entity_id, is_illicit        (ground truth)
+  labels_tx.csv                     txid, tx_class, typology, is_illicit, entity_id (ground truth)
+  labels.csv                        txid, address, typology, cluster_id             (legacy format)
+  seeds.csv                         address, threat_type, incident_name, confidence, source
+                                    (addresses of ~30% of illicit entities; the rest stay hidden)
+  manifest.json
+Ground truth is for training and evaluation only. It is never used as a model input.
+"""
+import csv
+import hashlib
+import json
+import math
+import random
+import xml.etree.ElementTree as ET
+from collections import Counter
+from pathlib import Path
+from typing import Any, Dict
+
+from beans.synth.sim import ILLICIT, Sim
+
+COLS = ["timestamp", "src_ip", "src_port", "dst_ip", "dst_port", "txid", "input_addresses", "input_amounts",
+        "output_addresses", "output_amounts", "fee", "script_type"]
+
 
 class SyntheticDatasetWriter:
-    """
-    Generates and writes complete multi-format forensic datasets (CSV, JSON, XML)
-    with ground-truth labels and seed lists (R1, R5, R12).
-    """
-
     @classmethod
-    def generate_dataset(
-        cls,
-        output_dir: Path,
-        n_tx: int = 5000,
-        illicit_rate: float = 0.05,
-        seed: int = 42
-    ) -> Dict[str, Any]:
+    def generate_dataset(cls, output_dir: Path, n_tx: int = 5000, illicit_rate: float = 0.05,
+                         seed: int = 42) -> Dict[str, Any]:
+        output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        pool = UTXOPool()
-        now = datetime.utcnow()
-        records: List[CanonicalRecord] = []
-        labels: List[Dict] = []
-        seeds: List[Dict] = []
+        sim = Sim(seed=seed)
+        sim.run(n_tx)
+        rows = sim.observations()
 
-        # 1. Generate Illicit Typologies
-        num_illicit_txs = max(5, int(n_tx * illicit_rate))
-        
-        # Ransomware
-        r_recs, r_labels, r_seeds = ForensicTypologyGenerator.generate_ransomware_scenario(
-            pool, now - timedelta(hours=6), "LockBit_3.0_Campaign"
-        )
-        records.extend(r_recs)
-        labels.extend(r_labels)
-        seeds.extend(r_seeds)
+        def rec(o):
+            return {
+                "timestamp": o["ts"].strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                "src_ip": o["src_ip"], "src_port": o["src_port"], "dst_ip": o["dst_ip"], "dst_port": o["dst_port"],
+                "txid": o["txid"],
+                "input_addresses": [a for a, _ in o["inputs"]], "input_amounts": [v for _, v in o["inputs"]],
+                "output_addresses": [a for a, _ in o["outputs"]], "output_amounts": [v for _, v in o["outputs"]],
+                "fee": o["fee"], "script_type": o["script"],
+            }
 
-        # Peel Chain
-        p_recs, p_labels, p_seeds = ForensicTypologyGenerator.generate_peel_chain_scenario(
-            pool, now - timedelta(hours=4), chain_length=10
-        )
-        records.extend(p_recs)
-        labels.extend(p_labels)
-        seeds.extend(p_seeds)
-
-        # CoinJoin
-        cj_recs, cj_labels, cj_seeds = ForensicTypologyGenerator.generate_coinjoin_scenario(
-            pool, now - timedelta(hours=2), num_participants=10
-        )
-        records.extend(cj_recs)
-        labels.extend(cj_labels)
-        seeds.extend(cj_seeds)
-
-        # 2. Exchange sweeps (2 sweeps)
-        sw_rec1, sw_lbl1 = LegitimateActorGenerator.generate_exchange_sweep(pool, now - timedelta(hours=8), 20)
-        sw_rec2, sw_lbl2 = LegitimateActorGenerator.generate_exchange_sweep(pool, now - timedelta(hours=1), 15)
-        records.extend([sw_rec1, sw_rec2])
-        labels.extend([sw_lbl1, sw_lbl2])
-
-        # 3. Fill with retail legitimate background traffic
-        needed_retail = max(10, n_tx - len(records))
-        for i in range(needed_retail):
-            t = now - timedelta(minutes=int(i * 1.5))
-            r_rec, r_lbl = LegitimateActorGenerator.generate_retail_transaction(pool, t)
-            records.append(r_rec)
-            labels.append(r_lbl)
-
-        # Sort all chronologically
-        records.sort(key=lambda r: r.timestamp)
-
-        # Write CSV
-        csv_file = output_dir / "transactions.csv"
-        with open(csv_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                "timestamp", "src_ip", "src_port", "dst_ip", "dst_port",
-                "txid", "input_addresses", "input_amounts", "output_addresses",
-                "output_amounts", "fee", "script_type"
-            ])
+        records = [rec(o) for o in rows]
+        with open(output_dir / "transactions.csv", "w", newline="", encoding="utf-8") as fh:
+            w = csv.writer(fh)
+            w.writerow(COLS)
             for r in records:
-                writer.writerow([
-                    r.timestamp.isoformat(),
-                    r.src_ip,
-                    r.src_port,
-                    r.dst_ip or "",
-                    r.dst_port,
-                    r.txid,
-                    ";".join(r.input_addresses),
-                    ";".join(str(a) for a in r.input_amounts),
-                    ";".join(r.output_addresses),
-                    ";".join(str(a) for a in r.output_amounts),
-                    r.fee,
-                    r.script_type
-                ])
-
-        # Write JSON
-        json_file = output_dir / "transactions.json"
-        with open(json_file, "w", encoding="utf-8") as f:
-            json_list = [
-                {
-                    "timestamp": r.timestamp.isoformat(),
-                    "src_ip": r.src_ip,
-                    "src_port": r.src_port,
-                    "dst_ip": r.dst_ip,
-                    "dst_port": r.dst_port,
-                    "txid": r.txid,
-                    "input_addresses": r.input_addresses,
-                    "input_amounts": r.input_amounts,
-                    "output_addresses": r.output_addresses,
-                    "output_amounts": r.output_amounts,
-                    "fee": r.fee,
-                    "script_type": r.script_type
-                }
-                for r in records
-            ]
-            json.dump(json_list, f, indent=2)
-
-        # Write XML
-        xml_file = output_dir / "transactions.xml"
-        root_elem = ET.Element("transactions")
+                w.writerow([";".join(map(str, r[c])) if isinstance(r[c], list) else r[c] for c in COLS])
+        with open(output_dir / "transactions.json", "w", encoding="utf-8") as fh:
+            json.dump(records, fh)
+        root = ET.Element("transactions")
         for r in records:
-            tx_elem = ET.SubElement(root_elem, "tx", {
-                "txid": r.txid,
-                "timestamp": r.timestamp.isoformat(),
-                "fee": str(r.fee),
-                "script_type": r.script_type
-            })
-            ET.SubElement(tx_elem, "net", {
-                "src_ip": r.src_ip,
-                "src_port": str(r.src_port),
-                "dst_ip": r.dst_ip or "",
-                "dst_port": str(r.dst_port)
-            })
-            inputs_elem = ET.SubElement(tx_elem, "inputs")
-            for addr, amt in zip(r.input_addresses, r.input_amounts):
-                ET.SubElement(inputs_elem, "in", {"address": addr, "amount": str(amt)})
-            outputs_elem = ET.SubElement(tx_elem, "outputs")
-            for addr, amt in zip(r.output_addresses, r.output_amounts):
-                ET.SubElement(outputs_elem, "out", {"address": addr, "amount": str(amt)})
+            tx = ET.SubElement(root, "tx", {"txid": r["txid"], "timestamp": r["timestamp"], "fee": str(r["fee"]),
+                                            "script_type": r["script_type"]})
+            ET.SubElement(tx, "net", {k: str(r[k]) for k in ("src_ip", "src_port", "dst_ip", "dst_port")})
+            ins = ET.SubElement(tx, "inputs")
+            for a, v in zip(r["input_addresses"], r["input_amounts"]):
+                ET.SubElement(ins, "in", {"address": a, "amount": str(v)})
+            outs = ET.SubElement(tx, "outputs")
+            for a, v in zip(r["output_addresses"], r["output_amounts"]):
+                ET.SubElement(outs, "out", {"address": a, "amount": str(v)})
+        ET.ElementTree(root).write(output_dir / "transactions.xml", encoding="utf-8", xml_declaration=True)
 
-        tree = ET.ElementTree(root_elem)
-        tree.write(xml_file, encoding="utf-8", xml_declaration=True)
+        # ---- ground truth
+        with open(output_dir / "labels_address.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["address", "typology", "entity_id", "is_illicit"])
+            for a, eid in sim.owner.items():
+                e = sim.entities[eid]
+                w.writerow([a, e.typology, eid, int(e.illicit)])
+        with open(output_dir / "labels_tx.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["txid", "tx_class", "typology", "is_illicit", "entity_id"])
+            for t in sim.txs:
+                w.writerow([t["txid"], t["tx_class"], t["typology"], int(t["illicit"]), t["entity"]])
+        with open(output_dir / "labels.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["txid", "address", "typology", "cluster_id"])
+            for t in sim.txs:
+                for a in {a for a, _ in t["inputs"]} | {a for a, _ in t["outputs"]}:
+                    e = sim.entities[sim.owner[a]]
+                    w.writerow([t["txid"], a, e.typology, e.eid])
 
-        # Write labels.csv
-        labels_file = output_dir / "labels.csv"
-        with open(labels_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["txid", "address", "typology", "cluster_id"])
-            for l in labels:
-                writer.writerow([l["txid"], l["address"], l["typology"], l["cluster_id"]])
+        # ---- seeds: the investigator knows some addresses of ~30% of illicit entities
+        rng = random.Random(seed + 1)
+        used = {a for t in sim.txs for a, _ in t["inputs"] + t["outputs"]}
+        illicit_ents = [e for e in sim.entities.values() if e.illicit and any(a in used for a in e.addresses)]
+        known = rng.sample(illicit_ents, max(1, math.ceil(0.3 * len(illicit_ents))))
+        seeds = []
+        for e in known:
+            addrs = [a for a in e.addresses if a in used]
+            for a in rng.sample(addrs, min(len(addrs), rng.randint(1, 3))):
+                seeds.append([a, e.typology, f"SYNTH-{e.eid}", round(rng.uniform(0.8, 0.99), 2), "SYNTHETIC_SEED"])
+        with open(output_dir / "seeds.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["address", "threat_type", "incident_name", "confidence", "source"])
+            w.writerows(seeds)
 
-        # Write seeds.csv
-        seeds_file = output_dir / "seeds.csv"
-        with open(seeds_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["address", "threat_type", "incident_name", "confidence", "source"])
-            for s in seeds:
-                writer.writerow([s["address"], s["threat_type"], s["incident_name"], s["confidence"], s["source"]])
-
-        # Also copy seeds to data/seeds/
-        settings.SEEDS_DIR.mkdir(parents=True, exist_ok=True)
-        global_seeds_file = settings.SEEDS_DIR / "illicit_seeds.csv"
-        with open(global_seeds_file, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["address", "threat_type", "incident_name", "confidence", "source"])
-            for s in seeds:
-                writer.writerow([s["address"], s["threat_type"], s["incident_name"], s["confidence"], s["source"]])
-
-        # Compute SHA256 of CSV
-        with open(csv_file, "rb") as f:
-            csv_hash = hashlib.sha256(f.read()).hexdigest()
-
+        n_ill_addr = sum(1 for a in used if sim.entities[sim.owner[a]].illicit)
         manifest = {
-            "dataset_name": output_dir.name,
-            "total_transactions": len(records),
-            "illicit_transactions": len([l for l in labels if l["typology"] != "NORMAL" and l["typology"] != "EXCHANGE_SWEEP"]),
-            "seeds_count": len(seeds),
-            "csv_sha256": csv_hash,
-            "generated_at": now.isoformat()
+            "generator": "beans-sim-v2", "dataset_name": output_dir.name, "seed": seed,
+            "total_transactions": len(sim.txs), "observation_rows": len(records),
+            "wallets": len(used), "illicit_wallets": n_ill_addr,
+            "illicit_wallet_share": round(n_ill_addr / max(len(used), 1), 4),
+            "illicit_transactions": sum(1 for t in sim.txs if t["illicit"]),
+            "entities": dict(Counter(e.typology for e in sim.entities.values())),
+            "tx_classes": dict(Counter(t["tx_class"] for t in sim.txs)),
+            "seed_wallets": len(seeds), "known_illicit_entities": len(known), "illicit_entities": len(illicit_ents),
+            "csv_sha256": hashlib.sha256((output_dir / "transactions.csv").read_bytes()).hexdigest(),
         }
-        with open(output_dir / "manifest.json", "w", encoding="utf-8") as f:
-            json.dump(manifest, f, indent=2)
-
+        (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
         return manifest

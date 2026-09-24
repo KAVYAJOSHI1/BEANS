@@ -1,88 +1,74 @@
+"""E3: transaction-shape classifier (normal / peel / coinjoin / fan_out / fan_in / round_trip).
+
+Structural signals (equal-output groups, peel ratio + chain length, returns-to-input, respend timing) are
+FEATURES; a LightGBM model learns the decision from labelled transactions. Out-of-fold predictions (grouped by
+the entity that created the tx) are used downstream so fusion never sees in-sample probabilities.
+"""
+import warnings
+from typing import Optional
+
+import joblib
 import numpy as np
-from typing import List, Dict, Tuple, Any
-from sklearn.ensemble import RandomForestClassifier
-from beans.schema import CanonicalRecord
-from beans.features.extractors import FeatureExtractor
+import pandas as pd
+from lightgbm import LGBMClassifier
+from sklearn.metrics import f1_score
+from sklearn.model_selection import StratifiedGroupKFold
 
-TYPOLOGY_CLASSES = ["NORMAL", "PEEL_CHAIN", "COINJOIN", "RANSOMWARE", "EXCHANGE_SWEEP"]
+from beans.config import settings
 
-class PeelingAndMixingClassifier:
-    """
-    Engine 3: Peeling-Chain & Mixing Typology Classifier (R5, E3).
-    Evaluates sequence, shape, output entropy, and denomination symmetries.
-    """
+CLASSES = ["normal", "peel", "coinjoin", "fan_out", "fan_in", "round_trip"]
+MODEL = settings.MODELS_DIR / "e3_txclass.joblib"
+warnings.filterwarnings("ignore", message=".*does not have valid feature names.*")
 
-    def __init__(self):
-        self.clf = RandomForestClassifier(n_estimators=100, random_state=42, class_weight="balanced")
-        self.is_trained = False
-        self.classes_ = TYPOLOGY_CLASSES
 
-    def train_on_labels(self, records: List[CanonicalRecord], labels_map: Dict[str, str]):
-        X_list = []
-        y_list = []
-        for r in records:
-            typology = labels_map.get(r.txid, "NORMAL")
-            feat_dict = FeatureExtractor.extract_tx_features(r)
-            X_list.append(list(feat_dict.values()))
-            y_list.append(typology)
+def _model():
+    return LGBMClassifier(n_estimators=200, learning_rate=0.08, num_leaves=31, class_weight="balanced",
+                          min_child_samples=5, verbose=-1, random_state=42)
 
-        if X_list and len(set(y_list)) > 1:
-            X = np.array(X_list)
-            y = np.array(y_list)
-            self.clf.fit(X, y)
-            self.classes_ = list(self.clf.classes_)
-            self.is_trained = True
 
-    def predict_probabilities(self, records: List[CanonicalRecord]) -> Dict[str, Dict[str, float]]:
-        """
-        Returns { txid: { "typology": predicted_class, "confidence": float, "probs": dict } }
-        """
-        results = {}
-        if not records:
-            return {}
+def _proba(clf, X) -> np.ndarray:
+    p = np.zeros((len(X), len(CLASSES)))
+    for j, c in enumerate(clf.classes_):
+        p[:, CLASSES.index(c)] = clf.predict_proba(X)[:, j]
+    return p
 
-        feature_dicts = [FeatureExtractor.extract_tx_features(r) for r in records]
-        X = np.array([list(fd.values()) for fd in feature_dicts])
 
-        if self.is_trained:
-            probs = self.clf.predict_proba(X)
-            for r, p_row in zip(records, probs):
-                prob_dict = {cls_name: round(float(p), 4) for cls_name, p in zip(self.classes_, p_row)}
-                top_class = self.classes_[int(np.argmax(p_row))]
-                results[r.txid] = {
-                    "predicted_typology": top_class,
-                    "confidence": prob_dict[top_class],
-                    "probabilities": prob_dict
-                }
-        else:
-            # High-fidelity baseline structural heuristics when model not yet fitted
-            for r, fd in zip(records, feature_dicts):
-                prob_dict = {c: 0.05 for c in TYPOLOGY_CLASSES}
-                top_class = "NORMAL"
-                conf = 0.50
-
-                # CoinJoin check
-                if fd["max_equal_outputs"] >= 4 and fd["n_in"] >= 3:
-                    top_class = "COINJOIN"
-                    conf = 0.92
-                # Peel chain check
-                elif fd["n_in"] == 1 and fd["n_out"] == 2 and fd["max_min_ratio"] > 4.0 and (fd["is_vpn_tor"] or fd["is_bulletproof"]):
-                    top_class = "PEEL_CHAIN"
-                    conf = 0.88
-                # Ransomware fan-out check
-                elif fd["fan_out_ratio"] >= 5.0 and fd["is_bulletproof"]:
-                    top_class = "RANSOMWARE"
-                    conf = 0.94
-                # Exchange sweep check
-                elif fd["n_in"] >= 10 and fd["n_out"] <= 2:
-                    top_class = "EXCHANGE_SWEEP"
-                    conf = 0.95
-
-                prob_dict[top_class] = conf
-                results[r.txid] = {
-                    "predicted_typology": top_class,
-                    "confidence": conf,
-                    "probabilities": prob_dict
-                }
-
-        return results
+def run(X: pd.DataFrame, labels: Optional[pd.DataFrame]) -> tuple[pd.DataFrame, dict]:
+    """labels: DataFrame indexed by txid with tx_class, entity_id (or None → use the persisted model)."""
+    feats = list(X.columns)
+    report = {"features": feats}
+    if labels is not None and len(labels):
+        lab = labels.reindex(X.index).dropna(subset=["tx_class"])
+        Xl, y = X.loc[lab.index], lab["tx_class"].values
+        # group by (entity, day): one entity's same-day activity (e.g. a peel chain) never straddles train/test,
+        # while shapes produced by a single actor over many days (a CoinJoin coordinator) remain learnable
+        day = pd.to_datetime(X.attrs.get("ts", pd.Series(dtype="datetime64[ns]")).reindex(lab.index)).dt.strftime("%m%d")
+        groups = (lab["entity_id"].astype(str) + "|" + day.fillna("")).values
+        oof = np.zeros((len(Xl), len(CLASSES)))
+        n_splits = min(5, max(2, pd.Series(groups).nunique() // 20))
+        for tr, te in StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42).split(Xl, y, groups):
+            clf = _model().fit(Xl.iloc[tr], y[tr])
+            oof[te] = _proba(clf, Xl.iloc[te])
+        pred = np.array(CLASSES)[oof.argmax(1)]
+        report.update({"trained_on": int(len(Xl)), "cv_folds": n_splits,
+                       "macro_f1": round(float(f1_score(y, pred, average="macro")), 4),
+                       "per_class_f1": {c: round(float(v), 4) for c, v in zip(
+                           CLASSES, f1_score(y, pred, labels=CLASSES, average=None, zero_division=0))},
+                       "confusion": {"labels": CLASSES, "matrix": pd.crosstab(
+                           pd.Categorical(y, CLASSES), pd.Categorical(pred, CLASSES), dropna=False).values.tolist()}})
+        final = _model().fit(Xl, y)
+        MODEL.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump({"model": final, "features": feats}, MODEL)
+        probs = pd.DataFrame(_proba(final, X), index=X.index, columns=[f"p_{c}" for c in CLASSES])
+        probs.loc[Xl.index] = oof   # labelled txs get honest out-of-fold probabilities
+    elif MODEL.exists():
+        bundle = joblib.load(MODEL)
+        probs = pd.DataFrame(_proba(bundle["model"], X[bundle["features"]]), index=X.index,
+                             columns=[f"p_{c}" for c in CLASSES])
+        report["used_persisted_model"] = str(MODEL.name)
+    else:
+        probs = pd.DataFrame(0.0, index=X.index, columns=[f"p_{c}" for c in CLASSES])
+        probs["p_normal"] = 1.0
+        report["unavailable"] = "no labels and no trained model"
+    probs["tx_class_pred"] = np.array(CLASSES)[probs[[f"p_{c}" for c in CLASSES]].values.argmax(1)]
+    return probs, report

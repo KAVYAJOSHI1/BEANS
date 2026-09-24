@@ -144,35 +144,49 @@ class DuckStore:
         conn.close()
 
     def insert_records(self, records: List[CanonicalRecord]):
+        """Bulk insert (Arrow). The first observation of a txid wins, so `transactions.src_ip` is the first-spy IP."""
         if not records:
             return
-        conn = self.get_connection()
+        import pyarrow as pa
+        from datetime import timezone
+
+        tx_rows, obs_rows = {}, []
         for r in records:
-            # Upsert transaction
-            conn.execute("""
-            INSERT OR REPLACE INTO transactions (
-                txid, timestamp, input_addresses, input_amounts, output_addresses, output_amounts,
-                total_input, total_output, fee, script_type, block_height, src_ip, src_port,
-                dst_ip, dst_port, geo_country, geo_city, geo_lat, geo_lon, asn, asn_name, asn_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                r.txid, r.timestamp, r.input_addresses, r.input_amounts, r.output_addresses, r.output_amounts,
-                r.total_input, r.total_output, r.fee, r.script_type, r.block_height, r.src_ip, r.src_port,
-                r.dst_ip, r.dst_port, r.geo_country, r.geo_city, r.geo_lat, r.geo_lon, r.asn, r.asn_name, r.asn_type
-            ])
+            ts = r.timestamp.astimezone(timezone.utc).replace(tzinfo=None) if r.timestamp.tzinfo else r.timestamp
+            if r.txid not in tx_rows or ts < tx_rows[r.txid]["timestamp"]:
+                tx_rows[r.txid] = {
+                    "txid": r.txid, "timestamp": ts, "input_addresses": r.input_addresses,
+                    "input_amounts": r.input_amounts, "output_addresses": r.output_addresses,
+                    "output_amounts": r.output_amounts, "total_input": r.total_input, "total_output": r.total_output,
+                    "fee": r.fee, "script_type": r.script_type, "block_height": r.block_height, "src_ip": r.src_ip,
+                    "src_port": r.src_port, "dst_ip": r.dst_ip, "dst_port": r.dst_port, "geo_country": r.geo_country,
+                    "geo_city": r.geo_city, "geo_lat": r.geo_lat, "geo_lon": r.geo_lon, "asn": r.asn,
+                    "asn_name": r.asn_name, "asn_type": r.asn_type,
+                }
+            obs_rows.append({
+                "id": f"obs_{r.txid[:12]}_{r.src_ip}_{int(ts.timestamp() * 1000)}", "timestamp": ts, "txid": r.txid,
+                "src_ip": r.src_ip, "src_port": r.src_port, "dst_ip": r.dst_ip, "dst_port": r.dst_port,
+                "geo_country": r.geo_country, "geo_city": r.geo_city, "geo_lat": r.geo_lat, "geo_lon": r.geo_lon,
+                "asn": r.asn, "asn_name": r.asn_name, "asn_type": r.asn_type,
+            })
+        tx_tab = pa.Table.from_pylist(list(tx_rows.values()))
+        obs_tab = pa.Table.from_pylist(obs_rows)
+        conn = self.get_connection()
+        tx_cols = ", ".join(tx_tab.column_names)
+        obs_cols = ", ".join(obs_tab.column_names)
+        conn.register("tx_in", tx_tab)
+        conn.register("obs_in", obs_tab)
+        conn.execute(f"INSERT OR IGNORE INTO transactions ({tx_cols}) SELECT {tx_cols} FROM tx_in")
+        conn.execute(f"INSERT OR IGNORE INTO net_observations ({obs_cols}) SELECT {obs_cols} FROM obs_in")
+        conn.close()
 
-            # Insert net observation
-            obs_id = f"obs_{r.txid[:12]}_{r.src_ip}_{int(r.timestamp.timestamp())}"
-            conn.execute("""
-            INSERT OR REPLACE INTO net_observations (
-                id, timestamp, txid, src_ip, src_port, dst_ip, dst_port,
-                geo_country, geo_city, geo_lat, geo_lon, asn, asn_name, asn_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                obs_id, r.timestamp, r.txid, r.src_ip, r.src_port, r.dst_ip, r.dst_port,
-                r.geo_country, r.geo_city, r.geo_lat, r.geo_lon, r.asn, r.asn_name, r.asn_type
-            ])
-
+    def load_sidecar(self, table: str, path: Path, columns: List[str]):
+        """Replace a ground-truth/seed table from a CSV next to the ingested file."""
+        conn = self.get_connection()
+        conn.execute(f"CREATE TABLE IF NOT EXISTS {table} AS SELECT * FROM read_csv_auto(?, all_varchar=true) LIMIT 0",
+                     [str(path)])
+        conn.execute(f"DELETE FROM {table}")
+        conn.execute(f"INSERT INTO {table} SELECT * FROM read_csv_auto(?, all_varchar=true)", [str(path)])
         conn.close()
 
     def get_all_transactions(self) -> List[Dict[str, Any]]:

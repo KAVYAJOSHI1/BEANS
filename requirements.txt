@@ -20,3 +20,8 @@ jinja2>=3.1.3
 # Kavya: PDF evidence packs + API tests
 weasyprint>=62.0
 httpx>=0.27
+# ML engines + fast bulk insert
+pyarrow>=16
+lightgbm>=4.3
+shap>=0.46
+scipy>=1.11

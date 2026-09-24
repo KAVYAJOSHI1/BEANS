@@ -53,7 +53,7 @@ export default function App() {
       if (statsRes) setStats(statsRes);
 
       // 2. Alerts
-      const alertsRes = await fetch(`${API_BASE}/alerts?limit=100`).then((r) => r.json()).catch(() => []);
+      const alertsRes = await fetch(`${API_BASE}/alerts?limit=500`).then((r) => r.json()).catch(() => []);
       if (Array.isArray(alertsRes)) setAlerts(alertsRes);
 
       // 3. Graph Topology
@@ -244,7 +244,7 @@ export default function App() {
   };
 
   const counts = {
-    alerts: alerts.filter((a) => a.status === 'OPEN').length,
+    alerts: stats?.kpis?.open_alerts ?? alerts.filter((a) => a.status === 'OPEN').length,
     cases: cases.length,
   };
 
