@@ -1,5 +1,34 @@
 import React from 'react';
+import * as echarts from 'echarts';
+import ReactECharts from 'echarts-for-react';
+import { feature } from 'topojson-client';
+import worldTopo from 'world-atlas/countries-110m.json';
 import { Globe, Plane, ShieldAlert, Radio, Server } from 'lucide-react';
+
+// Natural Earth 110m outlines bundled at build time, so the map works fully offline.
+if (!echarts.getMap('world')) echarts.registerMap('world', feature(worldTopo, worldTopo.objects.countries));
+
+const RISKY = new Set(['TOR_EXIT', 'BULLETPROOF', 'VPN']);
+
+function WorldMap({ points, arcs }) {
+  const option = {
+    tooltip: { trigger: 'item', formatter: (p) => p.data?.tip || p.name },
+    geo: { map: 'world', roam: true, zoom: 1.15, itemStyle: { areaColor: '#e2e8f0', borderColor: '#fff' },
+      emphasis: { itemStyle: { areaColor: '#cbd5e1' }, label: { show: false } } },
+    series: [
+      { type: 'effectScatter', coordinateSystem: 'geo', rippleEffect: { scale: 3 }, zlevel: 2,
+        data: points.map((p) => ({ name: p.ip, value: [p.lon, p.lat, p.tx_count],
+          tip: `${p.ip}<br/>${p.country}${p.approximate ? ' (country centroid)' : ''} · ${p.asn || ''}<br/>${p.asn_type} · ${p.tx_count} obs`,
+          itemStyle: { color: RISKY.has(p.asn_type) ? '#dc2626' : '#2563eb' } })),
+        symbolSize: (v) => Math.min(6 + Math.sqrt(v[2]) * 2, 26) },
+      { type: 'lines', coordinateSystem: 'geo', zlevel: 1,
+        effect: { show: true, period: 4, symbol: 'arrow', symbolSize: 6, color: '#dc2626' },
+        lineStyle: { color: '#dc2626', width: 1.5, opacity: 0.7, curveness: 0.3 },
+        data: arcs.map((a) => ({ coords: [[a.from.lon, a.from.lat], [a.to.lon, a.to.lat]], tip: a.label })) },
+    ],
+  };
+  return <ReactECharts option={option} style={{ height: 460 }} />;
+}
 
 export default function GeoMap({ geoData }) {
   const points = geoData?.points || [];
@@ -23,6 +52,14 @@ export default function GeoMap({ geoData }) {
             {points.length} Relaying Entry Points
           </span>
         </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
+        <WorldMap points={points} arcs={arcs} />
+        <p className="text-[11px] text-slate-500 px-2">
+          Red points: Tor / VPN / bulletproof-hosting relays. Red arcs: the same wallet broadcast from two places faster than
+          {' '}{geoData?.threshold_kmh || 900} km/h allows. Positions use country centroids where the offline GeoIP DB has no coordinates.
+        </p>
       </div>
 
       {/* Impossible Travel Arcs Highlights */}

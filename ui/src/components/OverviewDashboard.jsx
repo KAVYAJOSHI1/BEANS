@@ -45,11 +45,11 @@ export default function OverviewDashboard({ stats, alerts, onSelectAlert, setAct
             <span className="px-2.5 py-1 rounded-md bg-white/20 text-xs font-semibold backdrop-blur-md">
               OFFLINE FORENSIC SENTINEL
             </span>
-            <span className="text-xs text-blue-200">NTRO PS 26146 Compliance</span>
+            <span className="text-xs text-blue-200">SIH PS 26146 · NTRO</span>
           </div>
           <h1 className="text-2xl font-bold mt-2">Forensic Intelligence & Traffic Monitoring</h1>
           <p className="text-blue-100 text-sm mt-1 max-w-2xl">
-            Autonomous multi-layer correlation linking Bitcoin P2P network telemetry (SIGINT) with blockchain ledger flows and calibrated AI/ML threat detection engines.
+            Offline correlation of Bitcoin P2P network telemetry (SIGINT) with blockchain ledger flows and calibrated AI/ML threat detection engines.
           </p>
         </div>
         <div className="flex space-x-2">
@@ -204,8 +204,8 @@ export default function OverviewDashboard({ stats, alerts, onSelectAlert, setAct
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>Powered by 4 AI/ML Engines: CIOH + IsolationForest + LightGBM + Personalized PageRank</span>
-            <span>Zero-cloud, 100% air-gapped forensic execution</span>
+            <span>Engines: E1 clustering · E2 anomaly · E3 peel/mix · E4 seed risk propagation</span>
+            <span>Runs fully offline</span>
           </div>
         </div>
       </div>

@@ -34,7 +34,7 @@ export default function Navbar({ activeTab, setActiveTab, onRefresh, loading }) 
                   OFFLINE NATIVE
                 </span>
               </div>
-              <p className="text-xs text-slate-500">Bitcoin Forensic Intelligence Pipeline · NTRO</p>
+              <p className="text-xs text-slate-500">Bitcoin Encryption, Analysis &amp; Network Security</p>
             </div>
           </div>
 
