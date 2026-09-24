@@ -14,7 +14,7 @@ from beans.engines.e3_peelmix import PeelingAndMixingClassifier
 from beans.engines.e4_propagate import RiskPropagationEngine
 from beans.score.fuse import MetaFusionEngine
 from beans.explain.reasons import PlainEnglishReasonGenerator
-from beans.report.pdf_export import LawEnforcementReportGenerator
+from beans.report.pdf_export import CaseReportGenerator
 
 @pytest.fixture
 def sample_records():
@@ -102,25 +102,13 @@ def test_meta_fusion_and_reasons():
     )
     assert len(reasons) >= 3
 
-def test_law_enforcement_dossier_export():
-    """S3: Verify court-admissible LE dossier generation with SHA-256 hash"""
-    dossier = LawEnforcementReportGenerator.generate_case_dossier(
-        case_id=1,
-        case_name="Operation Test Case",
-        incident_type="RANSOMWARE",
-        suspect_wallets=["bc1qSuspect1", "bc1qSuspect2"],
-        investigator="Special Agent Analyst",
-        notes="Suspect syndicate identified.",
-        alerts=[{
-            "entity_id": "bc1qSuspect1",
-            "risk_score": 92.0,
-            "calibrated_confidence": 0.90,
-            "alert_type": "RANSOMWARE",
-            "severity": "CRITICAL",
-            "reasons": ["Ransomware collection pattern"],
-            "shap_top_features": [{"feature": "is_bulletproof", "value": 1.0, "impact": "+0.32"}]
-        }],
-        dataset_sha256="TEST_SHA256_HASH_12345"
-    )
-    assert "LAW ENFORCEMENT" in dossier["markdown"]
-    assert "TEST_SHA256_HASH_12345" in dossier["markdown"]
+def test_case_evidence_pack_export():
+    """S3: evidence pack carries source-file hashes and a verifiable evidence SHA-256"""
+    alert = {"alert_id": "ALT-1", "entity_type": "WALLET", "entity_id": "bc1qSuspect1", "alert_type": "RANSOMWARE",
+             "severity": "CRITICAL", "risk_score": 92.0, "calibrated_confidence": 0.90, "status": "OPEN",
+             "reasons": ["Ransomware collection pattern"], "engine_scores": {}, "evidence": {"txid": "ab" * 32},
+             "shap_top_features": [{"feature": "is_bulletproof", "value": 1.0, "impact": "+0.32"}]}
+    case = {"id": 1, "case_name": "Test Case", "incident_type": "RANSOMWARE", "status": "OPEN", "notes": "n"}
+    pack = CaseReportGenerator.build(case, [alert], [{"file": "tx.csv", "sha256": "f" * 64, "records": 10}], [])
+    assert len(pack["evidence_sha256"]) == 64
+    assert "f" * 64 in pack["markdown"] and "bc1qSuspect1" in pack["html"]

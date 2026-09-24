@@ -1,99 +1,97 @@
-from fastapi import APIRouter, Query, HTTPException
-from typing import List, Dict, Any, Optional
-import json
-from beans.store.duck import DuckStore
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, HTTPException, Query, Response
+
+from beans.api import db
 
 router = APIRouter(prefix="/alerts", tags=["Alerts"])
 
+STATUSES = {"OPEN", "INVESTIGATING", "CONFIRMED", "RESOLVED", "FALSE_POSITIVE"}
+FEEDBACK_LABEL = {"FALSE_POSITIVE": "FALSE_POSITIVE", "CONFIRMED": "TRUE_POSITIVE"}
+
+
+def alert_out(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "alert_id": row["alert_id"],
+        "entity_id": row["entity_id"],
+        "entity_type": row["entity_type"],
+        "alert_type": row["alert_type"],
+        "risk_score": float(row.get("risk_score") or 0.0),
+        "calibrated_confidence": float(row.get("calibrated_confidence") or 0.0),
+        "severity": row.get("severity"),
+        "reasons": row.get("reasons") or [],
+        "shap_top_features": row.get("shap_top_features") or [],
+        "engine_scores": row.get("engine_scores") or {},
+        "evidence": row.get("evidence") or {},
+        "status": row.get("status") or "OPEN",
+        "assigned_to": row.get("assigned_to") or "Unassigned",
+        "created_at": row.get("created_at"),
+    }
+
+
 @router.get("")
-def get_ranked_alerts(
+def list_alerts(
+    response: Response,
     severity: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    q: Optional[str] = Query(None),
-    limit: int = Query(100, ge=1, le=500)
+    alert_type: Optional[str] = Query(None, alias="type"),
+    q: Optional[str] = Query(None, description="search entity id, alert type, txid or IP"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
 ) -> List[Dict[str, Any]]:
-    store = DuckStore()
-    conn = store.get_connection()
-
-    sql = "SELECT * FROM alerts WHERE 1=1"
-    params = []
-
+    where, params = ["1=1"], []
     if severity and severity != "ALL":
-        sql += " AND severity = ?"
+        where.append("severity = ?")
         params.append(severity)
     if status and status != "ALL":
-        sql += " AND status = ?"
+        where.append("status = ?")
         params.append(status)
+    if alert_type and alert_type != "ALL":
+        where.append("alert_type = ?")
+        params.append(alert_type)
     if q:
-        sql += " AND (entity_id ILIKE ? OR alert_type ILIKE ?)"
-        params.extend([f"%{q}%", f"%{q}%"])
+        where.append("(entity_id ILIKE ? OR alert_type ILIKE ? OR CAST(evidence AS VARCHAR) ILIKE ?)")
+        params.extend([f"%{q}%"] * 3)
+    cond = " AND ".join(where)
+    response.headers["X-Total-Count"] = str(db.scalar(f"SELECT COUNT(*) FROM alerts WHERE {cond}", params))
+    rows = db.query(
+        f"SELECT * FROM alerts WHERE {cond} ORDER BY risk_score DESC, calibrated_confidence DESC LIMIT ? OFFSET ?",
+        params + [limit, offset],
+    )
+    return [alert_out(r) for r in rows]
 
-    sql += " ORDER BY risk_score DESC, created_at DESC LIMIT ?"
-    params.append(limit)
 
-    df = conn.execute(sql, params).fetchdf()
-    conn.close()
+@router.get("/{alert_id}")
+def get_alert(alert_id: str) -> Dict[str, Any]:
+    row = db.one("SELECT * FROM alerts WHERE alert_id = ?", [alert_id])
+    if not row:
+        raise HTTPException(404, f"alert {alert_id} not found")
+    return alert_out(row)
 
-    results = []
-    for row in df.to_dict(orient="records"):
-        # parse json fields if string
-        shap_feats = row.get("shap_top_features")
-        if isinstance(shap_feats, str):
-            try:
-                shap_feats = json.loads(shap_feats)
-            except Exception:
-                shap_feats = []
-
-        engine_sc = row.get("engine_scores")
-        if isinstance(engine_sc, str):
-            try:
-                engine_sc = json.loads(engine_sc)
-            except Exception:
-                engine_sc = {}
-
-        evidence = row.get("evidence")
-        if isinstance(evidence, str):
-            try:
-                evidence = json.loads(evidence)
-            except Exception:
-                evidence = {}
-
-        results.append({
-            "alert_id": row.get("alert_id"),
-            "entity_id": row.get("entity_id"),
-            "entity_type": row.get("entity_type"),
-            "alert_type": row.get("alert_type"),
-            "risk_score": float(row.get("risk_score", 0.0)),
-            "calibrated_confidence": float(row.get("calibrated_confidence", 0.0)),
-            "severity": row.get("severity"),
-            "reasons": row.get("reasons") if isinstance(row.get("reasons"), list) else [],
-            "shap_top_features": shap_feats,
-            "engine_scores": engine_sc,
-            "evidence": evidence,
-            "status": row.get("status", "OPEN"),
-            "assigned_to": row.get("assigned_to", "Unassigned"),
-            "created_at": str(row.get("created_at"))
-        })
-
-    return results
 
 @router.patch("/{alert_id}/status")
 def update_alert_status(alert_id: str, payload: Dict[str, Any]):
-    store = DuckStore()
-    conn = store.get_connection()
-    new_status = payload.get("status", "OPEN")
+    row = db.one("SELECT alert_id, entity_id, status FROM alerts WHERE alert_id = ?", [alert_id])
+    if not row:
+        raise HTTPException(404, f"alert {alert_id} not found")
+    new_status = str(payload.get("status", "OPEN")).upper()
+    if new_status not in STATUSES:
+        raise HTTPException(422, f"status must be one of {sorted(STATUSES)}")
     assigned_to = payload.get("assigned_to")
+    notes = payload.get("notes", "")
 
     if assigned_to:
-        conn.execute("UPDATE alerts SET status = ?, assigned_to = ? WHERE alert_id = ?", [new_status, assigned_to, alert_id])
+        db.execute("UPDATE alerts SET status = ?, assigned_to = ? WHERE alert_id = ?", [new_status, assigned_to, alert_id])
     else:
-        conn.execute("UPDATE alerts SET status = ? WHERE alert_id = ?", [new_status, alert_id])
+        db.execute("UPDATE alerts SET status = ? WHERE alert_id = ?", [new_status, alert_id])
 
-    # Log feedback if false positive
-    if new_status == "FALSE_POSITIVE":
-        conn.execute("INSERT INTO feedback (alert_id, user_label, notes) VALUES (?, ?, ?)", [
-            alert_id, "FALSE_POSITIVE", payload.get("notes", "Marked FP by analyst")
-        ])
-
-    conn.close()
+    # Analyst verdicts become labelled feedback for the next training run (roadmap S5)
+    if new_status in FEEDBACK_LABEL:
+        db.execute(
+            "INSERT INTO feedback (id, alert_id, entity_id, user_label, notes) "
+            "VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM feedback), ?, ?, ?, ?)",
+            [alert_id, row["entity_id"], FEEDBACK_LABEL[new_status], notes],
+        )
+    db.audit("ALERT_STATUS", "ALERT", alert_id,
+             {"from": row["status"], "to": new_status, "assigned_to": assigned_to, "notes": notes})
     return {"status": "success", "alert_id": alert_id, "new_status": new_status}
