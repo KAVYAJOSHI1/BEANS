@@ -9,7 +9,7 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 
 | # | Feature (roadmap) | Status | What to do | By |
 |---|---|---|---|---|
-| — | Contracts match your schema | ❌ `test_contracts.py` fails | Rewrite `docs/CONTRACTS.md` + test for `CanonicalRecord`/`AlertRecord`/`duck.py` tables | **14:00** |
+| — | Contracts match your schema | ✅ fixed in Dhairya's 13:25 commit (12/12 tests pass) | Rewrite `docs/CONTRACTS.md` + test for `CanonicalRecord`/`AlertRecord`/`duck.py` tables | **14:00** |
 | M10 | SHAP "why flagged" (§7) | ❌ impacts are hard-coded | Real `shap.TreeExplainer` on the fusion model; reasons generated from the actual top SHAP features; add a counterfactual line | **15:30** |
 | M9 | Fusion → risk + **calibrated** confidence (§6.5) | 🟡 fixed formula | LightGBM on the wallet matrix → isotonic calibration; train/test split **by entity_id**; confidence = certainty + agreement + evidence completeness | 16:30 |
 | M7 | E3 peel/mix classifier (§6 E3) | 🟡 falls back to if/else | Structural checks become features; LightGBM on `labels_tx`; no silent rule fallback | 17:30 |
