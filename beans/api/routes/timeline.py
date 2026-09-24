@@ -34,8 +34,8 @@ def get_timeline_sequence(
 
     events = []
     for idx, r in enumerate(df.to_dict(orient="records")):
-        ins = r.get("input_addresses") or []
-        outs = r.get("output_addresses") or []
+        ins = list(r.get("input_addresses")) if r.get("input_addresses") is not None else []
+        outs = list(r.get("output_addresses")) if r.get("output_addresses") is not None else []
         
         events.append({
             "step": idx + 1,

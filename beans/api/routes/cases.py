@@ -60,11 +60,13 @@ def export_case_dossier(case_id: int) -> Dict[str, Any]:
     alerts_df = conn.execute("SELECT * FROM alerts ORDER BY risk_score DESC LIMIT 10").fetchdf()
     conn.close()
 
+    suspects_raw = case.get("suspect_entities")
+    suspects = list(suspects_raw) if suspects_raw is not None else []
     dossier = LawEnforcementReportGenerator.generate_case_dossier(
         case_id=case["id"],
         case_name=case["case_name"],
         incident_type=case.get("incident_type", "RANSOMWARE"),
-        suspect_wallets=case.get("suspect_entities") or [],
+        suspect_wallets=suspects,
         investigator=case.get("investigator", "Senior Investigator"),
         notes=case.get("notes", ""),
         alerts=alerts_df.to_dict(orient="records")

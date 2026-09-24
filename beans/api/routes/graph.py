@@ -56,7 +56,8 @@ def get_graph_topology(
             G.add_edge(ip_node, tx_node, type="RELAYED", label="Relayed")
 
         # Inputs
-        for addr in (r.get("input_addresses") or []):
+        in_addrs = list(r.get("input_addresses")) if r.get("input_addresses") is not None else []
+        for addr in in_addrs:
             w_node = f"w_{addr}"
             meta = risk_map.get(addr, {})
             is_seed = addr in seed_set
@@ -73,7 +74,8 @@ def get_graph_topology(
             G.add_edge(w_node, tx_node, type="INPUT", label="Spends")
 
         # Outputs
-        for addr in (r.get("output_addresses") or []):
+        out_addrs = list(r.get("output_addresses")) if r.get("output_addresses") is not None else []
+        for addr in out_addrs:
             w_node = f"w_{addr}"
             meta = risk_map.get(addr, {})
             is_seed = addr in seed_set
