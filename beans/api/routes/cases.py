@@ -1,72 +1,92 @@
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict, Any, Optional
-from datetime import datetime
-from beans.store.duck import DuckStore
-from beans.report.pdf_export import LawEnforcementReportGenerator
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
+
+from beans.api import db
+from beans.api.routes.alerts import alert_out
+from beans.report.pdf_export import CaseReportGenerator
 
 router = APIRouter(prefix="/cases", tags=["Case Management"])
 
+CASE_STATUSES = {"OPEN", "INVESTIGATING", "CLOSED"}
+
+
+def _case(case_id: int) -> Dict[str, Any]:
+    case = db.one("SELECT * FROM case_files WHERE id = ?", [case_id])
+    if not case:
+        raise HTTPException(404, f"case {case_id} not found")
+    return case
+
+
 @router.get("")
 def list_cases() -> List[Dict[str, Any]]:
-    store = DuckStore()
-    conn = store.get_connection()
-    df = conn.execute("SELECT * FROM case_files ORDER BY created_at DESC").fetchdf()
-    conn.close()
-    return df.to_dict(orient="records")
+    cases = db.query("SELECT * FROM case_files ORDER BY created_at DESC")
+    for c in cases:
+        c["alert_count"] = db.scalar("SELECT COUNT(*) FROM alerts WHERE list_contains(?, entity_id)",
+                                     [c["suspect_entities"] or []]) if c["suspect_entities"] else 0
+    return cases
+
 
 @router.post("")
 def create_case(payload: Dict[str, Any]):
-    store = DuckStore()
-    conn = store.get_connection()
-    
-    # Next ID
-    max_id = conn.execute("SELECT COALESCE(MAX(id), 0) FROM case_files").fetchone()[0]
-    new_id = max_id + 1
+    name = str(payload.get("case_name") or "").strip()
+    if not name:
+        raise HTTPException(422, "case_name is required")
+    suspects = sorted({s.strip() for s in payload.get("suspect_entities") or [] if str(s).strip()})
+    new_id = int(db.scalar("SELECT COALESCE(MAX(id), 0) + 1 FROM case_files"))
+    db.execute(
+        "INSERT INTO case_files (id, case_name, incident_type, suspect_entities, linked_txids, notes, investigator, priority) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [new_id, name, payload.get("incident_type", "UNKNOWN"), suspects, payload.get("linked_txids") or [],
+         payload.get("notes", ""), payload.get("investigator", "analyst"), payload.get("priority", "HIGH")])
+    db.audit("CASE_CREATE", "CASE", str(new_id), {"case_name": name, "suspects": suspects})
+    return {"status": "success", "case_id": new_id, "case_name": name}
 
-    case_name = payload.get("case_name", f"Case #{new_id}")
-    incident_type = payload.get("incident_type", "RANSOMWARE")
-    suspects = payload.get("suspect_entities", [])
-    notes = payload.get("notes", "")
-    investigator = payload.get("investigator", "Special Agent Analyst")
-    priority = payload.get("priority", "HIGH")
 
-    conn.execute("""
-    INSERT INTO case_files (id, case_name, incident_type, suspect_entities, notes, investigator, priority)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, [new_id, case_name, incident_type, suspects, notes, investigator, priority])
+@router.get("/{case_id}")
+def get_case(case_id: int) -> Dict[str, Any]:
+    case = _case(case_id)
+    suspects = case["suspect_entities"] or []
+    alerts = db.query("SELECT * FROM alerts WHERE list_contains(?, entity_id) ORDER BY risk_score DESC",
+                      [suspects]) if suspects else []
+    return {**case, "alerts": [alert_out(a) for a in alerts]}
 
-    conn.close()
-    return {"status": "success", "case_id": new_id, "case_name": case_name}
+
+@router.patch("/{case_id}")
+def update_case(case_id: int, payload: Dict[str, Any]):
+    case = _case(case_id)
+    status = str(payload.get("status", case["status"])).upper()
+    if status not in CASE_STATUSES:
+        raise HTTPException(422, f"status must be one of {sorted(CASE_STATUSES)}")
+    suspects = set(case["suspect_entities"] or []) | {s.strip() for s in payload.get("add_entities") or [] if s.strip()}
+    suspects -= set(payload.get("remove_entities") or [])
+    db.execute("UPDATE case_files SET status = ?, notes = ?, suspect_entities = ?, updated_at = now() WHERE id = ?",
+               [status, payload.get("notes", case["notes"]), sorted(suspects), case_id])
+    db.audit("CASE_UPDATE", "CASE", str(case_id), payload)
+    return get_case(case_id)
+
 
 @router.get("/{case_id}/export")
-def export_case_dossier(case_id: int) -> Dict[str, Any]:
-    store = DuckStore()
-    conn = store.get_connection()
-
-    case_df = conn.execute("SELECT * FROM case_files WHERE id = ?", [case_id]).fetchdf()
-    if case_df.empty:
-        # Fallback default demo case
-        case = {
-            "id": case_id,
-            "case_name": "Operation LockBit Eclipse - Extortion Syndicate",
-            "incident_type": "RANSOMWARE",
-            "suspect_entities": [],
-            "notes": "Target syndicate active in laundering ransomware proceeds through CoinJoin mixers.",
-            "investigator": "Forensics Special Agent"
-        }
-    else:
-        case = case_df.to_dict(orient="records")[0]
-
-    alerts_df = conn.execute("SELECT * FROM alerts ORDER BY risk_score DESC LIMIT 10").fetchdf()
-    conn.close()
-
-    dossier = LawEnforcementReportGenerator.generate_case_dossier(
-        case_id=case["id"],
-        case_name=case["case_name"],
-        incident_type=case.get("incident_type", "RANSOMWARE"),
-        suspect_wallets=case.get("suspect_entities") or [],
-        investigator=case.get("investigator", "Senior Investigator"),
-        notes=case.get("notes", ""),
-        alerts=alerts_df.to_dict(orient="records")
-    )
-    return dossier
+def export_case(case_id: int, fmt: str = Query("json", pattern="^(json|md|pdf|html)$")):
+    case = get_case(case_id)
+    sources = db.query("SELECT file, sha256, records, source, ingested_at FROM ingest_log ORDER BY ingested_at")
+    audit = db.query("SELECT created_at, investigator, action, entity_type, entity_id FROM audit_log "
+                     "WHERE (entity_type = 'CASE' AND entity_id = ?) OR list_contains(?, entity_id) ORDER BY created_at",
+                     [str(case_id), [a["alert_id"] for a in case["alerts"]]])
+    pack = CaseReportGenerator.build(case, case["alerts"], sources, audit)
+    db.audit("CASE_EXPORT", "CASE", str(case_id), {"format": fmt, "evidence_sha256": pack["evidence_sha256"]})
+    stem = f"BEANS_case_{case_id}"
+    if fmt == "pdf":
+        try:
+            pdf = CaseReportGenerator.to_pdf(pack["html"])
+        except Exception as e:  # missing system libs → tell the UI to use the HTML export instead
+            raise HTTPException(501, f"PDF rendering unavailable ({e}); use fmt=html") from e
+        return Response(pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{stem}.pdf"'})
+    if fmt == "html":
+        return Response(pack["html"], media_type="text/html")
+    if fmt == "md":
+        return Response(pack["markdown"], media_type="text/markdown",
+                        headers={"Content-Disposition": f'attachment; filename="{stem}.md"'})
+    return {k: pack[k] for k in ("case_id", "case_name", "evidence_sha256", "evidence", "markdown")}

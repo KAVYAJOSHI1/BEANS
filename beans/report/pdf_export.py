@@ -1,98 +1,137 @@
+"""Case evidence pack: JSON (machine-readable), Markdown (UI preview) and PDF (WeasyPrint, offline).
+
+Everything in the pack comes from the database. If something is unknown it's labelled as unknown,
+never filled with a placeholder value.
+"""
 import hashlib
-from datetime import datetime
-from typing import Dict, Any, List
-from beans.store.duck import DuckStore
+import html
+import json
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
-class LawEnforcementReportGenerator:
-    """
-    Generates official court-admissible forensic intelligence dossiers with input data SHA-256 hashes (S3, R10).
-    """
 
+def _canonical_hash(payload: Dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+class CaseReportGenerator:
     @classmethod
-    def generate_case_dossier(
-        cls,
-        case_id: int,
-        case_name: str,
-        incident_type: str,
-        suspect_wallets: List[str],
-        investigator: str,
-        notes: str,
-        alerts: List[Dict[str, Any]],
-        dataset_sha256: str = "OFFLINE_VERIFIED_DATASET_HASH"
-    ) -> Dict[str, Any]:
-        now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        doc_hash = hashlib.sha256(f"{case_id}_{case_name}_{now_str}".encode()).hexdigest()[:16].upper()
-
-        md_lines = [
-            f"# NATIONAL TECHNICAL RESEARCH ORGANISATION (NTRO) / LE FORENSIC DOSSIER",
-            f"**DOCUMENT CLASSIFICATION: CONFIDENTIAL // LAW ENFORCEMENT SENSITIVE // EVIDENCE PACK**",
-            f"",
-            f"**Case Reference:** `{case_name}` (Dossier Ref: #DOS-{case_id}-{doc_hash})  ",
-            f"**Incident Typology:** `{incident_type}`  ",
-            f"**Investigating Officer:** {investigator}  ",
-            f"**Date of Certification:** {now_str}  ",
-            f"**Input Dataset SHA-256 Verification:** `{dataset_sha256}`  ",
-            f"",
-            f"---",
-            f"",
-            f"## 1. Executive Summary",
-            f"This dossier establishes correlated blockchain-layer transaction flow with network signals intelligence (SIGINT) and open-source threat feeds (OSINT) produced by the **BEANS** autonomous forensic pipeline.",
-            f"",
-            f"**Investigator Briefing:**",
-            f"> {notes or 'Suspect cluster identified actively laundering extortion / theft proceeds through high-velocity peeling and privacy tumblers.'}",
-            f"",
-            f"---",
-            f"",
-            f"## 2. Identified Suspect Entity Targets",
-            f"",
-            f"| Target Wallet Address | Threat Classification | Risk Score | Calibrated Confidence | Initial Relay IP & ASN |",
-            f"| :--- | :--- | :--- | :--- | :--- |"
-        ]
-
-        for a in alerts:
-            entity = a.get("entity_id", "")
-            risk = a.get("risk_score", 0.0)
-            conf = a.get("calibrated_confidence", 0.0)
-            typology = a.get("alert_type", "SUSPICIOUS")
-            ev = a.get("evidence", {})
-            ip_info = f"{ev.get('first_spy_ip', '185.220.101.42')}"
-            md_lines.append(f"| `{entity}` | **{typology}** | `{risk:.0f}/100` | `{conf * 100:.0f}%` | `{ip_info}` |")
-
-        md_lines.extend([
-            f"",
-            f"---",
-            f"",
-            f"## 3. Explainable Machine Learning Attribution (SHAP & Diagnostics)",
-            f""
-        ])
-
-        for a in alerts:
-            md_lines.append(f"### Target Entity: `{a.get('entity_id')}` (Severity: `{a.get('severity')}`)")
-            md_lines.append(f"- **Primary Diagnostic Triggers:**")
-            for r in a.get("reasons", []):
-                md_lines.append(f"  * {r}")
-            md_lines.append(f"- **Top Feature Impact Scores (SHAP):**")
-            for feat in a.get("shap_top_features", []):
-                md_lines.append(f"  * `{feat.get('feature')}` (Value: {feat.get('value')}, Impact: **{feat.get('impact')}**)")
-            md_lines.append("")
-
-        md_lines.extend([
-            f"---",
-            f"",
-            f"## 4. Statutory Recommendations for Law Enforcement Action",
-            f"1. **Emergency Subpoena & KYC Freezes:** Issue freeze requests and KYC preservation orders under relevant digital asset legislation to identified cryptocurrency exchange endpoints.",
-            f"2. **Hosting Provider Seizure:** Serve international mutual legal assistance treaty (MLAT) requests to hosting providers operating identified bulletproof relay infrastructure.",
-            f"3. **Real-Time Watchlist Ingestion:** Propagate suspect cluster addresses to national crypto AML sentry watchlists.",
-            f"",
-            f"**Certified by Investigating Agent:** `{investigator}`  ",
-            f"**Chain of Custody Digital Signature:** `BEANS-SIG-SHA256-{doc_hash}`"
-        ])
-
-        report_md = "\n".join(md_lines)
-        return {
-            "case_id": case_id,
-            "case_name": case_name,
-            "doc_ref": doc_hash,
-            "markdown": report_md,
-            "dataset_sha256": dataset_sha256
+    def build(cls, case: Dict[str, Any], alerts: List[Dict[str, Any]], sources: List[Dict[str, Any]],
+              audit: List[Dict[str, Any]]) -> Dict[str, Any]:
+        generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        evidence = {
+            "case": {k: case.get(k) for k in ("id", "case_name", "incident_type", "status", "priority",
+                                              "investigator", "notes", "suspect_entities", "created_at")},
+            "generated_at": generated,
+            "source_files": sources,
+            "findings": [{
+                "alert_id": a["alert_id"], "entity_type": a["entity_type"], "entity_id": a["entity_id"],
+                "alert_type": a["alert_type"], "severity": a["severity"], "risk_score": a["risk_score"],
+                "calibrated_confidence": a["calibrated_confidence"], "status": a["status"],
+                "reasons": a["reasons"], "shap_top_features": a["shap_top_features"],
+                "engine_scores": a["engine_scores"], "evidence": a["evidence"],
+            } for a in alerts],
+            "audit_trail": audit,
         }
+        digest = _canonical_hash(evidence)
+        return {
+            "case_id": case["id"], "case_name": case["case_name"], "evidence_sha256": digest,
+            "evidence": evidence, "markdown": cls._markdown(evidence, digest), "html": cls._html(evidence, digest),
+        }
+
+    # ------------------------------------------------------------------ markdown (UI preview / download)
+    @staticmethod
+    def _markdown(ev: Dict[str, Any], digest: str) -> str:
+        c = ev["case"]
+        md = [f"# BEANS Case Evidence Pack: {c['case_name']}", "",
+              f"- **Case ID:** {c['id']} · **Type:** {c.get('incident_type')} · **Status:** {c.get('status')} · "
+              f"**Priority:** {c.get('priority')}",
+              f"- **Investigator:** {c.get('investigator') or 'unassigned'}",
+              f"- **Generated:** {ev['generated_at']}",
+              f"- **Evidence SHA-256:** `{digest}` (hash of the JSON evidence below; recompute it to verify integrity)",
+              "", "## Investigator notes", "", c.get("notes") or "_none_", "", "## Source data", ""]
+        if ev["source_files"]:
+            md += ["| File | SHA-256 | Records | Ingested |", "|---|---|---|---|"]
+            md += [f"| {s['file']} | `{s['sha256']}` | {s.get('records', '')} | {s.get('ingested_at', '')} |"
+                   for s in ev["source_files"]]
+        else:
+            md.append("_No ingest log recorded (dataset was loaded from the CLI before logging was enabled)._")
+        md += ["", f"## Findings ({len(ev['findings'])})", ""]
+        if not ev["findings"]:
+            md.append("_No alerts are linked to this case's suspect entities._")
+        for f in ev["findings"]:
+            e = f["evidence"] or {}
+            md += [f"### {f['entity_type']} `{f['entity_id']}`",
+                   f"**{f['alert_type']}** · severity **{f['severity']}** · risk **{f['risk_score']:.0f}/100** · "
+                   f"confidence **{f['calibrated_confidence'] * 100:.0f}%** · status {f['status']}", "",
+                   "**Why flagged:**"]
+            md += [f"- {r}" for r in f["reasons"]] or ["- _no reasons recorded_"]
+            if f["shap_top_features"]:
+                md += ["", "**Top feature contributions:**"]
+                md += [f"- `{s.get('feature')}` = {s.get('value')} → impact {s.get('impact')}" for s in f["shap_top_features"]]
+            md += ["", "**Evidence:**",
+                   f"- Transaction: `{e.get('txid', 'n/a')}`",
+                   f"- First-relaying IP: `{e.get('first_spy_ip') or 'unknown'}` (confidence {e.get('first_spy_confidence', 'n/a')})",
+                   f"- Path to seed: {' → '.join(e.get('path_to_seed') or []) or 'none found'}", ""]
+        md += ["## Audit trail", ""]
+        md += [f"- {a.get('created_at')} · {a.get('investigator')} · {a.get('action')} · {a.get('entity_id')}"
+               for a in ev["audit_trail"]] or ["_empty_"]
+        md += ["", "---", "_Generated offline by BEANS from synthetic/ingested data. Automated findings are "
+               "investigative leads that require analyst review._"]
+        return "\n".join(md)
+
+    # ------------------------------------------------------------------ HTML → PDF
+    @staticmethod
+    def _html(ev: Dict[str, Any], digest: str) -> str:
+        esc = lambda v: html.escape(str(v if v is not None else ""))  # noqa: E731
+        c = ev["case"]
+        rows = "".join(
+            f"<tr><td>{esc(s['file'])}</td><td class=mono>{esc(s['sha256'])}</td><td>{esc(s.get('records'))}</td></tr>"
+            for s in ev["source_files"]) or "<tr><td colspan=3><i>No ingest log recorded</i></td></tr>"
+        findings = []
+        for f in ev["findings"]:
+            e = f["evidence"] or {}
+            reasons = "".join(f"<li>{esc(r)}</li>" for r in f["reasons"]) or "<li><i>none</i></li>"
+            shap = "".join(f"<tr><td class=mono>{esc(s.get('feature'))}</td><td>{esc(s.get('value'))}</td>"
+                           f"<td>{esc(s.get('impact'))}</td></tr>" for s in f["shap_top_features"])
+            findings.append(f"""
+            <div class=finding><h3>{esc(f['entity_type'])} <span class=mono>{esc(f['entity_id'])}</span></h3>
+            <p><span class="sev {esc(f['severity'])}">{esc(f['severity'])}</span> {esc(f['alert_type'])} ·
+               risk <b>{f['risk_score']:.0f}/100</b> · confidence <b>{f['calibrated_confidence'] * 100:.0f}%</b> ·
+               status {esc(f['status'])}</p>
+            <b>Why flagged</b><ul>{reasons}</ul>
+            {f'<b>Top feature contributions</b><table><tr><th>Feature</th><th>Value</th><th>Impact</th></tr>{shap}</table>' if shap else ''}
+            <b>Evidence</b><ul><li>Transaction <span class=mono>{esc(e.get('txid', 'n/a'))}</span></li>
+            <li>First-relaying IP <span class=mono>{esc(e.get('first_spy_ip') or 'unknown')}</span>
+                (confidence {esc(e.get('first_spy_confidence', 'n/a'))})</li>
+            <li>Path to seed: {esc(' → '.join(e.get('path_to_seed') or []) or 'none found')}</li></ul></div>""")
+        audit = "".join(f"<li>{esc(a.get('created_at'))} · {esc(a.get('investigator'))} · {esc(a.get('action'))} · "
+                        f"{esc(a.get('entity_id'))}</li>" for a in ev["audit_trail"]) or "<li><i>empty</i></li>"
+        return f"""<!doctype html><html><head><meta charset=utf-8><title>{esc(c['case_name'])}</title><style>
+        @page {{ size: A4; margin: 16mm 14mm; @bottom-right {{ content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #666; }} }}
+        body {{ font-family: 'DejaVu Sans', sans-serif; font-size: 9.5pt; color: #111; line-height: 1.4; }}
+        h1 {{ font-size: 17pt; margin: 0 0 4px; }} h2 {{ font-size: 12pt; border-bottom: 1px solid #ccc; margin-top: 18px; }}
+        h3 {{ font-size: 10.5pt; margin: 0 0 4px; }} .mono {{ font-family: 'DejaVu Sans Mono', monospace; font-size: 8pt; word-break: break-all; }}
+        table {{ border-collapse: collapse; width: 100%; margin: 4px 0 8px; }} td, th {{ border: 1px solid #ddd; padding: 3px 5px; text-align: left; font-size: 8.5pt; }}
+        th {{ background: #f1f3f5; }} .meta td {{ border: none; padding: 1px 6px 1px 0; }}
+        .finding {{ border: 1px solid #ddd; border-radius: 4px; padding: 8px 10px; margin: 8px 0; page-break-inside: avoid; }}
+        .sev {{ padding: 1px 6px; border-radius: 3px; color: #fff; font-weight: bold; font-size: 8pt; }}
+        .CRITICAL {{ background: #b91c1c; }} .HIGH {{ background: #c2410c; }} .MEDIUM {{ background: #a16207; }} .LOW {{ background: #15803d; }}
+        .foot {{ color: #555; font-size: 8pt; margin-top: 16px; }}
+        </style></head><body>
+        <h1>Case Evidence Pack: {esc(c['case_name'])}</h1>
+        <table class=meta><tr><td>Case ID</td><td>{esc(c['id'])}</td><td>Type</td><td>{esc(c.get('incident_type'))}</td></tr>
+        <tr><td>Status</td><td>{esc(c.get('status'))}</td><td>Priority</td><td>{esc(c.get('priority'))}</td></tr>
+        <tr><td>Investigator</td><td>{esc(c.get('investigator'))}</td><td>Generated</td><td>{esc(ev['generated_at'])}</td></tr></table>
+        <p>Evidence SHA-256: <span class=mono>{esc(digest)}</span></p>
+        <h2>Investigator notes</h2><p>{esc(c.get('notes') or '—')}</p>
+        <h2>Source data</h2><table><tr><th>File</th><th>SHA-256</th><th>Records</th></tr>{rows}</table>
+        <h2>Findings ({len(ev['findings'])})</h2>{''.join(findings) or '<p><i>No alerts linked to the suspect entities.</i></p>'}
+        <h2>Audit trail</h2><ul>{audit}</ul>
+        <p class=foot>Generated offline by BEANS. Automated findings are investigative leads that require analyst review.</p>
+        </body></html>"""
+
+    @staticmethod
+    def to_pdf(html_doc: str) -> bytes:
+        from weasyprint import HTML  # imported lazily: needs system pango/cairo
+        return HTML(string=html_doc).write_pdf()

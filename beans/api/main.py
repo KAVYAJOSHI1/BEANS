@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import logging
 
+from beans.api import db
 from beans.config import settings
 from beans.api.routes import stats, alerts, entities, graph, timeline, geomap, cases, seeds, ingest, modelcard
 
@@ -17,8 +18,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    # the built UI is served from this same origin; this only admits the Vite dev server
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,8 +43,16 @@ def health_check():
         "status": "healthy",
         "service": "BEANS Pipeline",
         "version": settings.VERSION,
-        "offline_mode": True
+        "offline_mode": True,
+        "db": str(settings.DB_PATH),
+        "transactions": db.scalar("SELECT COUNT(*) FROM transactions"),
+        "alerts": db.scalar("SELECT COUNT(*) FROM alerts"),
     }
+
+
+@app.get("/api/audit")
+def audit_log(limit: int = 200):
+    return db.query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", [limit])
 
 # Mount static frontend if ui/dist exists
 frontend_dist = settings.BASE_DIR / "ui" / "dist"

@@ -1,56 +1,68 @@
-from fastapi import APIRouter
-from typing import Dict, Any, List
-from beans.store.duck import DuckStore
+import math
+from collections import defaultdict
+from datetime import datetime
+from typing import Any, Dict
+
+from fastapi import APIRouter, Query
+
+from beans.api import db
+from beans.api.geo import locate
+from beans.config import settings
 
 router = APIRouter(prefix="/geomap", tags=["Geo Map"])
 
+
+def _km(lat1, lon1, lat2, lon2) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 6371.0 * 2 * math.asin(math.sqrt(a))
+
+
 @router.get("/origins")
-def get_geomap_origins() -> Dict[str, Any]:
-    store = DuckStore()
-    conn = store.get_connection()
-
-    points_df = conn.execute("""
-    SELECT src_ip, geo_country, geo_city, geo_lat, geo_lon, asn, asn_name, asn_type, COUNT(*) as tx_count
-    FROM net_observations
-    WHERE geo_lat != 0.0 AND geo_lon != 0.0
-    GROUP BY src_ip, geo_country, geo_city, geo_lat, geo_lon, asn, asn_name, asn_type
-    """).fetchdf()
-
+def get_geomap_origins(max_arcs: int = Query(25, ge=1, le=200)) -> Dict[str, Any]:
     points = []
-    for r in points_df.to_dict(orient="records"):
-        points.append({
-            "ip": r["src_ip"],
-            "country": r["geo_country"],
-            "city": r["geo_city"],
-            "lat": float(r["geo_lat"]),
-            "lon": float(r["geo_lon"]),
-            "asn": r["asn"],
-            "asn_name": r["asn_name"],
-            "asn_type": r["asn_type"],
-            "tx_count": int(r["tx_count"])
-        })
+    for r in db.query("""
+            SELECT src_ip AS ip, any_value(geo_country) AS country, any_value(geo_city) AS city,
+                   any_value(geo_lat) AS lat, any_value(geo_lon) AS lon, any_value(asn) AS asn,
+                   any_value(asn_name) AS asn_name, any_value(asn_type) AS asn_type, COUNT(*) AS tx_count
+            FROM net_observations GROUP BY src_ip ORDER BY tx_count DESC LIMIT 2000"""):
+        loc = locate(r["country"], r["lat"], r["lon"])
+        if loc:
+            points.append({**r, "lat": loc[0], "lon": loc[1],
+                           "approximate": not (r["lat"] or r["lon"])})  # True = country centroid
 
-    # Sample arcs (impossible travel pairs)
-    arcs = [
-        {
-            "from": {"city": "Rotterdam", "lat": 51.9244, "lon": 4.4777, "country": "NL"},
-            "to": {"city": "Hong Kong", "lat": 22.3193, "lon": 114.1694, "country": "HK"},
-            "speed_kmh": 1420.0,
-            "is_impossible": True,
-            "label": "Impossible Travel (1,420 km/h)"
-        },
-        {
-            "from": {"city": "Panama City", "lat": 8.9824, "lon": -79.5199, "country": "PA"},
-            "to": {"city": "Zurich", "lat": 47.3769, "lon": 8.5417, "country": "CH"},
-            "speed_kmh": 1180.0,
-            "is_impossible": True,
-            "label": "VPN Hopping (1,180 km/h)"
-        }
-    ]
+    # Impossible travel: consecutive broadcasts of one wallet's spends from places further apart
+    # than a plane could fly in the elapsed time (threshold: settings.IMPOSSIBLE_TRAVEL_KMH).
+    by_wallet = defaultdict(list)
+    for h in db.query("""
+            SELECT unnest(input_addresses) AS wallet, timestamp AS ts, geo_country AS country, geo_city AS city,
+                   geo_lat AS lat, geo_lon AS lon, src_ip
+            FROM transactions WHERE src_ip IS NOT NULL"""):
+        loc = locate(h["country"], h["lat"], h["lon"])
+        if loc:
+            by_wallet[h["wallet"]].append((h["ts"], loc, h))
 
-    conn.close()
-
-    return {
-        "points": points,
-        "arcs": arcs
-    }
+    best: Dict[tuple, Dict[str, Any]] = {}
+    for wallet, seq in by_wallet.items():
+        seq.sort(key=lambda x: x[0])
+        for (t0, l0, a), (t1, l1, b) in zip(seq, seq[1:]):
+            if l0 == l1:
+                continue
+            km = _km(*l0, *l1)
+            hours = max((datetime.fromisoformat(t1) - datetime.fromisoformat(t0)).total_seconds(), 60) / 3600
+            speed = km / hours
+            if speed < settings.IMPOSSIBLE_TRAVEL_KMH:
+                continue
+            key = (a["country"], b["country"])
+            if key not in best or speed > best[key]["speed_kmh"]:
+                best[key] = {
+                    "wallet": wallet,
+                    "from": {"city": a["city"], "country": a["country"], "lat": l0[0], "lon": l0[1], "ip": a["src_ip"]},
+                    "to": {"city": b["city"], "country": b["country"], "lat": l1[0], "lon": l1[1], "ip": b["src_ip"]},
+                    "distance_km": round(km, 1), "minutes": round(hours * 60, 1), "speed_kmh": round(speed, 1),
+                    "is_impossible": True,
+                    "label": f"{round(km):,} km in {round(hours * 60)} min ({round(speed):,} km/h)",
+                }
+    arcs = sorted(best.values(), key=lambda x: -x["speed_kmh"])[:max_arcs]
+    return {"points": points, "arcs": arcs, "threshold_kmh": settings.IMPOSSIBLE_TRAVEL_KMH}

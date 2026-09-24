@@ -172,11 +172,11 @@ class ForensicPipeline:
                         entity_id=w,
                         entity_type="WALLET",
                         alert_type=f"{e3_info['predicted_typology']}_PATTERN",
-                        risk_score=risk_score,
-                        calibrated_confidence=cal_conf,
+                        risk=risk_score,
+                        confidence=cal_conf,
                         severity=severity,
                         reasons=reasons,
-                        shap_top_features=shap_top,
+                        shap_top=shap_top,
                         engine_scores=components,
                         evidence={
                             "txid": r.txid,
@@ -205,7 +205,7 @@ class ForensicPipeline:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 a.alert_id, a.entity_id, a.entity_type, a.alert_type, a.risk_score, a.calibrated_confidence,
-                a.severity, a.reasons, json.dumps(a.shap_top_features), json.dumps(a.engine_scores),
+                a.severity, a.reasons, json.dumps(a.shap_top), json.dumps(a.engine_scores),
                 json.dumps(a.evidence), a.status, a.assigned_to
             ])
 

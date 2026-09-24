@@ -1,120 +1,118 @@
-from fastapi import APIRouter, Query
-from typing import Dict, Any, Optional
-import networkx as nx
-from beans.store.duck import DuckStore
+import re
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+from beans.api import db
 
 router = APIRouter(prefix="/graph", tags=["Link Graph"])
 
+TXID_RE = re.compile(r"^[0-9a-f]{64}$")
+IP_RE = re.compile(r"^[0-9a-fA-F:.]+$")
+TX_COLS = "txid, timestamp, input_addresses, output_addresses, input_amounts, output_amounts, total_output, fee, " \
+          "src_ip, geo_country, asn, asn_type"
+
+
+def _txs_touching(wallets: List[str], limit: int) -> List[Dict[str, Any]]:
+    return db.query(
+        f"SELECT {TX_COLS} FROM transactions WHERE list_has_any(input_addresses, ?::VARCHAR[]) "
+        "OR list_has_any(output_addresses, ?::VARCHAR[]) ORDER BY timestamp LIMIT ?",
+        [wallets, wallets, limit])
+
+
+def _expand(center: Optional[str], hops: int, limit: int) -> tuple[List[Dict[str, Any]], List[str]]:
+    """Collect the transactions within `hops` wallet-hops of the center (or of the top alerts)."""
+    if center and TXID_RE.match(center.lower()):
+        start = db.query(f"SELECT {TX_COLS} FROM transactions WHERE txid = ?", [center.lower()])
+    elif center and IP_RE.match(center) and ("." in center or ":" in center) and not center.startswith("bc1"):
+        start = db.query(f"SELECT {TX_COLS} FROM transactions WHERE src_ip = ? LIMIT ?", [center, limit])
+    elif center:
+        start = _txs_touching([center], limit)
+    else:  # default view: neighbourhood of the highest-risk alerted wallets
+        top = [r["entity_id"] for r in db.query(
+            "SELECT entity_id FROM alerts WHERE entity_type = 'WALLET' ORDER BY risk_score DESC LIMIT 12")]
+        start = _txs_touching(top, limit) if top else db.query(
+            f"SELECT {TX_COLS} FROM transactions ORDER BY timestamp DESC LIMIT ?", [limit])
+    if center and not start:
+        raise HTTPException(404, f"nothing found for {center}")
+
+    txs = {t["txid"]: t for t in start}
+    frontier = {w for t in start for w in (t["input_addresses"] or []) + (t["output_addresses"] or [])}
+    seen = set(frontier)
+    for _ in range(hops - 1):
+        if len(txs) >= limit or not frontier:
+            break
+        for t in _txs_touching(sorted(frontier), limit - len(txs)):
+            txs.setdefault(t["txid"], t)
+        frontier = {w for t in txs.values() for w in (t["input_addresses"] or []) + (t["output_addresses"] or [])} - seen
+        seen |= frontier
+    return list(txs.values())[:limit], sorted(seen)
+
+
 @router.get("/topology")
 def get_graph_topology(
-    center: Optional[str] = Query(None),
+    center: Optional[str] = Query(None, description="wallet address, txid or IP"),
     hops: int = Query(2, ge=1, le=4),
-    min_risk: float = Query(0.0),
-    limit: int = Query(100, ge=10, le=300)
+    min_risk: float = Query(0.0, ge=0, le=100),
+    limit: int = Query(120, ge=10, le=400),
 ) -> Dict[str, Any]:
-    store = DuckStore()
-    conn = store.get_connection()
+    txs, wallets = _expand(center, hops, limit)
 
-    tx_df = conn.execute("SELECT * FROM transactions ORDER BY timestamp DESC LIMIT ?", [limit]).fetchdf()
-    alert_df = conn.execute("SELECT entity_id, risk_score, alert_type, severity FROM alerts").fetchdf()
-    seed_df = conn.execute("SELECT address FROM seeds").fetchdf()
+    risk = {r["entity_id"]: r for r in db.query(
+        "SELECT entity_id, risk_score, alert_type, severity, evidence FROM alerts WHERE list_contains(?, entity_id)",
+        [wallets])} if wallets else {}
+    seeds = {r["address"] for r in db.query("SELECT address FROM seeds")}
+    profiles = {r["address"]: r for r in db.query(
+        "SELECT address, cluster_id, threat_classification FROM wallet_profiles WHERE list_contains(?, address)",
+        [wallets])} if wallets else {}
 
-    conn.close()
+    nodes: Dict[str, Dict[str, Any]] = {}
+    edges: List[Dict[str, Any]] = []
 
-    risk_map = {row["entity_id"]: row for row in alert_df.to_dict(orient="records")}
-    seed_set = set(seed_df["address"].tolist()) if not seed_df.empty else set()
+    def wallet_node(addr: str) -> Optional[str]:
+        meta = risk.get(addr, {})
+        score = float(meta.get("risk_score") or 0.0)
+        keep = score >= min_risk or addr == center or addr in seeds
+        if not keep:
+            return None
+        nid = f"w_{addr}"
+        nodes.setdefault(nid, {
+            "id": nid, "type": "WALLET", "label": f"{addr[:6]}…{addr[-4:]}", "full_id": addr,
+            "risk_score": score, "alert_type": meta.get("alert_type", "NONE"), "severity": meta.get("severity", "LOW"),
+            "is_seed": addr in seeds, "is_center": addr == center,
+            "cluster_id": profiles.get(addr, {}).get("cluster_id", "SOLO"),
+        })
+        return nid
 
-    G = nx.MultiDiGraph()
+    for t in txs:
+        tid = f"tx_{t['txid'][:12]}"
+        nodes[tid] = {"id": tid, "type": "TRANSACTION", "label": f"TX {t['txid'][:8]}", "full_id": t["txid"],
+                      "value": t["total_output"] or 0.0, "fee": t["fee"] or 0.0, "timestamp": t["timestamp"],
+                      "n_inputs": len(t["input_addresses"] or []), "n_outputs": len(t["output_addresses"] or [])}
+        if t["src_ip"]:
+            iid = f"ip_{t['src_ip']}"
+            nodes.setdefault(iid, {"id": iid, "type": "IP", "label": t["src_ip"], "full_id": t["src_ip"],
+                                   "country": t["geo_country"], "asn": t["asn"], "isp_type": t["asn_type"],
+                                   "risk_score": 0.0})
+            edges.append({"source": iid, "target": tid, "type": "RELAYED", "label": "first relayed"})
+        for addr, amt in zip(t["input_addresses"] or [], t["input_amounts"] or []):
+            if (w := wallet_node(addr)):
+                edges.append({"source": w, "target": tid, "type": "INPUT", "label": f"{amt:.4f}", "amount": amt})
+        for addr, amt in zip(t["output_addresses"] or [], t["output_amounts"] or []):
+            if (w := wallet_node(addr)):
+                edges.append({"source": tid, "target": w, "type": "OUTPUT", "label": f"{amt:.4f}", "amount": amt})
 
-    for r in tx_df.to_dict(orient="records"):
-        txid = r["txid"]
-        tx_node = f"tx_{txid[:10]}"
-        
-        G.add_node(
-            tx_node,
-            type="TRANSACTION",
-            label=f"TX: {txid[:8]}",
-            full_id=txid,
-            fee=float(r.get("fee", 0.0)),
-            value=float(r.get("total_output", 0.0)),
-            timestamp=str(r.get("timestamp"))
-        )
-
-        # IP node
-        src_ip = r.get("src_ip")
-        if src_ip:
-            ip_node = f"ip_{src_ip}"
-            G.add_node(
-                ip_node,
-                type="IP",
-                label=f"IP: {src_ip}",
-                full_id=src_ip,
-                country=r.get("geo_country"),
-                asn=r.get("asn"),
-                isp_type=r.get("asn_type")
-            )
-            G.add_edge(ip_node, tx_node, type="RELAYED", label="Relayed")
-
-        # Inputs
-        for addr in (r.get("input_addresses") or []):
-            w_node = f"w_{addr}"
-            meta = risk_map.get(addr, {})
-            is_seed = addr in seed_set
-            G.add_node(
-                w_node,
-                type="WALLET",
-                label=f"{addr[:6]}...{addr[-4:]}",
-                full_id=addr,
-                risk_score=float(meta.get("risk_score", 0.0)),
-                alert_type=meta.get("alert_type", "NORMAL"),
-                severity=meta.get("severity", "LOW"),
-                is_seed=is_seed
-            )
-            G.add_edge(w_node, tx_node, type="INPUT", label="Spends")
-
-        # Outputs
-        for addr in (r.get("output_addresses") or []):
-            w_node = f"w_{addr}"
-            meta = risk_map.get(addr, {})
-            is_seed = addr in seed_set
-            G.add_node(
-                w_node,
-                type="WALLET",
-                label=f"{addr[:6]}...{addr[-4:]}",
-                full_id=addr,
-                risk_score=float(meta.get("risk_score", 0.0)),
-                alert_type=meta.get("alert_type", "NORMAL"),
-                severity=meta.get("severity", "LOW"),
-                is_seed=is_seed
-            )
-            G.add_edge(tx_node, w_node, type="OUTPUT", label="Pays")
-
-    # Filter center if provided
-    if center:
-        c_node = f"w_{center}" if not center.startswith("tx_") and not center.startswith("ip_") else center
-        if c_node in G:
-            sub_nodes = set([c_node])
-            frontier = set([c_node])
-            for _ in range(hops):
-                nxt = set()
-                for n in frontier:
-                    nxt.update(G.predecessors(n))
-                    nxt.update(G.successors(n))
-                sub_nodes.update(nxt)
-                frontier = nxt
-            G = G.subgraph(list(sub_nodes))
-
-    elements_nodes = [{"data": {"id": str(n), **data}} for n, data in G.nodes(data=True)]
-    elements_edges = [
-        {"data": {"id": f"e_{i}", "source": str(u), "target": str(v), **data}}
-        for i, (u, v, k, data) in enumerate(G.edges(keys=True, data=True))
-    ]
+    # Evidence overlays the UI can highlight: path to the nearest seed and the peel chain of the center
+    highlight: Dict[str, List[str]] = {"path_to_seed": [], "txids": []}
+    if center and center in risk:
+        ev = risk[center].get("evidence") or {}
+        highlight["path_to_seed"] = [f"w_{a}" for a in (ev.get("path_to_seed") or [])]
+        highlight["txids"] = [f"tx_{x[:12]}" for x in ([ev["txid"]] if ev.get("txid") else [])]
 
     return {
-        "nodes": elements_nodes,
-        "edges": elements_edges,
-        "summary": {
-            "node_count": len(elements_nodes),
-            "edge_count": len(elements_edges)
-        }
+        "nodes": [{"data": n} for n in nodes.values()],
+        "edges": [{"data": {"id": f"e_{i}", **e}} for i, e in enumerate(edges)],
+        "highlight": highlight,
+        "summary": {"center": center, "hops": hops, "node_count": len(nodes), "edge_count": len(edges),
+                    "transactions": len(txs)},
     }
