@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore", message=".*does not have valid feature names.*
 def _lgbm(pos_weight: float):
     return LGBMClassifier(n_estimators=250, learning_rate=0.05, num_leaves=15, min_child_samples=10,
                           subsample=0.9, subsample_freq=1, colsample_bytree=0.8, scale_pos_weight=pos_weight,
-                          verbose=-1, random_state=42)
+                          verbose=-1, random_state=42, deterministic=True, force_row_wise=True)
 
 
 def _oof(X: pd.DataFrame, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, members: list = None,
@@ -95,7 +95,7 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
                 pred[te] = ti[tr][0]
                 continue
             m = LGBMClassifier(n_estimators=150, learning_rate=0.08, num_leaves=15, min_child_samples=3,
-                               class_weight="balanced", verbose=-1, random_state=42).fit(Xi.iloc[tr], ti[tr])
+                               class_weight="balanced", verbose=-1, random_state=42, deterministic=True, force_row_wise=True).fit(Xi.iloc[tr], ti[tr])
             pred[te] = m.predict(Xi.iloc[te])
         typ_acc = round(float((pred == ti).mean()), 4)
         typ_oof.loc[Xi.index] = pred
@@ -106,7 +106,7 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
     X.assign(_y=yv, _group=gv, _typology=typology.values,
              _weight=1.0 if wv is None else wv).to_parquet(TRAINING_SET)
     typ_model = (LGBMClassifier(n_estimators=150, learning_rate=0.08, num_leaves=15, min_child_samples=3,
-                                class_weight="balanced", verbose=-1, random_state=42).fit(Xi, ti)
+                                class_weight="balanced", verbose=-1, random_state=42, deterministic=True, force_row_wise=True).fit(Xi, ti)
                  if len(set(ti)) > 1 else None)
     FUSION_MODEL.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": final, "members": members, "features": list(X.columns), "typology_model": typ_model,

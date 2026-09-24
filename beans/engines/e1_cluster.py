@@ -60,6 +60,17 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         if len(change) == 1 and sum(p for p, _, _ in prec) == 1:
             uf.union(ins[txid][0], change[0])
             merged_change += 1
+    # peel-chain change heuristic: inside a peel chain (≥ 3 linked peel-shaped hops, where each hop's large output
+    # is spent by the next peel-shaped hop), the large output is the sender's change. Restricting to chains avoids
+    # merging a victim who pays a ransom with a small change output.
+    merged_peel = 0
+    peel_tx = X_tx.index[(X_tx["peel_shape"] == 1) & (X_tx["peel_chain_len"] >= 3)]
+    big = frames.tout[frames.tout["txid"].isin(peel_tx)].sort_values("amount").groupby("txid").tail(1)
+    for txid, addr in zip(big["txid"], big["address"]):
+        if txid in coinjoin_txids or txid not in ins.index:
+            continue
+        uf.union(ins[txid][0], addr)
+        merged_peel += 1
     root = {a: uf.find(a) for a in uf.p}
     members = defaultdict(list)
     for a, r in root.items():
@@ -71,6 +82,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         for a in addrs:
             cid[a] = name
     return pd.Series(cid, name="cluster_id"), {"cioh_merges": merged_cioh, "change_merges": merged_change,
+                                               "peel_change_merges": merged_peel,
                                                "clusters": len(members),
                                                "multi_address_clusters": sum(len(m) > 1 for m in members.values())}
 

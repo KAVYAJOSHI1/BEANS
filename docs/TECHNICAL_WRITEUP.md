@@ -2,7 +2,7 @@
 **Bitcoin Encryption, Analysis & Network Security** · SIH 2026 · Problem Statement 26146 (NTRO)
 *AI-Powered Monitoring & Analysis of Bitcoin Transaction Traffic*
 
-> Status: 24 Sep, 16:00. Every number below was measured by the pipeline itself (`models/model_card.json`, regenerated on each run). Fusion and classifier metrics are out-of-fold, grouped by entity.
+> Status: 24 Sep, 17:00. Every number below was measured by the pipeline itself (`models/model_card.json`, regenerated on each run). Fusion and classifier metrics are out-of-fold, grouped by entity.
 
 ---
 
@@ -51,7 +51,7 @@ Demo dataset (`--n-tx 5000 --seed 42`): 4,032 transactions, 11,897 network obser
 
 | PS focus area | BEANS engine | Method |
 |---|---|---|
-| Entity clustering (common-input-ownership + graph embeddings) | E1 | CIOH union-find over transaction inputs, **excluding transactions E3 classifies as CoinJoin** (otherwise unrelated participants merge) + conservative change heuristic (single full-precision output); truncated-SVD embeddings of the normalised cluster flow graph + behaviour → HDBSCAN merge *suggestions* |
+| Entity clustering (common-input-ownership + graph embeddings) | E1 | CIOH union-find over transaction inputs, **excluding transactions E3 classifies as CoinJoin** (otherwise unrelated participants merge) + conservative change heuristic (single full-precision output) + peel-chain change heuristic (inside chains of ≥ 3 linked peel hops the large output is change); truncated-SVD embeddings of the normalised cluster flow graph + behaviour → HDBSCAN merge *suggestions* |
 | Anomaly detection | E2 | Isolation Forest on transaction and wallet features (unsupervised, needs no labels) |
 | Peeling-chain / mixing detection | E3 | Structural features (equal-output groups, peel ratio and chain length, fan-in/out, time-to-respend) → LightGBM multiclass (normal / peel / coinjoin / fan-out / fan-in / round-trip), no rule fallback |
 | Risk scoring propagated from seed wallets | E4 | Personalised PageRank from seed wallets on the value-weighted flow graph + decayed taint; path to nearest seed kept as evidence |
@@ -87,26 +87,37 @@ Stack: Python 3.12, DuckDB (embedded, single file), NetworkX, scikit-learn, Fast
 
 ## 8. Results (demo dataset, measured)
 
+All numbers are reproducible bit-for-bit: inputs are explicitly ordered and LightGBM runs in deterministic mode.
+
 | Engine | Metric | Value | Reference |
 |---|---|---|---|
-| Fusion | PR-AUC, out-of-fold by entity | **0.967** | random ranking = 0.066 |
-| Fusion | ROC-AUC | 0.990 | |
-| Fusion | Precision@50 | **1.00** | |
-| Fusion | Recall of illicit wallets at P ≥ 0.5 | 0.816 | |
-| Fusion | Expected calibration error | **0.009** | |
-| **Ablation** | PR-AUC **without** network-layer features | 0.902 | with = 0.967 → the network ↔ chain correlation adds value |
-| Alert list | Alerts that are illicit | **99.7 %** (299/300) | |
-| Alert list | Illicit entities with ≥ 1 alert | 83 % (25/30) | |
-| E3 | Macro-F1, grouped CV | **0.993** | peel 0.997 · CoinJoin 1.00 · round-trip 0.989 · fan-in 0.977 |
-| E1 | Homogeneity on illicit wallets (no cluster mixes two actors) | 1.00 | |
-| E1 | Completeness (an actor's wallets in one cluster) | 0.47 | fresh-address churn splits actors; change heuristic merged 2,846 |
+| Fusion | PR-AUC, out-of-fold by entity | **0.931** | random ranking = 0.066 |
+| Fusion | ROC-AUC | 0.987 | |
+| Fusion | Precision@50 | **0.98** | |
+| Fusion | Recall of illicit wallets at P ≥ 0.5 | 0.708 | |
+| Fusion | Expected calibration error | **0.013** | |
+| **Ablation** | PR-AUC **without** network-layer features | 0.898 | with = 0.931 → the network ↔ chain correlation adds value |
+| Alert list | Alerts that are illicit | **95 %** (285/300) | top 10: 100 % |
+| Alert list | Illicit entities with ≥ 1 alert | **100 %** (30/30) | |
+| E3 | Macro-F1, grouped CV | **0.993** | peel · CoinJoin · round-trip · fan-in/out all ≥ 0.97 |
+| E1 | Homogeneity (no cluster mixes two actors) | 1.00 | all wallets: 0.9985 |
+| E1 | Completeness (an actor's wallets in one cluster) | 0.58 | was 0.47 before the peel-chain change heuristic |
 | E4 | Hidden (non-seed) illicit wallets reached from seeds | 0.18 | legitimate wallets reached: 0.10 |
-| Typology | Accuracy on illicit wallets, grouped CV | 0.66 | |
-| Throughput | Ingest + all engines + training, 11.9k observations | **16 s** | 8-core laptop |
+| Typology | Accuracy on illicit wallets, grouped CV | 0.69 | |
+| Throughput | Ingest + all engines + training, 11.9k observations | **11 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
 
-Most important features (mean |SHAP|): cluster share of Tor/VPN/bulletproof relays, cluster size, reverse PPR to seeds, wallet share of risky relays, peel probability, anomaly score, equal-output share, PPR.
+Most important features (mean |SHAP|): cluster share of Tor/VPN/bulletproof relays, wallet share of risky relays, round-trip probability, cluster size, anomaly score, fan-out probability, equal-output share, reverse PPR to seeds.
 
-**Reading these numbers honestly.** The data is synthetic and generated by the same team, so absolute scores are optimistic. The meaningful signals are *relative*: the network-layer ablation (+0.065 PR-AUC), the grouped (by entity) evaluation, calibration, and the weaker engines, which we report rather than hide (E1 completeness, E4 reach, typology).
+**What we tried and rejected.** Cluster-level seed features ("shares a cluster with a seed", cluster taint) raised entity coverage but cut alert precision from 95 % to 87–90 %, because the model over-trusted cluster membership. They are used only for evidence and the E4 metric.
+
+**Reading these numbers honestly.** The data is synthetic and generated by the same team, so absolute scores are optimistic. The meaningful signals are *relative*: the network-layer ablation (+0.033 PR-AUC), the grouped (by entity) evaluation, calibration, and the weaker engines, which we report rather than hide (E1 completeness, E4 reach, typology).
+
+## 8b. Operational features
+
+- **Unfamiliar files:** a YAML column mapping (CLI `--mapping`, API and UI upload) handles renamed columns, epoch times, satoshi amounts and nested input/output objects. Rows missing required fields are quarantined, never filled with placeholders (docs/DATA_FORMATS.md).
+- **Analyst feedback loop:** *Confirm* / *False positive* verdicts override labels in the next training run. On unlabelled operational data they are added to the saved training set (weight 5) and the models retrain.
+- **Monitoring mode:** `beans watch <folder>` ingests and scores every new file dropped in.
+- **Exports:** Neo4j bulk-import CSVs and a STIX 2.1 bundle of wallet and first-relay-IP indicators.
 
 ## 9. Limitations and responsible use
 

@@ -23,7 +23,7 @@ warnings.filterwarnings("ignore", message=".*does not have valid feature names.*
 
 def _model():
     return LGBMClassifier(n_estimators=200, learning_rate=0.08, num_leaves=31, class_weight="balanced",
-                          min_child_samples=5, verbose=-1, random_state=42)
+                          min_child_samples=5, verbose=-1, random_state=42, deterministic=True, force_row_wise=True)
 
 
 def _proba(clf, X) -> np.ndarray:
