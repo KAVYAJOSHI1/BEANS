@@ -15,8 +15,10 @@ class ForensicPipeline:
     Master pipeline executing the full ingestion -> enrich -> graph -> 4 engines -> fusion -> XAI -> alert cycle.
     """
 
-    def __init__(self, store: Optional[DuckStore] = None):
+    def __init__(self, store: Optional[DuckStore] = None, mapping: Optional[Path] = None):
         self.store = store or DuckStore()
+        from beans.ingest.mapping import ColumnMapper
+        self.mapper = ColumnMapper(mapping)
         self.enricher = OfflineGeoIPEnricher()
 
     def run_file_ingestion(self, file_path: Path) -> Dict[str, Any]:
@@ -25,9 +27,9 @@ class ForensicPipeline:
         suffix = p.suffix.lower()
 
         if suffix == ".csv":
-            parser = StreamingCSVParser()
+            parser = StreamingCSVParser(self.mapper)
         elif suffix in [".json", ".ndjson", ".jsonl"]:
-            parser = StreamingJSONParser()
+            parser = StreamingJSONParser(self.mapper)
         elif suffix == ".xml":
             parser = StreamingXMLParser()
         else:
@@ -46,6 +48,8 @@ class ForensicPipeline:
         return {
             "file": p.name,
             "records_ingested": len(records),
+            "rows_read": getattr(parser, "total", len(records)),
+            "rows_quarantined": getattr(parser, "total", len(records)) - len(records),
             "sidecars_loaded": sidecars,
             "pipeline_stats": pipeline_stats
         }
@@ -55,12 +59,20 @@ class ForensicPipeline:
         loaded = []
         seeds = folder / "seeds.csv"
         if seeds.exists():
-            conn = self.store.get_connection()
-            conn.execute("""INSERT OR REPLACE INTO seeds (address, threat_type, incident_name, confidence, source)
-                SELECT address, threat_type, incident_name, TRY_CAST(confidence AS DOUBLE), source
-                FROM read_csv_auto(?, all_varchar=true)""", [str(seeds)])
-            conn.close()
-            loaded.append(seeds.name)
+            import csv as _csv
+            with open(seeds, newline="") as fh:
+                cols = {c.strip().lower() for c in (next(_csv.reader(fh), []) or [])}
+            if "address" in cols:   # tolerate minimal seed lists (address[,label])
+                pick = lambda *names: next((n for n in names if n in cols), None)
+                t, i, c, src = pick("threat_type", "label", "typology"), pick("incident_name", "incident"), \
+                    pick("confidence"), pick("source")
+                conn = self.store.get_connection()
+                conn.execute(f"""INSERT OR REPLACE INTO seeds (address, threat_type, incident_name, confidence, source)
+                    SELECT address, {t or "'UNKNOWN'"}, {i or "'seed list'"}, {f"TRY_CAST({c} AS DOUBLE)" if c else "0.9"},
+                           {src or "'SEED_FILE'"}
+                    FROM read_csv_auto(?, all_varchar=true)""", [str(seeds)])
+                conn.close()
+                loaded.append(seeds.name)
         for name, table in (("labels_address.csv", "labels_address"), ("labels_tx.csv", "labels_tx")):
             if (folder / name).exists():
                 self.store.load_sidecar(table, folder / name, [])

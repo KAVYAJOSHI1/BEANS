@@ -38,3 +38,21 @@ def test_case_evidence_pack_export():
     pack = CaseReportGenerator.build(case, [alert], [{"file": "tx.csv", "sha256": "f" * 64, "records": 10}], [])
     assert len(pack["evidence_sha256"]) == 64
     assert "f" * 64 in pack["markdown"] and "bc1qSuspect1" in pack["html"]
+
+
+def test_unfamiliar_export_with_mapping(tmp_path):
+    """Finale risk: a file with other column names, epoch-ms times, satoshi amounts and nested in/outputs."""
+    import json as _json
+    from beans.ingest.mapping import ColumnMapper
+    (tmp_path / "m.yaml").write_text("seen_at_ms: timestamp\ntx_hash: txid\npeer: src_ip\nvin: input_addresses\n"
+                                     "vout: output_addresses\nfee_sats: fee\namount_unit: sat\n")
+    good = {"seen_at_ms": "1788220800198", "tx_hash": "ab" * 32, "peer": "3.5.140.2",
+            "vin": _json.dumps([{"address": "bc1qa", "value": 150000000}]),
+            "vout": _json.dumps([{"address": "bc1qb", "value": 100000000}, {"address": "bc1qc", "value": 49990000}]),
+            "fee_sats": "10000"}
+    rec = ColumnMapper(tmp_path / "m.yaml").build_record(good)
+    assert rec.input_amounts == [1.5] and rec.output_amounts == [1.0, 0.4999] and rec.fee == 0.0001
+    assert rec.timestamp.year == 2026 and rec.src_ip == "3.5.140.2" and rec.script_type == "UNKNOWN"
+    import pytest
+    with pytest.raises(ValueError, match="missing required"):
+        ColumnMapper(tmp_path / "m.yaml").build_record({**good, "peer": ""})   # never invent an IP

@@ -40,14 +40,6 @@ def load_frames(conn) -> Frames:
     return Frames(tx, tin, tout, spy)
 
 
-def _entropy(g: pd.Series) -> float:
-    s = g.sum()
-    if s <= 0 or len(g) < 2:
-        return 0.0
-    p = g[g > 0] / s
-    return float(-(p * np.log2(p)).sum() / math.log2(len(g)))
-
-
 def tx_features(f: Frames) -> pd.DataFrame:
     tx = f.tx.set_index("txid")
     out_g = f.tout.groupby("txid")["amount"]
@@ -63,7 +55,12 @@ def tx_features(f: Frames) -> pd.DataFrame:
     eq = f.tout.assign(r=f.tout["amount"].round(8)).groupby(["txid", "r"]).size().groupby("txid").max()
     X["max_equal_outputs"] = eq.reindex(X.index).fillna(0)
     X["equal_output_share"] = (X["max_equal_outputs"] / X["n_out"].clip(lower=1)).where(X["n_out"] > 1, 0)
-    X["output_entropy"] = out_g.apply(_entropy).reindex(X.index).fillna(0)
+    # normalised Shannon entropy of the output values (vectorised)
+    o = f.tout[f.tout["amount"] > 0][["txid", "amount"]].copy()
+    o["p"] = o["amount"] / o.groupby("txid")["amount"].transform("sum")
+    ent = (-(o["p"] * np.log2(o["p"]))).groupby(o["txid"]).sum()
+    n = X["n_out"].where(X["n_out"] > 1)
+    X["output_entropy"] = (ent.reindex(X.index) / np.log2(n)).fillna(0)
     mn, mx = out_g.min().reindex(X.index), out_g.max().reindex(X.index)
     X["min_out_share"] = (mn / X["total_out"].replace(0, np.nan)).fillna(1)
     X["log_max_min_ratio"] = np.log10((mx / mn.clip(lower=1e-8)).fillna(1))

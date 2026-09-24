@@ -60,6 +60,9 @@ def _run(conn, t0) -> dict:
         labels_addr = conn.execute("SELECT address, typology, entity_id, CAST(is_illicit AS INT) AS is_illicit "
                                    "FROM labels_address").df().set_index("address")
     seeds = {r[0] for r in conn.execute("SELECT address FROM seeds").fetchall()}
+    # analyst verdicts (latest per wallet): CONFIRMED → illicit, FALSE_POSITIVE → legitimate (roadmap S5)
+    feedback = {r[0]: int(r[1] == "TRUE_POSITIVE") for r in conn.execute(
+        "SELECT entity_id, arg_max(user_label, created_at) FROM feedback WHERE entity_id IS NOT NULL GROUP BY 1").fetchall()}
 
     # ---- E3: transaction shape
     probs, e3_rep = e3_peelmix.run(X_tx, labels_tx if labels_tx is not None and len(labels_tx) else None)
@@ -105,17 +108,38 @@ def _run(conn, t0) -> dict:
     Xw = W[feats].replace([np.inf, -np.inf], 0).fillna(0)
     network_cols = WALLET_NETWORK_COLS + ["cluster_share_risky", "cluster_n_countries"]
     fusion_rep, trained = {}, False
+    fb = pd.Series(feedback, dtype=float).reindex(Xw.index).dropna()
     if labels_addr is not None and len(labels_addr):
         lab = labels_addr.reindex(Xw.index)
+        lab.loc[fb.index, "is_illicit"] = fb.values                      # the analyst's verdict wins
+        lab.loc[fb.index, "entity_id"] = lab.loc[fb.index, "entity_id"].fillna(pd.Series("fb:" + fb.index, index=fb.index))
+        lab.loc[fb.index, "typology"] = lab.loc[fb.index, "typology"].fillna("ANALYST_CONFIRMED")
         known = lab["is_illicit"].notna()
+        weights = pd.Series(1.0, index=Xw.index)
+        weights.loc[fb.index] = 5.0
         p, typ, fusion_rep = fuse.train(Xw[known], lab.loc[known, "is_illicit"], lab.loc[known, "entity_id"],
-                                        lab.loc[known, "typology"], network_cols)
+                                        lab.loc[known, "typology"], network_cols, weights[known])
         if (~known).any():
             p2, t2, _ = fuse.predict(Xw[~known])
             p, typ = pd.concat([p, p2]), pd.concat([typ, t2])
         trained = True
+    elif len(fb) and fuse.training_set() is not None:
+        # operational data: add the analyst's verdicts to the saved training set and retrain (active learning)
+        base = fuse.training_set()
+        cols = [c for c in base.columns if not c.startswith("_")]
+        add = Xw.loc[fb.index].reindex(columns=cols, fill_value=0)
+        Xa = pd.concat([base[cols], add])
+        Xa.index = range(len(Xa))
+        ya = pd.Series(np.r_[base["_y"].values, fb.values], index=Xa.index)
+        ga = pd.Series(np.r_[base["_group"].values, ("fb:" + fb.index).values], index=Xa.index)
+        ta = pd.Series(np.r_[base["_typology"].values, np.where(fb.values == 1, "ANALYST_CONFIRMED", "NORMAL")], index=Xa.index)
+        wa = pd.Series(np.r_[base["_weight"].values, np.full(len(fb), 5.0)], index=Xa.index)
+        _, _, fusion_rep = fuse.train(Xa, ya, ga, ta, network_cols, wa)
+        p, typ, _ = fuse.predict(Xw)
+        trained = True
     else:
         p, typ, fusion_rep = fuse.predict(Xw)
+    fusion_rep["analyst_feedback_used"] = int(len(fb))
     p, typ = p.reindex(Xw.index).fillna(0), typ.reindex(Xw.index).fillna("UNKNOWN")
     timings["fusion"] = round(time.time() - t0, 2)
 
@@ -152,6 +176,7 @@ def _run(conn, t0) -> dict:
 
 def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:
     spy = f.spy.set_index("txid")
+    tx_ts = f.tx.set_index("txid")["ts"]
     chain_id = X_tx.attrs.get("peel_chain_id", {})
     chains = {}
     for t, c in chain_id.items():
@@ -165,7 +190,7 @@ def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:
         key_tx = mine["txid"].iloc[0] if len(mine) else None
         s = spy.loc[key_tx] if key_tx is not None and key_tx in spy.index else None
         path = e4info["path"](addr) if e4info and w["hops_from_seed"] < 20 else []
-        chain = sorted(chains.get(chain_id.get(key_tx), []), key=lambda t: f.tx.set_index("txid").at[t, "ts"]) if key_tx in chain_id else None
+        chain = sorted(chains.get(chain_id.get(key_tx), []), key=lambda t: tx_ts[t]) if key_tx in chain_id else None
         prob = float(w["p"])
         risk = round(100 * prob, 1)
         flags = [w["anomaly"] > 0.9, max(w[f"max_{c}"] for c in P_COLS) > 0.5,

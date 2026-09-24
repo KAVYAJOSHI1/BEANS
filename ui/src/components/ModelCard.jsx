@@ -28,7 +28,7 @@ function Value({ v }) {
   return <pre className="text-[11px] bg-slate-50 p-2 rounded overflow-x-auto">{JSON.stringify(v, null, 2)}</pre>;
 }
 
-export default function ModelCard({ modelCard, onEvaluate, loading }) {
+export default function ModelCard({ modelCard, onEvaluate, loading, verdicts = 0 }) {
   if (!modelCard) return <div className="text-sm text-slate-500">Loading model card…</div>;
 
   if (modelCard.status !== 'evaluated') {
@@ -65,7 +65,7 @@ export default function ModelCard({ modelCard, onEvaluate, loading }) {
             </div>
           )}
         </div>
-        <EvalButton onEvaluate={onEvaluate} loading={loading} label="Re-evaluate" />
+        <EvalButton onEvaluate={onEvaluate} loading={loading} label={verdicts ? `Retrain with ${verdicts} analyst verdict${verdicts > 1 ? "s" : ""}` : "Re-train & evaluate"} />
       </div>
 
       {modelCard.engine_metrics?.length > 0 && (

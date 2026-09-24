@@ -24,6 +24,7 @@ def get_system_overview() -> Dict[str, Any]:
         "low_alerts": sev.get("LOW", 0),
         "open_alerts": db.scalar("SELECT COUNT(*) FROM alerts WHERE status = 'OPEN'"),
         "active_seeds": db.scalar("SELECT COUNT(*) FROM seeds"),
+        "analyst_verdicts": db.scalar("SELECT COUNT(DISTINCT entity_id) FROM feedback"),
     }
     typology = [{"name": r["alert_type"].replace("_PATTERN", ""), "value": r["n"]}
                 for r in db.query("SELECT alert_type, COUNT(*) AS n FROM alerts GROUP BY 1 ORDER BY 2 DESC")]

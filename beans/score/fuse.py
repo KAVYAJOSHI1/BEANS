@@ -21,6 +21,7 @@ from sklearn.model_selection import GroupKFold, GroupShuffleSplit, StratifiedGro
 from beans.config import settings
 
 FUSION_MODEL = settings.MODELS_DIR / "fusion.joblib"
+TRAINING_SET = settings.MODELS_DIR / "fusion_training_set.parquet"   # kept so analyst feedback can be added later
 warnings.filterwarnings("ignore", message=".*does not have valid feature names.*")
 
 
@@ -30,13 +31,14 @@ def _lgbm(pos_weight: float):
                           verbose=-1, random_state=42)
 
 
-def _oof(X: pd.DataFrame, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, members: list = None) -> np.ndarray:
+def _oof(X: pd.DataFrame, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, members: list = None,
+         weights: np.ndarray = None) -> np.ndarray:
     pw = max(1.0, (y == 0).sum() / max((y == 1).sum(), 1))
     oof = np.zeros(len(X))
     for tr, te in StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42).split(X, y, groups):
         fit_i, cal_i = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=1).split(tr, groups=groups[tr]))
         fit_i, cal_i = tr[fit_i], tr[cal_i]
-        clf = _lgbm(pw).fit(X.iloc[fit_i], y[fit_i])
+        clf = _lgbm(pw).fit(X.iloc[fit_i], y[fit_i], sample_weight=None if weights is None else weights[fit_i])
         iso = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1)
         if len(set(y[cal_i])) > 1:
             iso.fit(clf.predict_proba(X.iloc[cal_i])[:, 1], y[cal_i])
@@ -68,10 +70,12 @@ def _metrics(y, p) -> dict:
             "ece": round(float(ece), 4), "base_rate": round(float(y.mean()), 4), "reliability": rel}
 
 
-def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series, network_cols: list[str]) -> tuple[pd.Series, pd.Series, dict]:
+def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series, network_cols: list[str],
+          weights: pd.Series = None) -> tuple[pd.Series, pd.Series, dict]:
     yv, gv = y.values.astype(int), groups.values
+    wv = None if weights is None else weights.reindex(X.index).fillna(1.0).values
     members: list = []
-    oof = _oof(X, yv, gv, members=members)
+    oof = _oof(X, yv, gv, members=members, weights=wv)
     report = {"wallets": int(len(X)), "illicit_wallets": int(yv.sum()), "entities": int(pd.Series(gv).nunique()),
               "illicit_entities": int(pd.Series(gv[yv == 1]).nunique()), **_metrics(yv, oof)}
     no_net = [c for c in X.columns if c not in network_cols]
@@ -98,7 +102,9 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
     report["typology_accuracy_grouped_cv"] = typ_acc
 
     pw = max(1.0, (yv == 0).sum() / max(yv.sum(), 1))
-    final = _lgbm(pw).fit(X, yv)   # used for SHAP explanations
+    final = _lgbm(pw).fit(X, yv, sample_weight=wv)   # used for SHAP explanations
+    X.assign(_y=yv, _group=gv, _typology=typology.values,
+             _weight=1.0 if wv is None else wv).to_parquet(TRAINING_SET)
     typ_model = (LGBMClassifier(n_estimators=150, learning_rate=0.08, num_leaves=15, min_child_samples=3,
                                 class_weight="balanced", verbose=-1, random_state=42).fit(Xi, ti)
                  if len(set(ti)) > 1 else None)
@@ -129,3 +135,7 @@ def predict(X: pd.DataFrame) -> tuple[pd.Series, pd.Series, dict]:
 
 def final_model():
     return joblib.load(FUSION_MODEL)["model"] if FUSION_MODEL.exists() else None
+
+
+def training_set():
+    return pd.read_parquet(TRAINING_SET) if TRAINING_SET.exists() else None

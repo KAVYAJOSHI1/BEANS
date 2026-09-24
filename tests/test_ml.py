@@ -85,3 +85,18 @@ def test_inference_without_labels_uses_persisted_models(trained, dataset, tmp_ro
     assert result["sidecars_loaded"] == []
     assert result["pipeline_stats"]["trained"] is False
     assert result["pipeline_stats"]["alerts_generated"] > 0
+
+
+def test_analyst_feedback_retrains_on_unlabelled_data(trained, dataset, tmp_root):
+    """S5: verdicts on operational (unlabelled) data are added to the saved training set and the model retrains."""
+    store = DuckStore(tmp_root / "unlabelled.duckdb")
+    conn = store.get_connection()
+    top = conn.execute("SELECT entity_id FROM alerts ORDER BY risk_score DESC LIMIT 2").fetchall()
+    low = conn.execute("SELECT address FROM wallet_profiles ORDER BY risk_score LIMIT 1").fetchone()[0]
+    conn.execute("INSERT INTO feedback (id, alert_id, entity_id, user_label) VALUES (1, 'a', ?, 'FALSE_POSITIVE'), "
+                 "(2, 'b', ?, 'TRUE_POSITIVE'), (3, 'c', ?, 'TRUE_POSITIVE')", [top[0][0], top[1][0], low])
+    conn.close()
+    stats = ForensicPipeline(store).execute_ml_pipeline()
+    assert stats["trained"] is True
+    report = json.loads((settings.MODELS_DIR / "training_report.json").read_text())
+    assert report["fusion"]["analyst_feedback_used"] == 3

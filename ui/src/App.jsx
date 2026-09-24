@@ -211,11 +211,12 @@ export default function App() {
     }
   };
 
-  const handleUploadFile = async (file) => {
+  const handleUploadFile = async (file, mapping) => {
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (mapping) formData.append('mapping', mapping);
       const r = await fetch(`${API_BASE}/ingest/upload`, { method: 'POST', body: formData });
       const res = await r.json();
       if (!r.ok) throw new Error(res.detail || 'upload failed');
@@ -236,6 +237,7 @@ export default function App() {
       const res = await r.json();
       if (!r.ok) throw new Error(res.detail || 'evaluation failed');
       setModelCardData(res);
+      await fetchAllData();
     } catch (e) {
       alert(e.message);
     } finally {
@@ -323,7 +325,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'modelcard' && <ModelCard modelCard={modelCardData} onEvaluate={handleEvaluate} loading={loading} />}
+        {activeTab === 'modelcard' && <ModelCard modelCard={modelCardData} onEvaluate={handleEvaluate} loading={loading} verdicts={stats?.kpis?.analyst_verdicts || 0} />}
 
         {activeTab === 'ingest' && (
           <IngestStudio

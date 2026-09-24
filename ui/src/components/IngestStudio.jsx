@@ -5,6 +5,7 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSee
   const [seedFile, setSeedFile] = useState(null);
   const [synthTxCount, setSynthTxCount] = useState(500);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [mappingFile, setMappingFile] = useState(null);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -15,7 +16,7 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSee
   const handleUploadSubmit = (e) => {
     e.preventDefault();
     if (selectedFile) {
-      onUploadFile(selectedFile);
+      onUploadFile(selectedFile, mappingFile);
     }
   };
 
@@ -87,6 +88,10 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSee
               onChange={handleFileChange}
               className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
+            <label className="block text-[11px] text-slate-500">
+              Optional column mapping (YAML) for files with other column names (see docs/DATA_FORMATS.md):
+              <input type="file" accept=".yaml,.yml" onChange={(e) => setMappingFile(e.target.files?.[0] || null)} className="block mt-1 text-xs" />
+            </label>
 
             <button
               type="submit"
@@ -121,6 +126,7 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSee
         const stats = r.rescore?.pipeline_stats || r.pipeline_stats || {};
         const cells = [
           ['Records', r.records_ingested ?? r.rescore?.records_rescored],
+          ['Quarantined rows', r.rows_quarantined],
           ['Alerts', stats.alerts_generated],
           ['Clusters (CIOH)', stats.clusters_computed],
           ['Seeds used', stats.seeds_propagated ?? r.seeds_loaded],
@@ -131,7 +137,7 @@ export default function IngestStudio({ onUploadFile, onGenerateDemo, onUploadSee
               <CheckCircle className="w-4 h-4" />
               <span>Pipeline run complete</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-semibold text-emerald-950 pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-semibold text-emerald-950 pt-2">
               {cells.map(([label, v]) => (
                 <div key={label} className="p-2.5 rounded bg-white/80 border border-emerald-200">
                   <span className="text-slate-500 block text-[10px]">{label}</span>
