@@ -17,7 +17,7 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 | M8 | E4 risk propagation from seeds (§6 E4) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | PPR + reverse PPR + decayed taint from the **real** 20% seeds; hops + path to seed for evidence | 18:30 |
 | M6 | E2 anomaly | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Re-check on new data; add SHAP for anomaly-type alerts | 19:00 |
 | S6 | Model card with real metrics (§13) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
-| S5 | Investigator feedback → retrain | 🟡 `feedback` table exists | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
+| S5 | Investigator feedback → retrain | ✅ verdicts override labels / extend saved training set and retrain | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
 | — | Leakage test | ✅ done by Kavya/Claude (tests/test_ml.py::test_no_label_leakage) | 20:30 |
 | C1 | GNN (GraphSAGE) + GNNExplainer | ❌ | Only after all of the above | after 20:30 |
 | C7 | Validate on public Elliptic dataset | ❌ | Needs a one-time download; optional | after 20:30 |
