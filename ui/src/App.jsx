@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
-import OverviewDashboard from './components/OverviewDashboard';
-import AlertTriage from './components/AlertTriage';
-import LinkGraph from './components/LinkGraph';
-import TimelineReplay from './components/TimelineReplay';
-import GeoMap from './components/GeoMap';
-import Entity360 from './components/Entity360';
-import CaseManager from './components/CaseManager';
-import ModelCard from './components/ModelCard';
-import IngestStudio from './components/IngestStudio';
+
+// Tabs are code-split so the first paint doesn't wait on echarts/cytoscape/world-atlas.
+const OverviewDashboard = lazy(() => import('./components/OverviewDashboard'));
+const AlertTriage = lazy(() => import('./components/AlertTriage'));
+const LinkGraph = lazy(() => import('./components/LinkGraph'));
+const TimelineReplay = lazy(() => import('./components/TimelineReplay'));
+const GeoMap = lazy(() => import('./components/GeoMap'));
+const Entity360 = lazy(() => import('./components/Entity360'));
+const CaseManager = lazy(() => import('./components/CaseManager'));
+const ModelCard = lazy(() => import('./components/ModelCard'));
+const IngestStudio = lazy(() => import('./components/IngestStudio'));
+// Warm the graph chunk in the background once the shell is up.
+const preloadGraph = () => import('./components/LinkGraph');
 
 const API_BASE = '/api';
 
@@ -41,40 +45,30 @@ export default function App() {
   const [modelCardData, setModelCardData] = useState(null);
   const [lastIngestResult, setLastIngestResult] = useState(null);
 
+  // Keep the graph mounted after its first visit so switching tabs doesn't redo the layout.
+  const [graphVisited, setGraphVisited] = useState(activeTab === 'graph');
+  if (activeTab === 'graph' && !graphVisited) setGraphVisited(true);
+
   useEffect(() => {
     fetchAllData();
+    const t = setTimeout(preloadGraph, 1500);
+    return () => clearTimeout(t);
   }, []);
 
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      // 1. Stats
-      const statsRes = await fetch(`${API_BASE}/stats/overview`).then((r) => r.json()).catch(() => null);
-      if (statsRes) setStats(statsRes);
-
-      // 2. Alerts
-      const alertsRes = await fetch(`${API_BASE}/alerts?limit=500`).then((r) => r.json()).catch(() => []);
-      if (Array.isArray(alertsRes)) setAlerts(alertsRes);
-
-      // 3. Graph Topology
-      const graphRes = await fetch(`${API_BASE}/graph/topology?limit=120`).then((r) => r.json()).catch(() => null);
-      if (graphRes) setGraphData(graphRes);
-
-      // 4. Timeline
-      const timelineRes = await fetch(`${API_BASE}/timeline/sequence?limit=40`).then((r) => r.json()).catch(() => []);
-      if (Array.isArray(timelineRes)) setTimelineEvents(timelineRes);
-
-      // 5. GeoMap
-      const geoRes = await fetch(`${API_BASE}/geomap/origins`).then((r) => r.json()).catch(() => null);
-      if (geoRes) setGeoData(geoRes);
-
-      // 6. Cases
-      const casesRes = await fetch(`${API_BASE}/cases`).then((r) => r.json()).catch(() => []);
-      if (Array.isArray(casesRes)) setCases(casesRes);
-
-      // 7. Model Card
-      const modelRes = await fetch(`${API_BASE}/modelcard`).then((r) => r.json()).catch(() => null);
-      if (modelRes) setModelCardData(modelRes);
+      // All independent requests run in parallel; each panel fills in as soon as its data arrives.
+      const getJson = (path, fallback) => fetch(`${API_BASE}${path}`).then((r) => r.json()).catch(() => fallback);
+      const [, alertsRes] = await Promise.all([
+        getJson('/stats/overview', null).then((res) => { if (res) setStats(res); }),
+        getJson('/alerts?limit=500', []).then((res) => { if (Array.isArray(res)) setAlerts(res); return res; }),
+        getJson('/graph/topology?limit=120', null).then((res) => { if (res) setGraphData(res); }),
+        getJson('/timeline/sequence?limit=40', []).then((res) => { if (Array.isArray(res)) setTimelineEvents(res); }),
+        getJson('/geomap/origins', null).then((res) => { if (res) setGeoData(res); }),
+        getJson('/cases', []).then((res) => { if (Array.isArray(res)) setCases(res); }),
+        getJson('/modelcard', null).then((res) => { if (res) setModelCardData(res); }),
+      ]);
 
       // Set default entity for 360 inspection if alerts exist
       if (alertsRes?.length > 0 && !entityData) {
@@ -264,6 +258,7 @@ export default function App() {
       />
 
       <main className="flex-1 w-full max-w-[1500px] mx-auto px-6 py-6">
+        <Suspense fallback={<div className="py-24 text-center text-sm text-slate-400">Loading…</div>}>
         {activeTab === 'overview' && (
           <OverviewDashboard
             stats={stats}
@@ -293,8 +288,10 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'graph' && (
+        {graphVisited && (
+          <div style={{ display: activeTab === 'graph' ? undefined : 'none' }}>
           <LinkGraph
+            active={activeTab === 'graph'}
             graphData={graphData}
             selectedNode={selectedNode}
             onSelectNode={(n) => setSelectedNode(n)}
@@ -302,6 +299,7 @@ export default function App() {
             onInspectEntity={inspectEntity}
             onOpenTimeline={openTimeline}
           />
+          </div>
         )}
 
         {activeTab === 'timeline' && <TimelineReplay timelineEvents={timelineEvents} onLoadTimeline={openTimeline} />}
@@ -336,6 +334,7 @@ export default function App() {
             lastIngestResult={lastIngestResult}
           />
         )}
+        </Suspense>
       </main>
 
       <footer className="text-center text-[11px] text-slate-400 py-4">
