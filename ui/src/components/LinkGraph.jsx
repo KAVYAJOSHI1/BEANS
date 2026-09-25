@@ -1,6 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CytoscapeComponent from 'react-cytoscapejs';
+import cytoscape from 'cytoscape';
+import fcose from 'cytoscape-fcose';
 import { ZoomIn, ZoomOut, Maximize2, Search, Crosshair, UserCheck, Clock, X } from 'lucide-react';
+
+// fcose is a much faster force-directed layout than the built-in cose (~0.7 s vs ~22 s on the default view).
+cytoscape.use(fcose);
 
 const riskColor = (risk) => {
   if (risk >= 85) return '#dc2626';
@@ -47,12 +52,12 @@ const STYLESHEET = [
 ];
 
 const LAYOUTS = {
-  cose: { name: 'cose', animate: false, nodeRepulsion: 9000, idealEdgeLength: 70, padding: 30 },
+  cose: { name: 'fcose', animate: false, randomize: true, nodeRepulsion: 9000, idealEdgeLength: 70, padding: 30 },
   breadthfirst: { name: 'breadthfirst', directed: true, spacingFactor: 1.1, padding: 30 },
   concentric: { name: 'concentric', concentric: (n) => n.data('risk_score') || 0, levelWidth: () => 20, padding: 30 },
 };
 
-export default function LinkGraph({ graphData, onSelectNode, selectedNode, onLoadGraph, onInspectEntity, onOpenTimeline }) {
+export default function LinkGraph({ active = true, graphData, onSelectNode, selectedNode, onLoadGraph, onInspectEntity, onOpenTimeline }) {
   const [layoutName, setLayoutName] = useState('cose');
   const [query, setQuery] = useState('');
   const [hops, setHops] = useState(2);
@@ -60,26 +65,35 @@ export default function LinkGraph({ graphData, onSelectNode, selectedNode, onLoa
   const [showEvidence, setShowEvidence] = useState(true);
   const cyRef = useRef(null);
 
-  const elements = [...(graphData?.nodes || []), ...(graphData?.edges || [])];
+  // Stable reference: otherwise every re-render (e.g. selecting a node) makes cytoscape re-diff the whole graph.
+  const elements = useMemo(() => [...(graphData?.nodes || []), ...(graphData?.edges || [])], [graphData]);
   const summary = graphData?.summary || {};
 
-  // Re-run the layout whenever the data or layout changes (a layout only runs once on mount otherwise).
+  // Re-run the layout whenever the data or layout changes. The graph stays mounted while hidden on other
+  // tabs, where the canvas has zero size, so defer the layout until it is visible again.
+  const laidOut = useRef(null);
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy || !elements.length) return;
+    if (!cy || !active) return;
+    cy.resize();
+    if (!elements.length) return;
+    if (laidOut.current?.graphData === graphData && laidOut.current?.layoutName === layoutName) return;
+    laidOut.current = { graphData, layoutName };
     cy.layout(LAYOUTS[layoutName]).run();
     cy.fit(undefined, 30);
-  }, [graphData, layoutName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [graphData, layoutName, active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    cy.elements().removeClass('evidence faded');
-    const ids = [...(graphData?.highlight?.path_to_seed || []), ...(graphData?.highlight?.txids || [])];
-    if (!showEvidence || !ids.length) return;
-    const hl = cy.collection(ids.map((id) => cy.getElementById(id)).filter((e) => e.length));
-    hl.addClass('evidence');
-    hl.edgesWith(hl).addClass('evidence');
+    cy.batch(() => {
+      cy.elements().removeClass('evidence faded');
+      const ids = [...(graphData?.highlight?.path_to_seed || []), ...(graphData?.highlight?.txids || [])];
+      if (!showEvidence || !ids.length) return;
+      const hl = cy.collection(ids.map((id) => cy.getElementById(id)).filter((e) => e.length));
+      hl.addClass('evidence');
+      hl.edgesWith(hl).addClass('evidence');
+    });
   }, [graphData, showEvidence]);
 
   const load = (center) => onLoadGraph({ center: center ?? (query.trim() || null), hops, minRisk });
@@ -145,9 +159,9 @@ export default function LinkGraph({ graphData, onSelectNode, selectedNode, onLoa
           elements={elements}
           stylesheet={STYLESHEET}
           style={{ width: '100%', height: '100%' }}
-          layout={LAYOUTS[layoutName]}
           minZoom={0.1}
           maxZoom={3}
+          hideEdgesOnViewport
           cy={(cy) => {
             if (cyRef.current === cy) return;
             cyRef.current = cy;
