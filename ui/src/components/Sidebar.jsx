@@ -1,7 +1,8 @@
 import React from 'react';
 import {
-  Shield, Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud,
+  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud,
 } from 'lucide-react';
+import coffeeBean from '../coffee-bean.svg';
 
 export const NAV_GROUPS = [
   { title: 'Monitor', items: [
@@ -31,8 +32,8 @@ export default function Sidebar({ activeTab, setActiveTab, counts = {} }) {
   return (
     <aside className="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col h-screen sticky top-0">
       <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-800">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white">
-          <Shield className="w-5 h-5" />
+        <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
+          <img src={coffeeBean} alt="" className="w-7 h-7" />
         </div>
         <div className="leading-tight">
           <div className="font-bold text-white tracking-tight">BEANS</div>
