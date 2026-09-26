@@ -133,3 +133,26 @@ transaction), traced forward to known exchanges and pushed to the webhooks as a 
 **SIEM webhooks** (`/api/webhooks`, Rules & Integrations page): formats `json` (Wazuh / custom), `splunk_hec`,
 `elastic` (`_bulk` NDJSON) and `stix` (STIX 2.1 bundle for MISP `/events/upload_stix/2` or OpenCTI). After every
 scoring run, alerts at or above each hook's `min_severity` are sent once per hook (3 attempts, logged in `webhook_log`).
+
+
+## 7. Optional live collector (`beans collect`, needs network)
+
+A separate tool for a connected machine; the analysis product stays offline. It connects to Bitcoin peers you choose
+(`--peer host:port`, or `--dns-seed`), completes the version handshake, listens for transaction announcements, fetches
+each new transaction once and writes **one row per (transaction, announcing peer)** in the input format above, plus
+`tx_version`, `locktime`, `rbf` and `unresolved_inputs`. Files rotate atomically into `--out` (default `data/inbox`),
+so `beans watch data/inbox` scores them as they arrive.
+
+```bash
+.venv/bin/python -m beans.cli collect --dns-seed --out data/inbox --rotate 300      # Ctrl+C to stop
+.venv/bin/python -m beans.cli watch data/inbox                                       # on the analysis side
+```
+
+**Limit.** A transaction names the coins it spends but not their amounts, and the P2P protocol cannot look them up.
+Inputs are resolved from transactions the collector has already seen; unresolved ones are counted
+(`unresolved_inputs`), never guessed, and the fee is then left empty. Chains (peel chains, splits) resolve well once
+their parent has been seen; a fresh 90-second run resolves few inputs (measured: 12 of 311 transactions). A full node
+with a transaction index, exported through the normal CSV path, gives complete inputs.
+
+Checked live: 1,030 rows from public peers in 90 s, 0 rows quarantined on ingest, and every fetched transaction's
+computed txid matched the id the peer announced. Address encodings are tested against the BIP-173 / BIP-350 vectors.

@@ -31,6 +31,7 @@ make demo           # synthetic data → ingest → 5 ML engines → alerts → 
 .venv/bin/python -m beans.cli ingest their_export.csv --mapping their.yaml # unfamiliar column names (docs/DATA_FORMATS.md)
 .venv/bin/python -m beans.cli ingest day1.csv day2.csv … --no-score        # bulk load (chunked), then: beans score
 .venv/bin/python -m beans.cli watch data/inbox                             # monitoring mode: score every new file
+.venv/bin/python -m beans.cli collect --dns-seed --out data/inbox           # OPTIONAL live P2P collector (needs network)
 .venv/bin/python -m beans.cli export --neo4j out/ --stix alerts.json       # graph + STIX 2.1 indicators
 .venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
 .venv/bin/python -m beans.cli validate-elliptic --download                 # external validation on real Bitcoin data

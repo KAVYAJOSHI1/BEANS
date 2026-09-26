@@ -431,3 +431,24 @@ def test_fingerprint_fields_parse_and_guard_change(tmp_path):
     f.tx["rbf"] = [True, True, True]
     cl2, _ = e1_cluster.cluster(f, _xtx(f), set())
     assert cl2["W"] == cl2["PAYEE"]                       # same software: the precision rule applies
+
+
+def test_chunked_ingest_keeps_earliest_observation(tmp_path, monkeypatch):
+    from beans.config import settings
+    from beans.store.duck import DuckStore
+    from beans.ingest.pipeline import ForensicPipeline
+    monkeypatch.setattr(settings, "INGEST_CHUNK_ROWS", 2)
+    store = DuckStore(tmp_path / "chunk.duckdb")
+    csv = tmp_path / "obs.csv"
+    tx = "cd" * 32
+    csv.write_text("timestamp,src_ip,txid,input_addresses,input_amounts,output_addresses,output_amounts,fee\n"
+                   f"2026-09-01T00:00:05Z,9.9.9.9,{tx},a,1,b,0.9,0.1\n"
+                   f"2026-09-01T00:00:06Z,8.8.8.8,{tx},a,1,b,0.9,0.1\n"
+                   f"2026-09-01T00:00:01Z,1.1.1.1,{tx},a,1,b,0.9,0.1\n")   # earliest relay comes last, in a later chunk
+    p = ForensicPipeline(store)
+    monkeypatch.setattr(p, "execute_ml_pipeline", lambda *a: {})
+    assert p.run_file_ingestion(csv)["records_ingested"] == 3
+    con = store.get_connection()
+    assert con.execute("SELECT src_ip FROM transactions WHERE txid = ?", [tx]).fetchone()[0] == "1.1.1.1"
+    assert con.execute("SELECT COUNT(*) FROM net_observations").fetchone()[0] == 3
+    con.close()

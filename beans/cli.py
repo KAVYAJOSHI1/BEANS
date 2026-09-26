@@ -152,6 +152,35 @@ def typology_corpus(
     console.print(corpus.groupby("_typology")["_group"].nunique().to_dict())
 
 
+@app.command()
+def collect(
+    peer: list[str] = typer.Option(None, "--peer", help="host:port of a Bitcoin node (repeatable)"),
+    dns_seed: bool = typer.Option(False, "--dns-seed", help="Ask the public DNS seeds for peers"),
+    out: str = typer.Option("data/inbox", "--out", help="Folder for rotated CSV files (watched by `beans watch`)"),
+    minutes: float = typer.Option(None, "--minutes", help="Stop after this long (default: run until Ctrl+C)"),
+    rotate: int = typer.Option(300, "--rotate", help="Seconds per output file"),
+    max_peers: int = typer.Option(8, "--max-peers"),
+):
+    """OPTIONAL live collector (needs network): records transaction announcements per peer into BEANS CSVs.
+
+    The analysis product stays offline; run this on a separate, connected machine and move the files over, or point
+    `beans watch` at --out."""
+    import asyncio
+    from beans.collector.p2p import Collector, dns_seed_peers
+    peers = [(h.rsplit(":", 1)[0], int(h.rsplit(":", 1)[1]) if ":" in h else 8333) for h in (peer or [])]
+    if dns_seed:
+        peers += dns_seed_peers(max_peers)
+    if not peers:
+        raise typer.BadParameter("give --peer host:port and/or --dns-seed")
+    c = Collector(Path(out), rotate_s=rotate, max_peers=max_peers)
+    console.print(f"[bold green]Collecting from {min(len(peers), max_peers)} peer(s) into {out}…[/bold green]")
+    try:
+        asyncio.run(c.run(peers, None if minutes is None else minutes * 60, log=lambda m: console.print(m)))
+    except KeyboardInterrupt:
+        c.flush()
+    console.print(c.stats)
+
+
 user_app = typer.Typer(help="Local users (login switches on once the first user exists)")
 app.add_typer(user_app, name="user")
 
