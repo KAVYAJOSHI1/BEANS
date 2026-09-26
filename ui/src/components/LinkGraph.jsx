@@ -7,6 +7,7 @@ import {
   ZoomIn, ZoomOut, Maximize2, Search, Crosshair, UserCheck, Clock, X, Sparkles, Orbit, Lasso, Briefcase,
 } from 'lucide-react';
 import { canvasColors, useTheme } from '../theme';
+import { riskColor, severityOf, useConfig } from '../risk';
 
 // fcose is a much faster force-directed layout than the built-in cose (~0.7 s vs ~22 s on the default view).
 cytoscape.use(fcose);
@@ -17,12 +18,7 @@ const LARGE_FLOW_EDGE_CAP = 150;
 const RISKY_IP = ['TOR_EXIT', 'BULLETPROOF', 'VPN'];
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-const riskColor = (risk) => {
-  if (risk >= 85) return '#dc2626';
-  if (risk >= 65) return '#f97316';
-  if (risk >= 40) return '#eab308';
-  return '#3b82f6';
-};
+const atLeast = (risk, sev) => ['HIGH', 'CRITICAL'].slice(sev === 'CRITICAL' ? 1 : 0).includes(severityOf(risk || 0));
 
 const stylesheet = (c) => [
   {
@@ -91,6 +87,7 @@ export default function LinkGraph({
   cases = [], onAddEntitiesToCase, onCreateCase,
 }) {
   const theme = useTheme();
+  const { severity_thresholds: T } = useConfig();
   const [layoutName, setLayoutName] = useState('cose');
   const [query, setQuery] = useState('');
   const [hops, setHops] = useState(2);
@@ -111,7 +108,7 @@ export default function LinkGraph({
   const nodeCount = graphData?.nodes?.length || 0;
   const tooBig = nodeCount > MOTION_NODE_CAP;
   const animate = motion && active;
-  const sheet = useMemo(() => stylesheet(canvasColors(theme)), [theme]);
+  const sheet = useMemo(() => stylesheet(canvasColors(theme)), [theme, T]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { cyRef.current?.style(sheet); }, [sheet]);
 
@@ -161,9 +158,9 @@ export default function LinkGraph({
     if (!cy) return undefined;
     const valueEdges = cy.edges('[type="INPUT"], [type="OUTPUT"]');
     const flowEdges = tooBig
-      ? valueEdges.filter((e) => e.connectedNodes().some((n) => (n.data('risk_score') || 0) >= 65)).slice(0, LARGE_FLOW_EDGE_CAP)
+      ? valueEdges.filter((e) => e.connectedNodes().some((n) => atLeast(n.data('risk_score'), 'HIGH'))).slice(0, LARGE_FLOW_EDGE_CAP)
       : valueEdges;
-    const halos = cy.nodes().filter((n) => n.data('is_seed') || (n.data('type') === 'WALLET' && (n.data('risk_score') || 0) >= 85)
+    const halos = cy.nodes().filter((n) => n.data('is_seed') || (n.data('type') === 'WALLET' && atLeast(n.data('risk_score'), 'CRITICAL'))
       || (n.data('type') === 'IP' && RISKY_IP.includes(n.data('isp_type'))));
     if (!animate) {
       cy.batch(() => {
@@ -197,7 +194,7 @@ export default function LinkGraph({
         halos.style({ 'underlay-opacity': 0, 'underlay-padding': 0 });
       });
     };
-  }, [animate, graphData, tooBig]);
+  }, [animate, graphData, tooBig, T]);
 
   const ripple = (node) => {
     if (!motion || reducedMotion()) return;
@@ -301,14 +298,14 @@ export default function LinkGraph({
       </div>
 
       <div className="flex flex-wrap gap-4 text-xs text-slate-600 px-1">
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600" /> wallet risk ≥ 85</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500" /> 65–84</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500" /> 40–64</span>
-        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500" /> &lt; 40</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600" /> wallet risk ≥ {T.CRITICAL}</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500" /> {T.HIGH}–{T.CRITICAL}</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500" /> {T.MEDIUM}–{T.HIGH}</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500" /> &lt; {T.MEDIUM}</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full border-4 border-red-900" /> seed wallet</span>
         <span className="flex items-center gap-1"><span className="w-3 h-3 bg-indigo-500 rotate-45" /> transaction</span>
         <span className="flex items-center gap-1"><span className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[10px] border-transparent border-b-sky-500" /> relaying IP (red = Tor/VPN/bulletproof)</span>
-        {animate && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 pulse-dot" /> pulsing = seed / critical / risky IP · dash speed = BTC value</span>}
+        {animate && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 pulse-dot" /> pulsing = seed / critical (≥ {T.CRITICAL}) / risky IP · dash speed = BTC value</span>}
         <span className="ml-auto text-slate-500">
           {summary.center ? <>centered on <span className="font-mono">{String(summary.center).slice(0, 18)}…</span> · </> : 'top alerts · '}
           {summary.node_count ?? 0} nodes · {summary.edge_count ?? 0} edges

@@ -49,6 +49,28 @@ def health_check():
         "db": str(settings.DB_PATH),
         "transactions": db.scalar("SELECT COUNT(*) FROM transactions"),
         "alerts": db.scalar("SELECT COUNT(*) FROM alerts"),
+        "data_origin": _data_origin(),
+    }
+
+
+def _data_origin() -> str:
+    """synthetic = the loaded data came with generator ground truth; operational = real ingested files; empty."""
+    if not db.scalar("SELECT COUNT(*) FROM transactions"):
+        return "empty"
+    has_truth = db.table_exists("labels_address") and db.scalar("SELECT COUNT(*) FROM labels_address")
+    return "synthetic" if has_truth else "operational"
+
+
+@app.get("/api/config")
+def public_config():
+    """Thresholds the UI needs, so it never keeps its own copies."""
+    return {
+        "severity_thresholds": {"CRITICAL": settings.RISK_CRITICAL_MIN, "HIGH": settings.RISK_HIGH_MIN,
+                                "MEDIUM": settings.RISK_MEDIUM_MIN},
+        "alert_min_probability": settings.ALERT_MIN_PROBABILITY, "max_alerts": settings.MAX_ALERTS,
+        "impossible_travel_kmh": settings.IMPOSSIBLE_TRAVEL_KMH,
+        "actions": {k: getattr(settings, k) for k in type(settings).model_fields if k.startswith("ACTION_")},
+        "data_origin": _data_origin(),
     }
 
 

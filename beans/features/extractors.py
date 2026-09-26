@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from beans.api.geo import CENTROIDS
+from beans.config import settings
 
 RISKY_ASN = {"TOR_EXIT", "VPN", "BULLETPROOF"}
 
@@ -130,7 +131,7 @@ def tx_features(f: Frames) -> pd.DataFrame:
     X["spy_tor"] = (spy["spy_asn_type"] == "TOR_EXIT").astype(float)
     X["spy_datacenter"] = (spy["spy_asn_type"] == "DATACENTER").astype(float)
     X["spy_residential"] = (spy["spy_asn_type"] == "RESIDENTIAL").astype(float)
-    X["spy_confidence"] = 1 - np.exp(-spy["spy_delta"].fillna(0.3) / 1.5)
+    X["spy_confidence"] = 1 - np.exp(-spy["spy_delta"].fillna(0.3) / settings.FIRST_SPY_TAU_SEC)
     X["n_obs"] = spy["n_obs"].fillna(0)
     X["spy_nonstd_port"] = (spy["spy_port"] != 8333).astype(float)
     return X
@@ -192,8 +193,64 @@ def wallet_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
     multi = net[net["address"].isin(W.index[W["n_spend"] > 1])]
     vel = multi.groupby("address")[["ts", "spy_country"]].apply(_velocity) if len(multi) else pd.Series(dtype=float)
     W["max_geo_velocity_kmh"] = vel.reindex(W.index).fillna(0).clip(upper=20000)
-    W["mean_spy_confidence"] = 1 - np.exp(-net.groupby("address")["spy_delta"].mean().reindex(W.index).fillna(0.3) / 1.5)
+    W["mean_spy_confidence"] = 1 - np.exp(-net.groupby("address")["spy_delta"].mean().reindex(W.index).fillna(0.3) / settings.FIRST_SPY_TAU_SEC)
+    W = W.join(context_features(f, X_tx), how="left")
+    ctx = ["fund_out_cv", "fund_below_round", "fund_in_hub", "fund_parent_max_n_in", "fund_parent_in_hub",
+           "fund_log_n_funders", "spend_to_consolidated", "is_consolidated"]
+    W[ctx] = W[ctx].fillna(0)
     return W.drop(columns=["first_recv", "last_recv", "first_spend", "last_spend"])
+
+
+CONSOLIDATION_MIN_INPUTS = 10   # a tx spending this many inputs is a service sweep (exchange / merchant / pool)
+
+
+def _below_round(amount: pd.Series) -> pd.Series:
+    """1 when an amount sits just below a power-of-ten threshold (0.9·10^k ≤ a < 10^k): classic structuring."""
+    a = amount.where(amount > 0)
+    ratio = a / np.power(10.0, np.ceil(np.log10(a)))
+    return ((ratio >= 0.9) & (ratio < 1.0)).astype(float)
+
+
+def context_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
+    """Where a wallet's money comes from and where it goes (attribution-free, no labels).
+
+    Funding side: shape of the transaction(s) that paid the wallet and of their parents (who funded the payer).
+    Spending side: whether the wallet's money lands on addresses that are later swept in large consolidations,
+    which is how exchange / service deposit addresses behave.
+    """
+    degree = pd.concat([f.tin[["txid", "address"]], f.tout[["txid", "address"]]]).drop_duplicates() \
+        .groupby("address").size()
+    tx = pd.DataFrame(index=X_tx.index)
+    og = f.tout.groupby("txid")["amount"]
+    tx["out_cv"] = (og.std(ddof=0) / og.mean().replace(0, np.nan)).reindex(tx.index).fillna(0).where(X_tx["n_out"] > 1, 0)
+    tx["below_round_share"] = f.tout.assign(b=_below_round(f.tout["amount"])).groupby("txid")["b"].mean().reindex(tx.index).fillna(0)
+    tin = f.tin.assign(deg=np.log1p(f.tin["address"].map(degree)))
+    tx["in_hub"] = tin.groupby("txid")["deg"].max().reindex(tx.index).fillna(0)
+    swept = set(f.tin.loc[f.tin["txid"].isin(X_tx.index[X_tx["n_in"] >= CONSOLIDATION_MIN_INPUTS]), "address"])
+    tx["out_consolidated_share"] = f.tout.assign(c=f.tout["address"].isin(swept).astype(float)) \
+        .groupby("txid")["c"].mean().reindex(tx.index).fillna(0)
+    # parents: the transactions that created this transaction's inputs
+    created_by = f.tout[["address", "txid"]].rename(columns={"txid": "parent"}).drop_duplicates("address")
+    par = f.tin[["txid", "address"]].merge(created_by, on="address", how="inner")
+    par = par[par["parent"] != par["txid"]].join(X_tx[["n_in"]], on="parent").join(tx[["in_hub"]], on="parent")
+    tx["parent_max_n_in"] = par.groupby("txid")["n_in"].max().reindex(tx.index).fillna(0)
+    tx["parent_in_hub"] = par.groupby("txid")["in_hub"].max().reindex(tx.index).fillna(0)
+    tx["n_funders"] = f.tin.groupby("txid")["address"].nunique().reindex(tx.index).fillna(0)
+
+    as_out = f.tout[["txid", "address"]].drop_duplicates().join(tx, on="txid")
+    as_in = f.tin[["txid", "address"]].drop_duplicates().join(tx, on="txid")
+    fo, fi = as_out.groupby("address"), as_in.groupby("address")
+    C = pd.DataFrame({
+        "fund_out_cv": fo["out_cv"].mean(),
+        "fund_below_round": fo["below_round_share"].max(),
+        "fund_in_hub": fo["in_hub"].max(),
+        "fund_parent_max_n_in": np.log1p(fo["parent_max_n_in"].max()),
+        "fund_parent_in_hub": fo["parent_in_hub"].max(),
+        "fund_log_n_funders": np.log1p(fo["n_funders"].max()),
+        "spend_to_consolidated": fi["out_consolidated_share"].mean(),
+    })
+    C["is_consolidated"] = C.index.isin(swept).astype(float)
+    return C
 
 
 WALLET_NETWORK_COLS = ["n_spend_ips", "n_spend_countries", "share_risky_asn", "share_datacenter",
