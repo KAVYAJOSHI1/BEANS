@@ -14,6 +14,7 @@ const CaseManager = lazy(() => import('./components/CaseManager'));
 const ModelCard = lazy(() => import('./components/ModelCard'));
 const IngestStudio = lazy(() => import('./components/IngestStudio'));
 const Integrations = lazy(() => import('./components/Integrations'));
+const Watchlist = lazy(() => import('./components/Watchlist'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -46,6 +47,8 @@ export default function App() {
   const [exportResult, setExportResult] = useState(null);
   const [modelCardData, setModelCardData] = useState(null);
   const [lastIngestResult, setLastIngestResult] = useState(null);
+  const [watchEvents, setWatchEvents] = useState([]);
+  const [watchlist, setWatchlist] = useState([]);
 
   // Keep the graph mounted after its first visit so switching tabs doesn't redo the layout.
   const [graphVisited, setGraphVisited] = useState(activeTab === 'graph');
@@ -72,6 +75,7 @@ export default function App() {
         getJson('/geomap/origins', null).then((res) => { if (res) setGeoData(res); }),
         getJson('/cases', []).then((res) => { if (Array.isArray(res)) setCases(res); }),
         getJson('/modelcard', null).then((res) => { if (res) setModelCardData(res); }),
+        loadWatch(),
       ]);
 
       // Set default entity for 360 inspection if alerts exist
@@ -83,6 +87,28 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadWatch = async () => {
+    const [ev, wl] = await Promise.all([
+      fetch(`${API_BASE}/watch-events`).then((r) => r.json()).catch(() => []),
+      fetch(`${API_BASE}/watchlist`).then((r) => r.json()).catch(() => []),
+    ]);
+    if (Array.isArray(ev)) setWatchEvents(ev);
+    if (Array.isArray(wl)) setWatchlist(wl);
+  };
+
+  const handleWatch = async (address, alertId) => {
+    await fetch(`${API_BASE}/watchlist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, alert_id: alertId, reason: 'ANALYST' }),
+    });
+    loadWatch();
+  };
+
+  const handleWatchCase = async (caseId) => {
+    await fetch(`${API_BASE}/cases/${caseId}/watch`, { method: 'POST' });
+    loadWatch();
   };
 
   const loadGraph = async ({ center = null, hops = 2, minRisk = 0 } = {}) => {
@@ -246,6 +272,7 @@ export default function App() {
   const counts = {
     alerts: stats?.kpis?.open_alerts ?? alerts.filter((a) => a.status === 'OPEN').length,
     cases: cases.length,
+    movements: watchEvents.filter((e) => e.status === 'OPEN').length,
   };
 
   return (
@@ -289,7 +316,14 @@ export default function App() {
             cases={cases}
             onAddToCase={handleAddToCase}
             onCreateCase={handleCreateCase}
+            watched={watchlist.map((w) => w.address)}
+            onWatch={handleWatch}
           />
+        )}
+
+        {activeTab === 'watchlist' && (
+          <Watchlist events={watchEvents} watchlist={watchlist} alerts={alerts} onChanged={loadWatch}
+            onSelectAlert={(a) => { setSelectedAlert(a); setActiveTab('alerts'); }} onInspectEntity={inspectEntity} />
         )}
 
         {graphVisited && (
@@ -327,6 +361,7 @@ export default function App() {
             onCreateCase={handleCreateCase}
             onExportDossier={handleExportDossier}
             exportResult={exportResult}
+            onWatchCase={handleWatchCase}
           />
         )}
 

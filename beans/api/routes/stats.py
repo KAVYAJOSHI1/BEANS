@@ -18,6 +18,8 @@ def get_system_overview() -> Dict[str, Any]:
         "total_ips": db.scalar("SELECT COUNT(DISTINCT src_ip) FROM net_observations"),
         "total_clusters": db.scalar("SELECT COUNT(DISTINCT cluster_id) FROM wallet_profiles WHERE cluster_id IS NOT NULL"),
         "total_alerts": sum(sev.values()),
+        "watched_wallets": db.scalar("SELECT COUNT(*) FROM watchlist WHERE active"),
+        "open_movement_events": db.scalar("SELECT COUNT(*) FROM watch_events WHERE status = 'OPEN'"),
         "critical_alerts": sev.get("CRITICAL", 0),
         "high_alerts": sev.get("HIGH", 0),
         "medium_alerts": sev.get("MEDIUM", 0),
