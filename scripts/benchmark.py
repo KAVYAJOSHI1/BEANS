@@ -68,7 +68,8 @@ def main(sizes):
                      f"{r['train_s']:.0f} s · {r['train_peak_gb']} GB | {r['score_s']:.0f} s · {r['score_peak_gb']} GB | "
                      f"{r['rows'] / r['score_s']:,.0f} |")
     lines += ["", "Training is a one-off on labelled data; operational files are handled by the scoring run.",
-              "Reproduce: `.venv/bin/python scripts/benchmark.py " + " ".join(map(str, sizes)) + "`"]
+              "Reproduce: `.venv/bin/python scripts/benchmark.py " + " ".join(map(str, sizes)) + "`",
+              "", "About one million rows (several files, chunked ingest + one scoring pass): [BENCHMARK_1M.md](BENCHMARK_1M.md)"]
     (ROOT / "docs" / "BENCHMARK.md").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
 

@@ -104,7 +104,7 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 | E4 | Hidden wallets of seeded actors reached | **0.77** | legitimate wallets reached: 0.08 |
 | E4 | All hidden illicit wallets reached | 0.31 | 70 % of actors have no seed at all |
 | Typology | Accuracy on illicit wallets, grouped CV, pooled per cluster | **0.84** | |
-| Throughput | Ingest + all engines + training, 11.9k observations | **14 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
+| Throughput | Ingest + all engines + training, 11.9k observations | **14 s** | ~1M rows (10 files): chunked ingest 96 s at 0.9 GB, scoring 190 s at 5.3 GB (docs/BENCHMARK_1M.md) |
 
 **External validation on real data (Elliptic).** Elliptic (Weber et al. 2019) has 203,769 real, labelled Bitcoin
 transactions but anonymised features (no addresses, amounts or IPs), so it tests the modelling approach rather than the

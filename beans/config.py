@@ -26,6 +26,9 @@ class BeansSettings(BaseSettings):
     RISK_HIGH_MIN: float = 65.0
     RISK_MEDIUM_MIN: float = 40.0
     
+    # Ingest
+    INGEST_CHUNK_ROWS: int = 50_000       # rows parsed + stored per batch (memory stays flat for any file size)
+
     # Engines
     E5_GNN: bool = True                   # SIGN-style graph neural features (beans/engines/e5_gnn.py)
     USE_TYPOLOGY_CORPUS: bool = True      # typology model also learns from the reference corpus …

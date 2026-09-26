@@ -29,6 +29,7 @@ make demo           # synthetic data → ingest → 5 ML engines → alerts → 
 
 ```bash
 .venv/bin/python -m beans.cli ingest their_export.csv --mapping their.yaml # unfamiliar column names (docs/DATA_FORMATS.md)
+.venv/bin/python -m beans.cli ingest day1.csv day2.csv … --no-score        # bulk load (chunked), then: beans score
 .venv/bin/python -m beans.cli watch data/inbox                             # monitoring mode: score every new file
 .venv/bin/python -m beans.cli export --neo4j out/ --stix alerts.json       # graph + STIX 2.1 indicators
 .venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
@@ -62,7 +63,7 @@ Measured on the synthetic demo dataset (4,032 transactions, 13,542 wallets, 6.6 
 | Seed propagation: hidden wallets of seeded actors reached | 77 % (legitimate wallets reached: 8 %) |
 | E3 transaction-shape classifier macro-F1 | 0.993 |
 | Calibration error (ECE) | 0.006 |
-| End-to-end run (ingest + 5 engines + training) | 14 s on a laptop; scoring ≈ 3,300 rows/s ([benchmark](docs/BENCHMARK.md)) |
+| End-to-end run (ingest + 5 engines + training) | 14 s on a laptop · **980,803 rows loaded and scored in 286 s, 5.3 GB peak** ([1M benchmark](docs/BENCHMARK_1M.md), [small-scale](docs/BENCHMARK.md)) |
 
 **Across 6 independently generated datasets** (`scripts/evaluate_seeds.py --seeds 42 7 123 2024 99 555`), mean:
 

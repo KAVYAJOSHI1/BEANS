@@ -47,7 +47,9 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
     uf = _UF()
     for a in pd.concat([frames.tin["address"], frames.tout["address"]]).unique():
         uf.find(a)
-    ins = frames.tin.groupby("txid")["address"].apply(list)
+    ins: dict = defaultdict(list)
+    for t, a in zip(frames.tin["txid"].values, frames.tin["address"].values):
+        ins[t].append(a)
     merged_cioh = merged_change = 0
     for txid, addrs in ins.items():
         if txid in coinjoin_txids or len(addrs) < 2:
@@ -56,18 +58,18 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
             uf.union(addrs[0], a)
         merged_cioh += 1
     # change heuristic (conservative): 2 outputs, exactly one has full 8-decimal precision → that one is change
-    first_seen = frames.tout.groupby("address")["ts"].min()
+    first_seen = frames.tout.groupby("address")["ts"].min().to_dict()
     # guards against false change picks (each one bridged an exchange into a criminal's cluster in testing):
     #  - an address later swept in a big consolidation is a service deposit address, never the sender's change
     #  - in a peel-shaped tx the tiny output is the payment; the change is the large one
-    swept = set(frames.tin.loc[frames.tin["txid"].isin(X_tx.index[X_tx["n_in"] >= SWEEP_MIN_INPUTS]), "address"])
+    swept = set(frames.tin.loc[frames.tin["txid"].isin(set(X_tx.index[X_tx["n_in"] >= SWEEP_MIN_INPUTS])), "address"])
     # wallet-software fingerprints: the tx's own, and that of the tx that later spends each address
     from beans.features.extractors import tx_fingerprint
-    fp = tx_fingerprint(frames.tx) if "tx_version" in frames.tx else pd.Series(dtype=object)
+    fp = (tx_fingerprint(frames.tx) if "tx_version" in frames.tx else pd.Series(dtype=object)).dropna().to_dict()
     # a CoinJoin is built by its coordinator's software, so a CoinJoin spend says nothing about the owner's wallet
     own_spends = frames.tin[~frames.tin["txid"].isin(coinjoin_txids)]
     first_spend = own_spends.sort_values("ts").drop_duplicates("address").set_index("address")["txid"]
-    spend_fp = first_spend.map(fp) if len(fp) else pd.Series(dtype=object)
+    spend_fp = first_spend.map(fp).dropna().to_dict() if fp else {}
 
     def fp_conflict(txid, addr) -> bool:
         """True when the tx and the later spend of `addr` were built by different wallet software."""
@@ -76,14 +78,19 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
 
     merged_fp = 0
     peel_shaped = set(X_tx.index[X_tx["peel_shape"] == 1])
-    two = frames.tout[frames.tout["txid"].isin(X_tx.index[(X_tx["n_out"] == 2) & (X_tx["n_in"] >= 1)])]
-    for txid, g in two.groupby("txid"):
-        if txid in coinjoin_txids or txid not in ins.index:
+    two = frames.tout[frames.tout["txid"].isin(set(X_tx.index[(X_tx["n_out"] == 2) & (X_tx["n_in"] >= 1)]))] \
+        .sort_values(["txid", "idx"])
+    T, A, V, S = two["txid"].values, two["address"].values, two["amount"].values, two["ts"].values
+    for i in range(0, len(T) - 1, 2):          # rows come in pairs: exactly two outputs per tx
+        txid = T[i]
+        if txid in coinjoin_txids or txid not in ins:
             continue
-        prec = [(_decimals(v) >= 7, a, ts) for a, v, ts in zip(g["address"], g["amount"], g["ts"])]
+        g_addr, g_amt = (A[i], A[i + 1]), (V[i], V[i + 1])
+        g_ts = (pd.Timestamp(S[i]), pd.Timestamp(S[i + 1]))
+        prec = [(_decimals(v) >= 7, a, ts) for a, v, ts in zip(g_addr, g_amt, g_ts)]
         change = [a for p, a, ts in prec if p and first_seen.get(a) == ts]
-        if change and (change[0] in swept or (txid in peel_shaped and change[0] == g.loc[g["amount"].idxmin(), "address"])
-                       or fp_conflict(txid, change[0])):
+        smaller = g_addr[0] if g_amt[0] <= g_amt[1] else g_addr[1]
+        if change and (change[0] in swept or (txid in peel_shaped and change[0] == smaller) or fp_conflict(txid, change[0])):
             continue
         if len(change) == 1 and sum(p for p, _, _ in prec) == 1:
             uf.union(ins[txid][0], change[0])
@@ -91,9 +98,9 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         elif not change:
             # fingerprint change rule: exactly one fresh, non-swept output is later spent by the same wallet software
             # as this transaction → it is the sender's change
-            same = [a for a, ts in zip(g["address"], g["ts"]) if first_seen.get(a) == ts and a not in swept
+            same = [a for a, ts in zip(g_addr, g_ts) if first_seen.get(a) == ts and a not in swept
                     and isinstance(fp.get(txid), str) and spend_fp.get(a) == fp.get(txid)]
-            other = [a for a in g["address"] if isinstance(spend_fp.get(a), str) and spend_fp.get(a) != fp.get(txid)]
+            other = [a for a in g_addr if isinstance(spend_fp.get(a), str) and spend_fp.get(a) != fp.get(txid)]
             if len(same) == 1 and len(other) == 1:
                 uf.union(ins[txid][0], same[0])
                 merged_fp += 1
@@ -104,7 +111,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
     peel_tx = X_tx.index[(X_tx["peel_shape"] == 1) & (X_tx["peel_chain_len"] >= 3)]
     big = frames.tout[frames.tout["txid"].isin(peel_tx)].sort_values("amount").groupby("txid").tail(1)
     for txid, addr in zip(big["txid"], big["address"]):
-        if txid in coinjoin_txids or txid not in ins.index or fp_conflict(txid, addr):
+        if txid in coinjoin_txids or txid not in ins or fp_conflict(txid, addr):
             continue
         uf.union(ins[txid][0], addr)
         merged_peel += 1
@@ -121,7 +128,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
             a = np.delete(a, np.argmax(np.abs(a - np.median(a))))
         return float(a.std() / a.mean()) if len(a) >= SPLIT_MIN_PARTS and a.mean() > 0 else 1.0
     cand = X_tx.index[(X_tx["n_out"] >= SPLIT_MIN_PARTS) & (X_tx["n_in"] >= 1)]
-    cand = [t for t in cand if t not in coinjoin_txids and t in ins.index]
+    cand = [t for t in cand if t not in coinjoin_txids and t in ins]
     cv = frames.tout[frames.tout["txid"].isin(cand)].groupby("txid")["amount"].apply(parts_cv)
     cand = [t for t in cand if cv.get(t, 1.0) <= SPLIT_MAX_CV]
     outs = frames.tout[frames.tout["txid"].isin(cand)].groupby("txid")

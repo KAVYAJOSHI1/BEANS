@@ -26,20 +26,32 @@ def synth(
 
 @app.command()
 def ingest(
-    file_path: str = typer.Argument(..., help="Path to CSV, JSON, or XML file to ingest"),
-    mapping: str = typer.Option(None, "--mapping", "-m", help="YAML column mapping for unfamiliar files (see beans/ingest/mapping.py)")
+    file_paths: list[str] = typer.Argument(..., help="One or more CSV / JSON / XML files"),
+    mapping: str = typer.Option(None, "--mapping", "-m", help="YAML column mapping for unfamiliar files (see beans/ingest/mapping.py)"),
+    no_score: bool = typer.Option(False, "--no-score", help="Only load the files; run `beans score` once afterwards"),
 ):
-    """Ingest multi-format transaction file, enrich offline, and execute AI/ML pipeline."""
-    p = Path(file_path)
-    if not p.exists():
-        console.print(f"[bold red]File not found: {file_path}[/bold red]")
+    """Ingest files, enrich offline, and run the AI/ML pipeline (once, after the last file)."""
+    paths = [Path(f) for f in file_paths]
+    missing = [str(p) for p in paths if not p.exists()]
+    if missing:
+        console.print(f"[bold red]File(s) not found: {', '.join(missing)}[/bold red]")
         raise typer.Exit(code=1)
-
-    console.print(f"[bold green]Ingesting and running forensic ML pipeline on {p.name}...[/bold green]")
     pipeline = ForensicPipeline(mapping=Path(mapping) if mapping else None)
-    result = pipeline.run_file_ingestion(p)
-    console.print(f"[bold cyan]Ingestion complete![/bold cyan]")
-    console.print(result)
+    pipeline.execute_ml_pipeline, run_scoring = (lambda *a: {"skipped": True}), pipeline.execute_ml_pipeline
+    for p in paths:
+        console.print(f"[bold green]Ingesting {p.name}…[/bold green]")
+        r = pipeline.run_file_ingestion(p)
+        console.print(f"  {r['records_ingested']:,} rows, {r['rows_quarantined']:,} quarantined")
+    if not no_score:
+        console.print("[bold green]Scoring the whole database…[/bold green]")
+        console.print(run_scoring())
+
+
+@app.command()
+def score():
+    """Re-run all engines + fusion over everything in the database (e.g. after `ingest --no-score`)."""
+    console.print(ForensicPipeline().execute_ml_pipeline())
+
 
 @app.command()
 def watch(

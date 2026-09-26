@@ -258,7 +258,10 @@ class DuckStore:
         obs_cols = ", ".join(obs_tab.column_names)
         conn.register("tx_in", tx_tab)
         conn.register("obs_in", obs_tab)
-        conn.execute(f"INSERT OR IGNORE INTO transactions ({tx_cols}) SELECT {tx_cols} FROM tx_in")
+        # earliest observation wins, also across chunks / files that are not time-sorted (first-spy correctness)
+        upd = ", ".join(f"{c} = excluded.{c}" for c in tx_tab.column_names if c != "txid")
+        conn.execute(f"INSERT INTO transactions ({tx_cols}) SELECT {tx_cols} FROM tx_in "
+                     f"ON CONFLICT (txid) DO UPDATE SET {upd} WHERE excluded.timestamp < transactions.timestamp")
         conn.execute(f"INSERT OR IGNORE INTO net_observations ({obs_cols}) SELECT {obs_cols} FROM obs_in")
         conn.close()
 

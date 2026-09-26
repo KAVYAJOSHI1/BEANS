@@ -4,6 +4,7 @@ Nothing in this module reads ground-truth tables (labels_*): features are comput
 network observations only. `tests/test_ml.py` checks that no label column leaks into a feature matrix.
 """
 import math
+from collections import defaultdict
 from dataclasses import dataclass
 
 import networkx as nx
@@ -107,9 +108,13 @@ def tx_features(f: Frames) -> pd.DataFrame:
     X.attrs["peel_chain_id"] = chain_id
 
     # --- round trip: value comes back to one of the input addresses within 3 hops
-    spenders = f.tin.groupby("address")["txid"].apply(list).to_dict()
-    outs = f.tout.groupby("txid")["address"].apply(list).to_dict()
-    ins = f.tin.groupby("txid")["address"].apply(set).to_dict()
+    # plain dict building: groupby().apply(list) over ~1M groups took 85 s on 1M rows, this takes ~1 s
+    spenders, outs, ins = defaultdict(list), defaultdict(list), defaultdict(set)
+    for t, a in zip(f.tin["txid"].values, f.tin["address"].values):
+        spenders[a].append(t)
+        ins[t].add(a)
+    for t, a in zip(f.tout["txid"].values, f.tout["address"].values):
+        outs[t].append(a)
     cyc = {}
     for t in X.index[(X["n_in"].between(1, 2)) & (X["n_out"] <= 2)]:
         targets, frontier, hit = ins.get(t, set()), [t], 0.0
