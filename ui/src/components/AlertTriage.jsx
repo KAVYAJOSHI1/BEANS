@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { Search, Filter, AlertCircle, CheckCircle, ExternalLink, X, ShieldAlert, Sparkles, Network, ArrowRight } from 'lucide-react';
+import { Search, X, Sparkles, ArrowRight } from 'lucide-react';
+import { ACTION_META, ActionBadge, ActionCard, DocModal } from './ActionPanel';
 
 export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, onInspectEntity, onOpenGraph, onOpenTimeline, cases, onAddToCase, onCreateCase }) {
   const [severityFilter, setSeverityFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [statusFilter] = useState('ALL');
+  const [actionFilter, setActionFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [doc, setDoc] = useState(null);
+
+  const actionCounts = alerts.reduce((m, a) => {
+    const k = a.recommended_action?.action;
+    if (k) m[k] = (m[k] || 0) + 1;
+    return m;
+  }, {});
 
   const filteredAlerts = alerts.filter((a) => {
     if (severityFilter !== 'ALL' && a.severity !== severityFilter) return false;
     if (statusFilter !== 'ALL' && a.status !== statusFilter) return false;
+    if (actionFilter !== 'ALL' && a.recommended_action?.action !== actionFilter) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const matchesEntity = a.entity_id.toLowerCase().includes(q);
@@ -66,6 +76,24 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
         </div>
       </div>
 
+      {/* Recommended-action filter */}
+      {Object.keys(actionCounts).length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="font-semibold text-slate-500 mr-1">Recommended action:</span>
+          <button onClick={() => setActionFilter('ALL')}
+            className={`px-2.5 py-1 rounded-lg font-bold border transition-all ${actionFilter === 'ALL' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            All <span className="opacity-70">{alerts.length}</span>
+          </button>
+          {Object.keys(ACTION_META).filter((k) => actionCounts[k]).map((k) => (
+            <button key={k} onClick={() => setActionFilter(actionFilter === k ? 'ALL' : k)}
+              className={`px-2.5 py-1 rounded-lg font-bold border transition-all flex items-center gap-1.5 ${actionFilter === k ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}>
+              <span className={`w-2 h-2 rounded-full ${ACTION_META[k].dot}`} />
+              {ACTION_META[k].short} <span className="opacity-70">{actionCounts[k]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Alert Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -77,6 +105,7 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
                 <th className="py-3 px-4">Threat Typology</th>
                 <th className="py-3 px-4">Risk Score</th>
                 <th className="py-3 px-4">Confidence</th>
+                <th className="py-3 px-4">Recommended Action</th>
                 <th className="py-3 px-4">Primary Diagnostic Trigger</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-right">Actions</th>
@@ -100,13 +129,16 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
                   </td>
                   <td className="py-3 px-4">
                     <span
-                      className={`text-xs px-2.5 py-1 rounded-md font-bold border ${getSeverityBadge(a.severity)}`}
+                      className={`text-xs px-2.5 py-1 rounded-md font-bold border whitespace-nowrap ${getSeverityBadge(a.severity)}`}
                     >
                       {a.risk_score.toFixed(0)} / 100
                     </span>
                   </td>
                   <td className="py-3 px-4 text-xs font-semibold text-slate-600">
                     {(a.calibrated_confidence * 100).toFixed(0)}%
+                  </td>
+                  <td className="py-3 px-4">
+                    {a.recommended_action?.action ? <ActionBadge action={a.recommended_action.action} pulse /> : <span className="text-xs text-slate-400">—</span>}
                   </td>
                   <td className="py-3 px-4 text-xs text-slate-600 max-w-xs truncate">
                     {a.reasons?.[0] || 'High risk correlation'}
@@ -132,7 +164,7 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
 
               {filteredAlerts.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={9} className="py-12 text-center text-slate-400 text-sm">
                     No alerts match the selected filters.
                   </td>
                 </tr>
@@ -175,6 +207,8 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
               <div className="text-2xl font-bold text-slate-900 mt-0.5">{(selectedAlert.calibrated_confidence * 100).toFixed(0)}%</div>
             </div>
           </div>
+
+          <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc} />
 
           {/* Plain-English Reasons (XAI) */}
           <div>
@@ -315,6 +349,8 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
           </div>
         </div>
       )}
+
+      {doc && <DocModal doc={doc} onClose={() => setDoc(null)} />}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw, Moon, Sun } from 'lucide-react';
+import { toggleTheme, useTheme } from '../theme';
 import { PAGE_TITLES } from './Sidebar';
 
 const TXID = /^[0-9a-fA-F]{64}$/;
@@ -9,6 +10,7 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
   const [q, setQ] = useState('');
   const page = PAGE_TITLES[activeTab] || { label: '', group: '' };
   const k = stats?.kpis;
+  const theme = useTheme();
 
   const submit = (e) => {
     e.preventDefault();
@@ -19,7 +21,7 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center gap-6 px-6 sticky top-0 z-40">
+    <header className="h-16 glass border-b border-slate-200 flex items-center gap-6 px-6 sticky top-0 z-40">
       <div className="min-w-0">
         <div className="text-[11px] text-slate-400 uppercase tracking-wider">{page.group}</div>
         <h1 className="text-base font-bold text-slate-900 leading-tight">{page.label}</h1>
@@ -43,6 +45,10 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
             <span><b className="text-rose-600">{k.open_alerts ?? k.total_alerts}</b> open alerts</span>
           </div>
         )}
+        <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label="Toggle dark mode" className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100">
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
         <button onClick={onRefresh} disabled={loading} title="Reload data"
           className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

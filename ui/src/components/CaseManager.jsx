@@ -42,7 +42,7 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
           <h2 className="text-lg font-bold text-slate-900">Cases & Evidence Packs</h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Group flagged entities into a case and export an evidence pack (PDF / JSON / Markdown). Each pack includes the
-            SHA-256 of the source files, an audit trail and a SHA-256 over the evidence itself.
+            SHA-256 of the source files, an audit trail, a SHA-256 over the evidence itself and an RFC 3161 timestamp token over that hash.
           </p>
         </div>
       </div>
@@ -173,6 +173,14 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                   <span>Download (.md)</span>
                 </button>
               </div>
+              {exportResult.timestamp && (
+                <div className="text-[11px] text-slate-600 flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                  {exportResult.timestamp.status === 'stamped'
+                    ? <>RFC 3161 timestamp {exportResult.timestamp.gen_time} · serial {exportResult.timestamp.serial} · {exportResult.timestamp.tsa}</>
+                    : <>Not timestamped: {exportResult.timestamp.reason}</>}
+                </div>
+              )}
               <pre className="text-[11px] font-mono bg-white p-3 rounded-lg border border-slate-200 max-h-60 overflow-y-auto text-slate-700 whitespace-pre-wrap">
                 {exportResult.markdown}
               </pre>

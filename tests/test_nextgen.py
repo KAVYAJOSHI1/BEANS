@@ -211,3 +211,16 @@ def test_known_entities_upload(client):
     assert any(k["entity_name"] == "Test Exchange" and k["in_jurisdiction"] for k in client.get("/api/known-entities").json())
     bad = client.post("/api/known-entities/upload?rescore=false", files={"file": ("k.csv", b"foo\n1\n", "text/csv")})
     assert bad.status_code == 422
+
+
+def test_section94_prefers_indian_exchange():
+    from beans.report import bnss
+    alert = {"alert_id": "A1", "entity_id": "W", "risk_score": 90, "recommended_action": {
+        "action": "IMMEDIATE_FREEZE_DRAFT", "facts": {"vasp": "VASP-OFF"}, "vasp_exposure": [
+            {"vasp": "VASP-OFF", "in_jurisdiction": False, "country": "SC", "deposit_address": "D1", "txid": "t1",
+             "amount_btc": 0.1, "deposit_ts": "2026-09-01 12:00:00", "hops": 1, "minutes_after_receipt": 5, "path": ["t1"]},
+            {"vasp": "VASP-IN", "in_jurisdiction": True, "country": "IN", "deposit_address": "D2", "txid": "t2",
+             "amount_btc": 0.1, "deposit_ts": "2026-09-01 13:00:00", "hops": 2, "minutes_after_receipt": 65, "path": ["t1", "t2"]}]}}
+    assert bnss.build("section94", alert)["vasp"] == "VASP-IN"
+    freeze = bnss.build("freeze", alert)
+    assert freeze["vasp"] == "VASP-OFF" and "Section 112" in freeze["html"]

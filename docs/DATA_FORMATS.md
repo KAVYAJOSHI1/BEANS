@@ -71,6 +71,7 @@ Verified on a renamed-column export with epoch-millisecond times, satoshi amount
 | File | Columns | Used for |
 |---|---|---|
 | `seeds.csv` | `address` (+ `threat_type`/`label`, `incident_name`, `confidence`, `source`) | known illicit wallets → E4 risk propagation |
+| `known_entities.csv` | `address, entity_name` (+ `entity_type` VASP\|MINING_POOL, `country`, `in_jurisdiction`, `source`) | attribution list for the action directives (exchange deposits, likely false positives); never a model feature. Also loadable with `beans known-entities FILE` or the Rules & Integrations page |
 | `labels_address.csv` | `address, typology, entity_id, is_illicit` | **training targets and evaluation only** |
 | `labels_tx.csv` | `txid, tx_class, typology, is_illicit, entity_id` | E3 training targets and evaluation only |
 
@@ -103,3 +104,20 @@ IPs come from real prefixes of the bundled DB-IP databases (`data/intel/ip_pools
 .venv/bin/python -m beans.cli export --stix alerts.json     # STIX 2.1 bundle: wallet + first-relay IP indicators
 .venv/bin/python -m beans.cli watch data/inbox              # monitoring mode: ingest every new file dropped in
 ```
+
+Per alert (API, or the buttons on the alert's action card):
+
+| Endpoint | Output |
+|---|---|
+| `POST /api/alerts/{id}/legal/section94?fmt=json\|html\|pdf` | Section 94 BNSS requisition draft to an exchange operating in India (body: IO fields `fir_no, fir_date, offences, io_name, io_rank, police_station, district_state, reply_days, vasp_address_line`; missing ones stay as blanks) |
+| `POST /api/alerts/{id}/legal/freeze?fmt=…` | freeze / hold request (Section 106 BNSS); offshore exchanges get a Letter of Request (Section 112) note |
+| `GET /api/alerts/{id}/referral?fmt=…` | FIU-IND intelligence referral pack (subject, assessment, money trail, exchange exposure, network evidence) |
+
+Every case pack, legal draft and referral pack carries the SHA-256 of its evidence and an **RFC 3161 timestamp token**
+from a local offline TSA (`data/tsa/`, created on first use; needs the `openssl` binary). Verify with
+`openssl ts -verify -digest <sha256> -in token.tsr -CAfile tsa_ca.pem -untrusted tsa.pem` (certificates at
+`GET /api/tsa/tsa_ca.pem` and `/api/tsa/tsa.pem`), or `POST /api/tsa/verify`.
+
+**SIEM webhooks** (`/api/webhooks`, Rules & Integrations page): formats `json` (Wazuh / custom), `splunk_hec`,
+`elastic` (`_bulk` NDJSON) and `stix` (STIX 2.1 bundle for MISP `/events/upload_stix/2` or OpenCTI). After every
+scoring run, alerts at or above each hook's `min_severity` are sent once per hook (3 attempts, logged in `webhook_log`).

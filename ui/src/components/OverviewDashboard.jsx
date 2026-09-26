@@ -1,5 +1,5 @@
 import React from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './Chart';
 import { ArrowRight, Database, Wallet, Server, Boxes, AlertTriangle, Crosshair, UploadCloud } from 'lucide-react';
 
 const SEV = [

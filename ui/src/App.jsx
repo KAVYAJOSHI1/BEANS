@@ -12,6 +12,7 @@ const Entity360 = lazy(() => import('./components/Entity360'));
 const CaseManager = lazy(() => import('./components/CaseManager'));
 const ModelCard = lazy(() => import('./components/ModelCard'));
 const IngestStudio = lazy(() => import('./components/IngestStudio'));
+const Integrations = lazy(() => import('./components/Integrations'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -153,11 +154,11 @@ export default function App() {
     }
   };
 
-  const handleAddToCase = async (caseId, entityId) => {
+  const handleAddToCase = async (caseId, entityIds) => {
     await fetch(`${API_BASE}/cases/${caseId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ add_entities: [entityId] }),
+      body: JSON.stringify({ add_entities: [].concat(entityIds) }),
     });
     const casesRes = await fetch(`${API_BASE}/cases`).then((r) => r.json()).catch(() => []);
     if (Array.isArray(casesRes)) setCases(casesRes);
@@ -245,9 +246,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
+    <div className="min-h-screen flex">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} counts={counts} />
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="themed flex-1 min-w-0 flex flex-col bg-slate-50 text-slate-900">
       <TopBar
         activeTab={activeTab}
         stats={stats}
@@ -298,6 +299,9 @@ export default function App() {
             onLoadGraph={loadGraph}
             onInspectEntity={inspectEntity}
             onOpenTimeline={openTimeline}
+            cases={cases}
+            onAddEntitiesToCase={handleAddToCase}
+            onCreateCase={handleCreateCase}
           />
           </div>
         )}
@@ -334,6 +338,8 @@ export default function App() {
             lastIngestResult={lastIngestResult}
           />
         )}
+
+        {activeTab === 'integrations' && <Integrations onDataChanged={fetchAllData} />}
         </Suspense>
       </main>
 
