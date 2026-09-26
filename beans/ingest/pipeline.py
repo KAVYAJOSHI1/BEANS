@@ -35,21 +35,30 @@ class ForensicPipeline:
         else:
             raise ValueError(f"Unsupported file extension: {suffix}")
 
-        records: List[CanonicalRecord] = []
+        # stream in chunks: memory stays flat however large the file is
+        from beans.config import settings
+        batch: List[CanonicalRecord] = []
+        n = 0
+        geo_cache: Dict[str, dict] = {}
         for rec in parser.parse(p):
-            geo = self.enricher.enrich(rec.src_ip)  # offline DB-IP country + ASN + infrastructure type
+            geo = geo_cache.get(rec.src_ip)
+            if geo is None:
+                geo = geo_cache[rec.src_ip] = self.enricher.enrich(rec.src_ip)  # offline DB-IP country + ASN + type
             rec.geo_country, rec.geo_city, rec.geo_lat, rec.geo_lon = geo["country"], geo["city"], geo["lat"], geo["lon"]
             rec.asn, rec.asn_name, rec.asn_type = geo["asn"], geo["asn_name"], geo["asn_type"]
-            records.append(rec)
-
-        self.store.insert_records(records)
+            batch.append(rec)
+            n += 1
+            if len(batch) >= settings.INGEST_CHUNK_ROWS:
+                self.store.insert_records(batch)
+                batch = []
+        self.store.insert_records(batch)
         sidecars = self.load_sidecars(p.parent)
-        pipeline_stats = self.execute_ml_pipeline(records)
+        pipeline_stats = self.execute_ml_pipeline()
         return {
             "file": p.name,
-            "records_ingested": len(records),
-            "rows_read": getattr(parser, "total", len(records)),
-            "rows_quarantined": getattr(parser, "total", len(records)) - len(records),
+            "records_ingested": n,
+            "rows_read": getattr(parser, "total", n),
+            "rows_quarantined": getattr(parser, "total", n) - n,
             "sidecars_loaded": sidecars,
             "pipeline_stats": pipeline_stats
         }

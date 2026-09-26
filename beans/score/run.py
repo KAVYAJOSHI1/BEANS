@@ -38,6 +38,11 @@ def _severity(risk: float) -> str:
             else "MEDIUM" if risk >= settings.RISK_MEDIUM_MIN else "LOW")
 
 
+def _peak_gb() -> float:
+    import resource
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024, 2)   # Linux: KiB
+
+
 def run_ml(store) -> dict:
     t0 = time.time()
     conn = store.get_connection()
@@ -56,7 +61,7 @@ def _run(conn, t0) -> dict:
         return {"status": "empty"}
     timings = {}
     X_tx = tx_features(f)
-    timings["tx_features"] = round(time.time() - t0, 2)
+    timings["tx_features"] = round(time.time() - t0, 2); timings["mem_gb_tx_features"] = _peak_gb()
 
     labels_tx = labels_addr = None
     if _table(conn, "labels_tx"):
@@ -71,7 +76,7 @@ def _run(conn, t0) -> dict:
 
     # ---- E3: transaction shape
     probs, e3_rep = e3_peelmix.run(X_tx, labels_tx if labels_tx is not None and len(labels_tx) else None)
-    timings["e3"] = round(time.time() - t0, 2)
+    timings["e3"] = round(time.time() - t0, 2); timings["mem_gb_e3"] = _peak_gb()
 
     # ---- E1: clustering (CoinJoins excluded from CIOH)
     coinjoin = set(probs.index[probs["p_coinjoin"] > 0.5])
@@ -98,7 +103,7 @@ def _run(conn, t0) -> dict:
     # ---- E2: anomaly on behaviour + network (no model outputs)
     behaviour = [c for c in W.columns if c not in ("cluster_id",) and not c.startswith(("max_p_", "cluster_", "gnn_"))]
     W["anomaly"] = e2_anomaly.anomaly(W, behaviour)
-    timings["e2"] = round(time.time() - t0, 2)
+    timings["e2"] = round(time.time() - t0, 2); timings["mem_gb_e2"] = _peak_gb()
 
     # ---- E4: propagation from seeds
     G = e4_propagate.graph(f)
@@ -111,12 +116,12 @@ def _run(conn, t0) -> dict:
     # Not a model input: in A/B tests, cluster-level seed features made the model over-trust cluster membership.
     seed_clusters = set(W.loc[W.index.isin(seeds), "cluster_id"])
     in_seed_cluster = W["cluster_id"].isin(seed_clusters)
-    timings["e4"] = round(time.time() - t0, 2)
+    timings["e4"] = round(time.time() - t0, 2); timings["mem_gb_e4"] = _peak_gb()
 
     # ---- E5: graph neural features (SIGN-style neighbourhood propagation); fusion is the readout
     if settings.E5_GNN:
         W = W.join(e5_gnn.sign_features(G, W))
-        timings["e5"] = round(time.time() - t0, 2)
+        timings["e5"] = round(time.time() - t0, 2); timings["mem_gb_e5"] = _peak_gb()
 
     # ---- E1 embeddings (suggestions only)
     emb = e1_cluster.embedding_suggestions(f, clusters, W)
@@ -161,7 +166,7 @@ def _run(conn, t0) -> dict:
         p, typ, fusion_rep = fuse.predict(Xw, W["cluster_id"])
     fusion_rep["analyst_feedback_used"] = int(len(fb))
     p, typ = p.reindex(Xw.index).fillna(0), typ.reindex(Xw.index).fillna("UNKNOWN")
-    timings["fusion"] = round(time.time() - t0, 2)
+    timings["fusion"] = round(time.time() - t0, 2); timings["mem_gb_fusion"] = _peak_gb()
 
     # ---- alerts: one per cluster (its riskiest wallet), highest risk first
     W["p"], W["typology_pred"] = p, typ
@@ -173,17 +178,18 @@ def _run(conn, t0) -> dict:
     alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map)
     from beans.explain import counterfactual
     counterfactual.compute(alerts, Xw, shap_map, lambda X: fuse.predict(X)[0])
-    timings["counterfactuals"] = round(time.time() - t0, 2)
+    timings["counterfactuals"] = round(time.time() - t0, 2); timings["mem_gb_counterfactuals"] = _peak_gb()
     directives.recommend(alerts, W, f, directives.load_known(conn))
-    timings["actions"] = round(time.time() - t0, 2)
+    timings["actions"] = round(time.time() - t0, 2); timings["mem_gb_actions"] = _peak_gb()
     _write(conn, W, probs, alerts)
     # watchlist: movements of already-watched wallets, then start watching new taint-watch wallets
     from beans.alerting import watch
     known = directives.load_known(conn)
     watch_events = watch.check(conn, f, known)
     auto_watched = watch.auto_watch(conn, alerts)
-    timings["total"] = round(time.time() - t0, 2)
+    timings["total"] = round(time.time() - t0, 2); timings["mem_gb_total"] = _peak_gb()
 
+    timings["peak_memory_gb"] = _peak_gb()
     report = {
         "evaluated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "trained": trained,
         "transactions": int(len(X_tx)), "wallets": int(len(W)), "seeds": len(seeds),
