@@ -2,6 +2,8 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import { loadConfig, useConfig } from './risk';
+import { loadSession, useSession } from './session';
+import Login from './components/Login';
 
 // Tabs are code-split so the first paint doesn't wait on echarts/cytoscape/world-atlas.
 const OverviewDashboard = lazy(() => import('./components/OverviewDashboard'));
@@ -15,6 +17,7 @@ const ModelCard = lazy(() => import('./components/ModelCard'));
 const IngestStudio = lazy(() => import('./components/IngestStudio'));
 const Integrations = lazy(() => import('./components/Integrations'));
 const Watchlist = lazy(() => import('./components/Watchlist'));
+const Approvals = lazy(() => import('./components/Approvals'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -49,17 +52,22 @@ export default function App() {
   const [lastIngestResult, setLastIngestResult] = useState(null);
   const [watchEvents, setWatchEvents] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
 
   // Keep the graph mounted after its first visit so switching tabs doesn't redo the layout.
   const [graphVisited, setGraphVisited] = useState(activeTab === 'graph');
   if (activeTab === 'graph' && !graphVisited) setGraphVisited(true);
 
   const { data_origin: dataOrigin } = useConfig();
+  const session = useSession();
+  const signedIn = session.loaded && (!session.authEnabled || session.user);
+  useEffect(() => { loadSession(); }, []);
   useEffect(() => {
+    if (!signedIn) return undefined;
     fetchAllData();
     const t = setTimeout(preloadGraph, 1500);
     return () => clearTimeout(t);
-  }, []);
+  }, [signedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchAllData = async () => {
     setLoading(true);
@@ -76,6 +84,7 @@ export default function App() {
         getJson('/cases', []).then((res) => { if (Array.isArray(res)) setCases(res); }),
         getJson('/modelcard', null).then((res) => { if (res) setModelCardData(res); }),
         loadWatch(),
+        getJson('/legal-requests?status=PENDING_APPROVAL', []).then((res) => { if (Array.isArray(res)) setPendingApprovals(res.length); }),
       ]);
 
       // Set default entity for 360 inspection if alerts exist
@@ -273,7 +282,11 @@ export default function App() {
     alerts: stats?.kpis?.open_alerts ?? alerts.filter((a) => a.status === 'OPEN').length,
     cases: cases.length,
     movements: watchEvents.filter((e) => e.status === 'OPEN').length,
+    approvals: pendingApprovals,
   };
+
+  if (!session.loaded) return <div className="min-h-screen" />;
+  if (!signedIn) return <Login />;
 
   return (
     <div className="min-h-screen flex">
@@ -378,6 +391,11 @@ export default function App() {
         )}
 
         {activeTab === 'integrations' && <Integrations onDataChanged={fetchAllData} />}
+
+        {activeTab === 'approvals' && (
+          <Approvals onChanged={() => fetch(`${API_BASE}/legal-requests?status=PENDING_APPROVAL`).then((r) => r.json())
+            .then((res) => { if (Array.isArray(res)) setPendingApprovals(res.length); }).catch(() => {})} />
+        )}
         </Suspense>
       </main>
 

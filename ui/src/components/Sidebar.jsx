@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio,
+  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio, Stamp,
 } from 'lucide-react';
 import coffeeBean from '../coffee-bean.svg';
 
@@ -18,6 +18,7 @@ export const NAV_GROUPS = [
   ] },
   { title: 'Report', items: [
     { id: 'cases', label: 'Cases & Evidence', icon: Briefcase, badge: 'cases' },
+    { id: 'approvals', label: 'Legal Approvals', icon: Stamp, badge: 'approvals' },
     { id: 'modelcard', label: 'Model Card', icon: Cpu },
   ] },
   { title: 'Data', items: [

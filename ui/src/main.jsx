@@ -4,6 +4,7 @@ import '@fontsource-variable/inter'
 import '@fontsource-variable/jetbrains-mono'
 import './index.css'
 import './theme.js'
+import './session.js'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

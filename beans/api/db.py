@@ -11,7 +11,8 @@ from typing import Any, Iterable, Optional
 
 from beans.store.duck import DuckStore
 
-JSON_COLUMNS = {"shap_top_features", "engine_scores", "evidence", "details", "recommended_action", "destinations"}
+JSON_COLUMNS = {"shap_top_features", "engine_scores", "evidence", "details", "recommended_action", "destinations",
+                "io", "annex", "timestamp_token"}
 
 _API_DDL = """
 CREATE TABLE IF NOT EXISTS ingest_log (
@@ -88,7 +89,10 @@ def table_exists(name: str) -> bool:
 
 
 def audit(action: str, entity_type: str, entity_id: str, details: Optional[dict] = None,
-          investigator: str = "analyst") -> None:
+          investigator: Optional[str] = None) -> None:
+    if investigator is None:   # the logged-in user ("local" in single-user mode)
+        from beans.api.auth import current_user
+        investigator = current_user()["username"]
     execute(
         "INSERT INTO audit_log (id, action, investigator, entity_type, entity_id, details) "
         "VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM audit_log), ?, ?, ?, ?, ?)",

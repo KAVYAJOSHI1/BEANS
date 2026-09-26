@@ -7,6 +7,8 @@ import logging
 from beans.api import db
 from beans.config import settings
 from beans.api.routes import stats, alerts, entities, graph, timeline, geomap, cases, seeds, ingest, modelcard, actions, webhooks, watchlist
+from beans.api.routes import auth as auth_routes
+from beans.api import auth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -25,6 +27,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.middleware("http")(auth.middleware)   # login + roles once users exist (beans/api/auth.py)
+
 # Include API routers
 app.include_router(stats.router, prefix=settings.API_PREFIX)
 app.include_router(alerts.router, prefix=settings.API_PREFIX)
@@ -39,6 +43,7 @@ app.include_router(modelcard.router, prefix=settings.API_PREFIX)
 app.include_router(actions.router, prefix=settings.API_PREFIX)
 app.include_router(webhooks.router, prefix=settings.API_PREFIX)
 app.include_router(watchlist.router, prefix=settings.API_PREFIX)
+app.include_router(auth_routes.router, prefix=settings.API_PREFIX)
 
 @app.get("/api/health")
 def health_check():

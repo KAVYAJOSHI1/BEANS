@@ -102,6 +102,45 @@ def known_entities(
         console.print(ForensicPipeline(store).execute_ml_pipeline())
 
 
+user_app = typer.Typer(help="Local users (login switches on once the first user exists)")
+app.add_typer(user_app, name="user")
+
+
+@user_app.command("add")
+def user_add(
+    username: str = typer.Argument(...),
+    role: str = typer.Option("ANALYST", "--role", "-r", help="VIEWER | ANALYST | SUPERVISOR | ADMIN"),
+    display_name: str = typer.Option("", "--name", help="Full name shown in the audit trail"),
+    password: str = typer.Option(..., prompt=True, hide_input=True, confirmation_prompt=True,
+                                 help="At least 10 characters (prompted if omitted)"),
+):
+    """Create a user. The first user switches BEANS from single-user mode to login-required."""
+    from beans.api import auth
+    from beans.store.duck import DuckStore
+    conn = DuckStore().get_connection()
+    try:
+        first = not auth.auth_enabled(conn)
+        auth.create_user(conn, username, password, role, display_name)
+    except ValueError as e:
+        console.print(f"[bold red]{e}[/bold red]")
+        raise typer.Exit(code=1)
+    finally:
+        conn.close()
+    console.print(f"[bold green]User {username} ({role.upper()}) created.[/bold green]")
+    if first:
+        console.print("[yellow]Login is now required for the dashboard and API.[/yellow]")
+
+
+@user_app.command("list")
+def user_list():
+    """List users."""
+    from beans.store.duck import DuckStore
+    conn = DuckStore().get_connection()
+    for u, name, role, active in conn.execute("SELECT username, display_name, role, active FROM users ORDER BY created_at").fetchall():
+        console.print(f"{u:20s} {role:11s} {'active' if active else 'disabled':9s} {name}")
+    conn.close()
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host address"),

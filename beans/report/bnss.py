@@ -142,3 +142,23 @@ def _html(kind: str, a: Dict[str, Any], io: Dict[str, Any], digest: str, ts: Dic
     <div class=seal>Annex SHA-256: <span class=mono>{digest}</span><br>{stamp_line}<br>
     Generated {_esc(a['generated_at'])}, offline. Recompute the hash of the annex JSON to verify integrity.</div>
     </body></html>"""
+
+
+def with_status(doc_html: str, req: dict, auth: bool = True) -> str:
+    """Replace the draft banner with the request's approval state (the evidence hash is unaffected)."""
+    st = req.get("status")
+    if st == "APPROVED":
+        who = f"{req.get('decided_by')} on {str(req.get('decided_at'))[:19]} UTC"
+        extra = "" if auth else " (single-user mode: no second-person check)"
+        banner = (f'<div class=draft style="border-color:#15803d;color:#15803d">APPROVED FOR ISSUE by supervisor {html.escape(who)}'
+                  f'{extra}. Request #{req["id"]}, drafted by {html.escape(str(req.get("created_by")))}. '
+                  "The Investigating Officer must still sign before issue.</div>")
+    elif st == "REJECTED":
+        banner = (f'<div class=draft>REJECTED by {html.escape(str(req.get("decided_by")))}: '
+                  f'{html.escape(str(req.get("decision_comment") or "no comment"))}. Not for issue.</div>')
+    else:
+        banner = (f'<div class=draft style="border-color:#c2410c;color:#c2410c">PENDING SUPERVISOR APPROVAL (request #{req["id"]}, '
+                  f'drafted by {html.escape(str(req.get("created_by")))}). Not for issue.</div>')
+    start = doc_html.index("<div class=draft>")
+    end = doc_html.index("</div>", start) + len("</div>")
+    return doc_html[:start] + banner + doc_html[end:]

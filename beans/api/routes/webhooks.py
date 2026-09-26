@@ -1,10 +1,10 @@
 """SIEM / threat-intel webhook configuration and delivery log."""
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from beans.alerting import webhooks as wh
-from beans.api import db
+from beans.api import auth, db
 from beans.store.duck import DuckStore
 
 router = APIRouter(prefix="/webhooks", tags=["SIEM Webhooks"])
@@ -30,7 +30,7 @@ def list_hooks() -> List[Dict[str, Any]]:
     return [_public(h) for h in db.query("SELECT * FROM webhooks ORDER BY id")]
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def add_hook(payload: Dict[str, Any]):
     url = str(payload.get("url") or "").strip()
     fmt = str(payload.get("fmt") or "json").lower()
@@ -49,7 +49,7 @@ def add_hook(payload: Dict[str, Any]):
     return _public(_get(new_id))
 
 
-@router.patch("/{hook_id}")
+@router.patch("/{hook_id}", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def update_hook(hook_id: int, payload: Dict[str, Any]):
     _get(hook_id)
     if "enabled" in payload:
@@ -63,7 +63,7 @@ def update_hook(hook_id: int, payload: Dict[str, Any]):
     return _public(_get(hook_id))
 
 
-@router.delete("/{hook_id}")
+@router.delete("/{hook_id}", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def delete_hook(hook_id: int):
     _get(hook_id)
     db.execute("DELETE FROM webhooks WHERE id = ?", [hook_id])
@@ -71,7 +71,7 @@ def delete_hook(hook_id: int):
     return {"status": "success", "id": hook_id}
 
 
-@router.post("/{hook_id}/test")
+@router.post("/{hook_id}/test", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def test_hook(hook_id: int):
     res = wh.send_test(_get(hook_id))
     db.execute("INSERT INTO webhook_log (webhook_id, alert_id, status, http_status, attempts, error) VALUES (?, ?, ?, ?, ?, ?)",
@@ -79,7 +79,7 @@ def test_hook(hook_id: int):
     return res
 
 
-@router.post("/dispatch")
+@router.post("/dispatch", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def dispatch_now():
     """Send every undelivered qualifying alert now (normally this runs after each scoring run)."""
     return {"results": wh.dispatch_pending(DuckStore())}

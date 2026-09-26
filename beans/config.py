@@ -43,6 +43,9 @@ class BeansSettings(BaseSettings):
     ACTION_SEED_LINK_HOPS: int = 4          # taint watch: "linked to a seed" = taint > 0 or within this many hops
     ACTION_MIN_PEEL_CHAIN: int = 3          # FIU referral: a peel chain this long counts as layering
 
+    # Users & sessions (beans/api/auth.py)
+    SESSION_HOURS: float = 12.0
+
     # Watchlist (beans/alerting/watch.py)
     WATCH_AUTO_TAINT_MONITOR: bool = True   # wallets with a taint-watch directive are watched automatically
     

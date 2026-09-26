@@ -195,6 +195,28 @@ class DuckStore:
             status VARCHAR DEFAULT 'OPEN',   -- OPEN | ACKNOWLEDGED
             detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- users, sessions and legal-draft approvals (beans/api/auth.py)
+        CREATE TABLE IF NOT EXISTS users (
+            username VARCHAR PRIMARY KEY,
+            display_name VARCHAR,
+            role VARCHAR,                -- VIEWER | ANALYST | SUPERVISOR | ADMIN
+            password_hash VARCHAR,
+            active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            token_hash VARCHAR PRIMARY KEY, username VARCHAR, expires_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS legal_requests (
+            id INTEGER PRIMARY KEY,
+            alert_id VARCHAR, entity_id VARCHAR, kind VARCHAR, vasp VARCHAR,
+            io JSON, annex JSON, evidence_sha256 VARCHAR, timestamp_token JSON, html VARCHAR,
+            status VARCHAR DEFAULT 'PENDING_APPROVAL',   -- PENDING_APPROVAL | APPROVED | REJECTED
+            created_by VARCHAR, decided_by VARCHAR, decision_comment VARCHAR, decided_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """)
         # migrations for databases created by earlier versions
         conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")

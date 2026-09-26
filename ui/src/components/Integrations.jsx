@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Webhook, Send, Trash2, Plus, Building2, UploadCloud, Stamp, Download, ListChecks, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Webhook, Send, Trash2, Plus, Building2, UploadCloud, Stamp, Download, ListChecks, RefreshCw, CheckCircle2, XCircle, Users as UsersIcon } from 'lucide-react';
 import { ActionBadge } from './ActionPanel';
+import { hasRole, useSession } from '../session';
 
 const API = '/api';
 const FORMATS = [
@@ -249,9 +250,64 @@ function Rulebook() {
   );
 }
 
+function Users() {
+  const [rows, setRows] = useState([]);
+  const [form, setForm] = useState({ username: '', display_name: '', role: 'ANALYST', password: '' });
+  const [msg, setMsg] = useState(null);
+  const refresh = async () => setRows((await getJson('/users')) || []);
+  useEffect(() => { refresh(); }, []);
+  const call = async (path, opts, ok) => {
+    const r = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    const body = await r.json().catch(() => ({}));
+    setMsg(r.ok ? { ok: true, text: ok } : { ok: false, text: body.detail });
+    refresh();
+    return r.ok;
+  };
+  const add = async (e) => {
+    e.preventDefault();
+    if (await call('/users', { method: 'POST', body: JSON.stringify(form) }, `Created ${form.username}`)) {
+      setForm({ username: '', display_name: '', role: 'ANALYST', password: '' });
+    }
+  };
+  return (
+    <Section icon={UsersIcon} title="Users & roles"
+      subtitle="VIEWER reads only · ANALYST triages, builds cases and drafts legal requests · SUPERVISOR approves drafts (not their own) and configures webhooks and attribution · ADMIN manages users. Every action is audited under the user's name.">
+      {msg && <div className={`text-xs px-3 py-2 rounded-lg border ${msg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{msg.text}</div>}
+      <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 text-xs">
+        {rows.map((u) => (
+          <div key={u.username} className="p-2 flex items-center gap-3">
+            <span className="font-bold text-slate-900 w-32 truncate">{u.username}</span>
+            <span className="text-slate-500 flex-1 truncate">{u.display_name}</span>
+            <select value={u.role} className="border border-slate-200 bg-white rounded px-1 py-0.5"
+              onChange={(e) => call(`/users/${u.username}`, { method: 'PATCH', body: JSON.stringify({ role: e.target.value }) }, 'Role updated')}>
+              {['VIEWER', 'ANALYST', 'SUPERVISOR', 'ADMIN'].map((r) => <option key={r}>{r}</option>)}
+            </select>
+            <label className="flex items-center gap-1 text-slate-600">
+              <input type="checkbox" checked={u.active}
+                onChange={(e) => call(`/users/${u.username}`, { method: 'PATCH', body: JSON.stringify({ active: e.target.checked }) }, 'Updated')} /> active
+            </label>
+          </div>
+        ))}
+      </div>
+      <form onSubmit={add} className="grid grid-cols-1 md:grid-cols-5 gap-2 items-end text-xs">
+        <label><span className="font-semibold text-slate-600">Username</span><input className={input} required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label>
+        <label><span className="font-semibold text-slate-600">Full name</span><input className={input} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></label>
+        <label><span className="font-semibold text-slate-600">Role</span>
+          <select className={input} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+            {['VIEWER', 'ANALYST', 'SUPERVISOR', 'ADMIN'].map((r) => <option key={r}>{r}</option>)}
+          </select></label>
+        <label><span className="font-semibold text-slate-600">Password (≥ 10 chars)</span><input className={input} type="password" required minLength={10} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
+        <button className="px-3 py-1.5 rounded-md bg-blue-600 text-white font-bold flex items-center justify-center gap-1"><Plus className="w-3.5 h-3.5" /> Add user</button>
+      </form>
+    </Section>
+  );
+}
+
 export default function Integrations({ onDataChanged }) {
+  const { user, authEnabled } = useSession();
   return (
     <div className="space-y-6">
+      {authEnabled && hasRole(user, 'ADMIN') && <Users />}
       <Rulebook />
       <Webhooks />
       <Attribution onChanged={onDataChanged} />

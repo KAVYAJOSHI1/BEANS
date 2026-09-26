@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from beans.api import db
+from beans.api.auth import current_user
 from beans.api.routes.alerts import alert_out
 from beans.report.pdf_export import CaseReportGenerator
 
@@ -39,7 +40,7 @@ def create_case(payload: Dict[str, Any]):
         "INSERT INTO case_files (id, case_name, incident_type, suspect_entities, linked_txids, notes, investigator, priority) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         [new_id, name, payload.get("incident_type", "UNKNOWN"), suspects, payload.get("linked_txids") or [],
-         payload.get("notes", ""), payload.get("investigator", "analyst"), payload.get("priority", "HIGH")])
+         payload.get("notes", ""), payload.get("investigator") or current_user()["username"], payload.get("priority", "HIGH")])
     db.audit("CASE_CREATE", "CASE", str(new_id), {"case_name": name, "suspects": suspects})
     return {"status": "success", "case_id": new_id, "case_name": name}
 

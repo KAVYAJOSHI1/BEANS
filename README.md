@@ -34,8 +34,19 @@ make demo           # synthetic data → ingest → 4 ML engines → alerts → 
 .venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
 .venv/bin/python -m beans.cli ingest data/synth/demo/transactions.xml      # ingest + enrich + graph + ML + alerts
 .venv/bin/python -m beans.cli known-entities exchanges.csv                 # exchange / mining-pool attribution for the action rules
+.venv/bin/python -m beans.cli user add alice --role supervisor             # first user switches login on (roles below)
 .venv/bin/python -m beans.cli serve --port 8000                            # API (/api, docs at /docs) + dashboard
 ```
+
+## Users and approvals
+
+With no users, BEANS runs in single-user mode (no login), which is what `make demo` uses. Creating the first user with
+`beans user add NAME --role admin` switches login on for the dashboard and API. Roles: **VIEWER** (read only),
+**ANALYST** (triage, cases, watchlist, legal drafts), **SUPERVISOR** (approves drafts, webhooks, attribution list),
+**ADMIN** (users). Section 94 and freeze drafts are filed as *pending* and must be approved by a supervisor other than
+the drafter (four-eyes) before an "approved for issue" copy exists. Every action is written to the audit trail under
+the user's name. Passwords: salted PBKDF2-SHA256; sessions: HttpOnly cookie, 12 h; 5 wrong passwords lock an account
+for 5 minutes.
 
 ## Evaluation
 
