@@ -84,6 +84,9 @@ class CaseReportGenerator:
             if f["shap_top_features"]:
                 md += ["", "**Top feature contributions:**"]
                 md += [f"- `{s.get('feature')}` = {s.get('value')} → impact {s.get('impact')}" for s in f["shap_top_features"]]
+            cf = (f.get("evidence") or {}).get("counterfactual")
+            if cf:
+                md += ["", f"**What would change the verdict:** {cf['summary']}"]
             md += ["", "**Evidence:**",
                    f"- Transaction: `{e.get('txid', 'n/a')}`",
                    f"- First-relaying IP: `{e.get('first_spy_ip') or 'unknown'}` (confidence {e.get('first_spy_confidence', 'n/a')})",
@@ -117,6 +120,7 @@ class CaseReportGenerator:
             <p><b>Recommended action:</b> {esc((f.get('recommended_action') or {}).get('title') or 'n/a')}
                <i>({esc((f.get('recommended_action') or {}).get('rule') or 'no rule')})</i></p>
             <b>Why flagged</b><ul>{reasons}</ul>
+            {f'<p><b>What would change the verdict:</b> {esc(e["counterfactual"]["summary"])}</p>' if e.get("counterfactual") else ''}
             {f'<b>Top feature contributions</b><table><tr><th>Feature</th><th>Value</th><th>Impact</th></tr>{shap}</table>' if shap else ''}
             <b>Evidence</b><ul><li>Transaction <span class=mono>{esc(e.get('txid', 'n/a'))}</span></li>
             <li>First-relaying IP <span class=mono>{esc(e.get('first_spy_ip') or 'unknown')}</span>

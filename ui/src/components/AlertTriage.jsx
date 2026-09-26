@@ -211,6 +211,38 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
           <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc}
             isWatched={watched.includes(selectedAlert.entity_id)} onWatch={onWatch} />
 
+          {/* Counterfactual: what would change the verdict */}
+          {selectedAlert.evidence?.counterfactual && (() => {
+            const cf = selectedAlert.evidence.counterfactual;
+            const single = cf.minimal_change?.factors?.length === 1;
+            return (
+              <div className="rounded-xl border border-slate-200 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">What would change the verdict</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${single ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                    {single ? 'single-signal alert' : 'corroborated'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-700">{cf.summary}</p>
+                <div className="space-y-1.5">
+                  {cf.single_factor.map((f) => (
+                    <div key={f.factor} className="text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-600">without {f.factor}</span>
+                        <span className="font-mono text-slate-800">{cf.risk_before.toFixed(0)} → <b className={f.risk_after < cf.threshold ? 'text-emerald-600' : 'text-rose-600'}>{f.risk_after.toFixed(0)}</b></span>
+                      </div>
+                      <div className="h-1.5 bg-slate-100 rounded mt-0.5 relative">
+                        <div className={`h-1.5 rounded ${f.risk_after < cf.threshold ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${f.risk_after}%` }} />
+                        <div className="absolute top-[-2px] h-2.5 w-px bg-slate-500" style={{ left: `${cf.threshold}%` }} title={`alert threshold ${cf.threshold}`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-400">"Without" = set to a typical wallet ({cf.typical_means}); line = HIGH threshold {cf.threshold}.</p>
+              </div>
+            );
+          })()}
+
           {/* Plain-English Reasons (XAI) */}
           <div>
             <div className="flex items-center space-x-2 text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">

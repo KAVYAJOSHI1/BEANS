@@ -26,7 +26,8 @@ def build(alert: Dict[str, Any], wallet: Dict[str, Any], ips: List[Dict[str, Any
         "assessment": {"alert_id": alert["alert_id"], "typology": (alert.get("alert_type") or "").replace("_PATTERN", ""),
                        "risk_score": alert.get("risk_score"), "calibrated_confidence": alert.get("calibrated_confidence"),
                        "severity": alert.get("severity"), "reasons": alert.get("reasons") or [],
-                       "shap_top_features": alert.get("shap_top_features") or [], "engine_scores": alert.get("engine_scores") or {}},
+                       "shap_top_features": alert.get("shap_top_features") or [], "engine_scores": alert.get("engine_scores") or {},
+                       "counterfactual": ev.get("counterfactual")},
         "directive": {k: ra.get(k) for k in ("action", "title", "rule", "legal_basis", "facts", "also_matched")},
         "money_trail": {"key_transaction": ev.get("txid"), "top_transactions": ev.get("top_txids") or [],
                         "path_to_seed": ev.get("path_to_seed") or [], "peel_chain": ev.get("peel_chain") or []},
@@ -70,7 +71,8 @@ def _html(d: Dict[str, Any], digest: str, ts: Dict[str, Any]) -> str:
         ("Received / sent (BTC)", f"{e(s['total_received_btc'])} / {e(s['total_sent_btc'])}"), ("Balance (BTC)", e(s['balance_btc'])),
         ("Transactions", e(s['transaction_count']))])}
     <h2>2. Assessment</h2>{kv([("Risk / severity", f"{e(a['risk_score'])}/100 · {e(a['severity'])}"),
-        ("Confidence", e(a['calibrated_confidence'])), ("Why flagged", "<ul>" + "".join(f"<li>{e(r)}</li>" for r in a['reasons']) + "</ul>")])}
+        ("Confidence", e(a['calibrated_confidence'])), ("Why flagged", "<ul>" + "".join(f"<li>{e(r)}</li>" for r in a['reasons']) + "</ul>"),
+        ("What would change the verdict", e((a.get('counterfactual') or {}).get('summary', 'not computed')))])}
     <h2>3. Recommended action</h2>{kv([("Directive", e(dr.get('title'))), ("Rule", e(dr.get('rule'))), ("Legal basis", e(dr.get('legal_basis'))),
         ("Also matched", e(', '.join(dr.get('also_matched') or []) or 'none'))])}
     <h2>4. Money trail</h2>{kv([("Key transaction", f"<span class=mono>{e(m['key_transaction'])}</span>"),

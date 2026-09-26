@@ -171,6 +171,9 @@ def _run(conn, t0) -> dict:
     if not global_imp and fuse.final_model() is not None:
         _, global_imp = explain(fuse.final_model(), Xw.sample(min(500, len(Xw)), random_state=1))
     alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map)
+    from beans.explain import counterfactual
+    counterfactual.compute(alerts, Xw, shap_map, lambda X: fuse.predict(X)[0])
+    timings["counterfactuals"] = round(time.time() - t0, 2)
     directives.recommend(alerts, W, f, directives.load_known(conn))
     timings["actions"] = round(time.time() - t0, 2)
     _write(conn, W, probs, alerts)
