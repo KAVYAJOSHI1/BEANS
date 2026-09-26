@@ -1,0 +1,184 @@
+{
+  "dataset": {
+    "transactions": 203769,
+    "edges": 234355,
+    "illicit": 4545,
+    "licit": 42019,
+    "unknown": 157205,
+    "time_steps": 49
+  },
+  "split": {
+    "train_steps": "1-34",
+    "test_steps": "35-49",
+    "calibration_steps": "31-34",
+    "train_labelled": 29894,
+    "test_labelled": 16670,
+    "test_illicit": 1083
+  },
+  "detection": {
+    "BEANS LightGBM + calibration (LF)": {
+      "precision": 0.901,
+      "recall": 0.6722,
+      "f1": 0.77,
+      "pr_auc": 0.7522,
+      "roc_auc": 0.8854,
+      "ece": 0.0216
+    },
+    "BEANS LightGBM + calibration (AF)": {
+      "precision": 0.9206,
+      "recall": 0.7064,
+      "f1": 0.7994,
+      "pr_auc": 0.7595,
+      "roc_auc": 0.8877,
+      "ece": 0.0175
+    },
+    "BEANS LightGBM + calibration (AF + graph)": {
+      "precision": 0.9093,
+      "recall": 0.7128,
+      "f1": 0.7992,
+      "pr_auc": 0.7605,
+      "roc_auc": 0.8823,
+      "ece": 0.02
+    },
+    "Random forest (LF), re-run here": {
+      "precision": 0.8538,
+      "recall": 0.7175,
+      "f1": 0.7797,
+      "pr_auc": 0.7724,
+      "roc_auc": 0.8904
+    },
+    "Random forest (AF), re-run here": {
+      "precision": 0.8909,
+      "recall": 0.7239,
+      "f1": 0.7988,
+      "pr_auc": 0.7748,
+      "roc_auc": 0.8906
+    }
+  },
+  "published_weber_2019": {
+    "Logistic regression (AF)": {
+      "precision": 0.404,
+      "recall": 0.593,
+      "f1": 0.481
+    },
+    "Random forest (LF)": {
+      "precision": 0.803,
+      "recall": 0.611,
+      "f1": 0.694
+    },
+    "Random forest (AF)": {
+      "precision": 0.956,
+      "recall": 0.67,
+      "f1": 0.788
+    },
+    "Random forest (AF + GCN embeddings)": {
+      "precision": 0.971,
+      "recall": 0.675,
+      "f1": 0.796
+    },
+    "GCN": {
+      "precision": 0.812,
+      "recall": 0.512,
+      "f1": 0.628
+    },
+    "Skip-GCN": {
+      "precision": 0.812,
+      "recall": 0.623,
+      "f1": 0.705
+    }
+  },
+  "per_test_step_f1": [
+    {
+      "time_step": 35,
+      "illicit": 182,
+      "f1": 0.9638
+    },
+    {
+      "time_step": 36,
+      "illicit": 33,
+      "f1": 0.8767
+    },
+    {
+      "time_step": 37,
+      "illicit": 40,
+      "f1": 0.7463
+    },
+    {
+      "time_step": 38,
+      "illicit": 111,
+      "f1": 0.9159
+    },
+    {
+      "time_step": 39,
+      "illicit": 81,
+      "f1": 0.9067
+    },
+    {
+      "time_step": 40,
+      "illicit": 112,
+      "f1": 0.7619
+    },
+    {
+      "time_step": 41,
+      "illicit": 116,
+      "f1": 0.952
+    },
+    {
+      "time_step": 42,
+      "illicit": 239,
+      "f1": 0.8578
+    },
+    {
+      "time_step": 43,
+      "illicit": 24,
+      "f1": 0.0
+    },
+    {
+      "time_step": 44,
+      "illicit": 24,
+      "f1": 0.1143
+    },
+    {
+      "time_step": 45,
+      "illicit": 5,
+      "f1": 0.0
+    },
+    {
+      "time_step": 46,
+      "illicit": 2,
+      "f1": 0.2
+    },
+    {
+      "time_step": 47,
+      "illicit": 22,
+      "f1": 0.0
+    },
+    {
+      "time_step": 48,
+      "illicit": 36,
+      "f1": 0.0526
+    },
+    {
+      "time_step": 49,
+      "illicit": 56,
+      "f1": 0.0317
+    }
+  ],
+  "propagation": {
+    "seed_share": 0.3,
+    "hidden_illicit": 755,
+    "hidden_licit": 14877,
+    "hidden_illicit_within_2_hops_of_a_seed": 0.4993,
+    "licit_within_2_hops_of_a_seed": 0.0522,
+    "pr_auc_ppr_only": 0.1972,
+    "pr_auc_model_only": 0.7396,
+    "pr_auc_model_plus_seeds": 0.8225,
+    "base_rate": 0.0483
+  },
+  "seconds": 30.3,
+  "notes": [
+    "Elliptic features are anonymised: no addresses, amounts or IPs, so this validates the modelling approach, not BEANS's ingest / clustering / network layer.",
+    "Published numbers are quoted from Weber et al. 2019 (arXiv:1908.02591), Table 1.",
+    "Time steps after 43 follow the closure of a large dark market; every published model degrades there."
+  ]
+}

@@ -102,6 +102,27 @@ def known_entities(
         console.print(ForensicPipeline(store).execute_ml_pipeline())
 
 
+@app.command("validate-elliptic")
+def validate_elliptic(
+    data: str = typer.Option(None, "--data", help="Folder with the Elliptic CSVs (default data/external/elliptic)"),
+    download: bool = typer.Option(False, "--download", help="Fetch the dataset first (needs internet once; checksummed)"),
+):
+    """External validation on the real Elliptic Bitcoin dataset (writes models/elliptic_report.json)."""
+    from beans.validate import elliptic
+    folder = Path(data) if data else elliptic.DEFAULT_DIR
+    if download:
+        elliptic.download(folder)
+    if not (folder / "elliptic_txs_features.csv").exists():
+        console.print(f"[bold red]No Elliptic data in {folder}. Run with --download (needs internet once).[/bold red]")
+        raise typer.Exit(code=1)
+    r = elliptic.run(folder)
+    for name, m in r["detection"].items():
+        console.print(f"{name:45s} P {m['precision']:.3f}  R {m['recall']:.3f}  F1 {m['f1']:.3f}  PR-AUC {m['pr_auc']:.3f}")
+    console.print(f"Published (Weber et al. 2019) random forest AF: F1 0.788 · GCN: F1 0.628")
+    console.print(f"Seeds (30 %): PR-AUC {r['propagation']['pr_auc_model_only']} → {r['propagation']['pr_auc_model_plus_seeds']}")
+    console.print(f"Report: {elliptic.REPORT}")
+
+
 user_app = typer.Typer(help="Local users (login switches on once the first user exists)")
 app.add_typer(user_app, name="user")
 
