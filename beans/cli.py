@@ -106,6 +106,7 @@ def known_entities(
 def validate_elliptic(
     data: str = typer.Option(None, "--data", help="Folder with the Elliptic CSVs (default data/external/elliptic)"),
     download: bool = typer.Option(False, "--download", help="Fetch the dataset first (needs internet once; checksummed)"),
+    doc: str = typer.Option(None, "--doc", help="Also write the Markdown write-up here (e.g. docs/VALIDATION_ELLIPTIC.md)"),
 ):
     """External validation on the real Elliptic Bitcoin dataset (writes models/elliptic_report.json)."""
     from beans.validate import elliptic
@@ -121,6 +122,9 @@ def validate_elliptic(
     console.print(f"Published (Weber et al. 2019) random forest AF: F1 0.788 · GCN: F1 0.628")
     console.print(f"Seeds (30 %): PR-AUC {r['propagation']['pr_auc_model_only']} → {r['propagation']['pr_auc_model_plus_seeds']}")
     console.print(f"Report: {elliptic.REPORT}")
+    if doc:
+        Path(doc).write_text(elliptic.markdown(r))
+        console.print(f"Write-up: {doc}")
 
 
 user_app = typer.Typer(help="Local users (login switches on once the first user exists)")

@@ -4,8 +4,9 @@ Elliptic has 203,769 transactions (4,545 illicit, 42,019 licit, the rest unknown
 49 time steps. Its 166 features are anonymised: no addresses, amounts or IPs. BEANS's ingest pipeline therefore
 cannot run on it; what can be validated on real data is the *modelling approach*:
 
-1. Detection: BEANS's calibrated LightGBM recipe (beans/score/fuse.py) on local features (LF), all features (AF) and
-   AF + graph features computed by us (in/out degree, PageRank, neighbour degree), on the standard temporal split
+1. Detection: BEANS's calibrated LightGBM recipe (beans/score/fuse.py) on local features (LF), all features (AF),
+   AF + simple graph features (degree, PageRank) and LF / AF + E5 GNN features (SIGN-style aggregation of the local
+   features over 1-2 hops, beans/engines/e5_gnn.py), on the standard temporal split
    (train on time steps 1-34, test on 35-49). The paper's random-forest baseline is re-run in the same code so the
    comparison is like for like, and the published numbers are listed next to it.
 2. Seed propagation (the E4 idea): in each test time step, 30 % of the illicit transactions are revealed as seeds;
@@ -134,6 +135,15 @@ def run(folder: Path = DEFAULT_DIR, seed: int = 42) -> dict:
     }
     X_all = feats.join(Gf)
     feature_sets["AF + graph"] = feature_sets["AF"] + list(Gf.columns)
+    # E5: the same SIGN-style GNN aggregation BEANS uses on wallets, over the local features
+    from beans.engines import e5_gnn
+    G = nx.DiGraph()
+    G.add_nodes_from(feats.index)
+    G.add_edges_from(edges[["txId1", "txId2"]].itertuples(index=False, name=None))
+    gnn = e5_gnn.sign_features(G, feats, cols=feature_sets["LF"])
+    X_all = X_all.join(gnn)
+    feature_sets["LF + GNN (E5)"] = feature_sets["LF"] + list(gnn.columns)
+    feature_sets["AF + GNN (E5)"] = feature_sets["AF"] + list(gnn.columns)
 
     results, test_scores = {}, {}
     for name, cols in feature_sets.items():
@@ -147,7 +157,7 @@ def run(folder: Path = DEFAULT_DIR, seed: int = 42) -> dict:
         rf = RandomForestClassifier(n_estimators=50, max_features=50, n_jobs=-1, random_state=seed).fit(X[tr], yl[tr])
         results[f"Random forest ({name}), re-run here"] = _metrics(yl[te], rf.predict_proba(X[te])[:, 1])
 
-    best = "AF + graph"
+    best = "AF"   # the best detector on this data; E5 adds nothing here (AF already holds neighbourhood aggregates)
     p_best = test_scores[best]
     per_step = []
     for s in sorted(set(steps[te])):
@@ -211,3 +221,84 @@ def _propagation(feats, lab, edges, model_p: dict, seed: int) -> dict:
             "licit_within_2_hops_of_a_seed": round(float(lic["within_2_hops"].mean()), 4),
             "pr_auc_ppr_only": auc("ppr_pct"), "pr_auc_model_only": auc("model"), "pr_auc_model_plus_seeds": auc("combined"),
             "base_rate": round(float(d["y"].mean()), 4)}
+
+
+def markdown(r: dict) -> str:
+    """docs/VALIDATION_ELLIPTIC.md, generated from the report so the numbers can never drift from it."""
+    d, s, det, pub, prop = r["dataset"], r["split"], r["detection"], r["published_weber_2019"], r["propagation"]
+    rows = "\n".join(f"| {k} | {v['precision']:.3f} | {v['recall']:.3f} | **{v['f1']:.3f}** | {v['pr_auc']:.3f} | "
+                     f"{v.get('ece', '—')} |" for k, v in det.items())
+    prow = "\n".join(f"| {k} | {v['precision']:.3f} | {v['recall']:.3f} | {v['f1']:.3f} |" for k, v in pub.items())
+    steps = " · ".join(f"{x['time_step']}: {x['f1']:.2f}" for x in r["per_test_step_f1"])
+    af, rf = det["BEANS LightGBM + calibration (AF)"], det["Random forest (AF), re-run here"]
+    gnn = det.get("BEANS LightGBM + calibration (AF + GNN (E5))", {})
+    return f"""# External validation: Elliptic (real Bitcoin transactions)
+
+Reproduce: `beans validate-elliptic --download --doc docs/VALIDATION_ELLIPTIC.md` (needs internet once; the files are
+checksummed and never committed; the dataset has its own licence). About 1 minute. This page is generated from
+`models/elliptic_report.json`, which the Model Card also shows.
+
+## What this does and does not validate
+
+The Elliptic dataset (Weber et al. 2019) has {d['transactions']:,} real Bitcoin transactions, {d['edges']:,} payment-flow
+edges and {d['time_steps']} time steps: {d['illicit']:,} labelled illicit, {d['licit']:,} licit, the rest unknown. Its 166
+features are **anonymised: no addresses, amounts or IP addresses**. So it cannot exercise BEANS's ingest, clustering (E1),
+network layer or action rules. It does test, on real data, the ideas those parts rely on:
+
+1. **the detector recipe**: calibrated LightGBM (`beans/score/fuse.py`) and the E5 GNN features (`beans/engines/e5_gnn.py`)
+2. **seed propagation** (E4): does knowing some illicit transactions help find the others?
+
+## 1. Detection (temporal split: train on steps {s['train_steps']}, test on {s['test_steps']})
+
+{s['train_labelled']:,} labelled training transactions, {s['test_labelled']:,} test ({s['test_illicit']:,} illicit). Calibration on steps
+{s['calibration_steps']} (held out from fitting). Threshold 0.5. LF = the 93 local features; AF = all 165; graph = degree
+and PageRank computed by us; GNN (E5) = SIGN-style 1-2 hop aggregation of the local features.
+
+| Model | Precision | Recall | F1 (illicit) | PR-AUC | ECE |
+|---|---|---|---|---|---|
+{rows}
+
+Published on the same split (Weber et al. 2019, Table 1):
+
+| Model | Precision | Recall | F1 |
+|---|---|---|---|
+{prow}
+
+**Reading.** BEANS's recipe reaches illicit F1 {af['f1']:.3f}, equal to the strongest published baseline (random forest
+0.788; our re-run {rf['f1']:.3f}) and well above the published graph neural networks (GCN 0.628, Skip-GCN 0.705). It does not
+beat the random forest. The E5 GNN features do **not** help here (F1 {gnn.get('f1', float('nan')):.3f}): Elliptic's 72
+"aggregated" features already are neighbourhood aggregates, so a second aggregation only adds noise. On the synthetic
+wallet graph, where no such features exist, E5 is a clear gain (see the technical write-up). Calibration holds on real
+data (ECE {af['ece']}).
+
+F1 per test time step (all features): {steps}
+
+From step 43 on every model collapses: a large dark market closed and the illicit behaviour changed. Weber et al. report
+the same for all their models. A model trained on the past does not catch a new scheme, which is why BEANS pairs the
+detector with analyst-feedback retraining and seed propagation.
+
+## 2. Seed propagation on real data
+
+In each test time step, {int(prop['seed_share'] * 100)} % of the illicit transactions are revealed as seeds (as in the synthetic
+benchmark); personalised PageRank from them scores the remaining {prop['hidden_illicit']:,} hidden illicit and
+{prop['hidden_licit']:,} licit transactions.
+
+| | |
+|---|---|
+| Hidden illicit transactions within 2 hops of a seed | **{prop['hidden_illicit_within_2_hops_of_a_seed']:.0%}** |
+| Licit transactions within 2 hops of a seed | {prop['licit_within_2_hops_of_a_seed']:.0%} |
+| PR-AUC: detector only | {prop['pr_auc_model_only']:.3f} |
+| PR-AUC: detector + seeds | **{prop['pr_auc_model_plus_seeds']:.3f}** |
+| PR-AUC: seeds only | {prop['pr_auc_ppr_only']:.3f} (base rate {prop['base_rate']:.3f}) |
+
+Seeds are not a detector on their own, but added to the model they lift PR-AUC by
+{prop['pr_auc_model_plus_seeds'] - prop['pr_auc_model_only']:+.3f}. The combination rule (`1 − (1 − p)(1 − 0.5·ppr_percentile)` for
+transactions within 2 hops of a seed) was fixed before looking at the test results, not tuned on them.
+
+## Limits
+
+- One dataset, one split, labelled by Elliptic's own heuristics; {d['unknown'] / d['transactions']:.0%} of transactions are unlabelled.
+- Transactions only: no address clustering, no network layer, no amounts, so most of what makes BEANS distinctive is
+  not tested here.
+- Published numbers are quoted from the paper, except the random-forest baseline, which is re-run here.
+"""

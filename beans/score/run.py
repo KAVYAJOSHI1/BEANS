@@ -16,7 +16,7 @@ import pyarrow as pa
 
 from beans.config import settings
 from beans.decision import actions as directives
-from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate
+from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn
 from beans.explain.reasons import reasons_from_shap
 from beans.explain.shap_explain import explain
 from beans.features.extractors import (WALLET_NETWORK_COLS, TX_NETWORK_COLS, load_frames, tx_features,
@@ -96,7 +96,7 @@ def _run(conn, t0) -> dict:
     W["cluster_log_size_spend"] = np.log1p(cg["sent_btc"].transform("sum"))
 
     # ---- E2: anomaly on behaviour + network (no model outputs)
-    behaviour = [c for c in W.columns if c not in ("cluster_id",) and not c.startswith(("max_p_", "cluster_"))]
+    behaviour = [c for c in W.columns if c not in ("cluster_id",) and not c.startswith(("max_p_", "cluster_", "gnn_"))]
     W["anomaly"] = e2_anomaly.anomaly(W, behaviour)
     timings["e2"] = round(time.time() - t0, 2)
 
@@ -113,6 +113,11 @@ def _run(conn, t0) -> dict:
     in_seed_cluster = W["cluster_id"].isin(seed_clusters)
     timings["e4"] = round(time.time() - t0, 2)
 
+    # ---- E5: graph neural features (SIGN-style neighbourhood propagation); fusion is the readout
+    if settings.E5_GNN:
+        W = W.join(e5_gnn.sign_features(G, W))
+        timings["e5"] = round(time.time() - t0, 2)
+
     # ---- E1 embeddings (suggestions only)
     emb = e1_cluster.embedding_suggestions(f, clusters, W)
     e1_rep.update({k: v for k, v in emb.items() if k != "group_of"})
@@ -120,7 +125,8 @@ def _run(conn, t0) -> dict:
     # ---- fusion
     feats = [c for c in W.columns if c != "cluster_id"]
     Xw = W[feats].replace([np.inf, -np.inf], 0).fillna(0)
-    network_cols = WALLET_NETWORK_COLS + ["cluster_share_risky", "cluster_n_countries"]
+    network_cols = WALLET_NETWORK_COLS + ["cluster_share_risky", "cluster_n_countries"] + \
+        [c for c in feats if c.startswith("gnn_") and c.endswith(tuple(WALLET_NETWORK_COLS + ["share_risky_asn", "n_spend_countries"]))]
     fusion_rep, trained = {}, False
     fb = pd.Series(feedback, dtype=float).reindex(Xw.index).dropna()
     if labels_addr is not None and len(labels_addr):

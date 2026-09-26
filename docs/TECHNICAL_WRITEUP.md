@@ -110,8 +110,9 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 transactions but anonymised features (no addresses, amounts or IPs), so it tests the modelling approach rather than the
 full pipeline. On the standard temporal split BEANS's calibrated LightGBM reaches illicit F1 **0.799** (precision 0.92,
 recall 0.71, ECE 0.018), equal to the strongest published baseline (random forest 0.788; our re-run 0.799) and above
-the published GCN (0.628). With 30 % of illicit transactions revealed as seeds, propagation lifts PR-AUC from 0.740 to
-**0.823**. Like every published model, it fails after the dark-market closure at time step 43. Details and limits:
+the published GCN (0.628). E5's GNN features do not help there (F1 0.780), because Elliptic's aggregated features
+already are neighbourhood aggregates. With 30 % of illicit transactions revealed as seeds, propagation lifts PR-AUC
+from 0.736 to **0.821**. Like every published model, it fails after the dark-market closure at time step 43. Details and limits:
 `docs/VALIDATION_ELLIPTIC.md`.
 
 **Multi-seed benchmark.** One dataset is one draw; `scripts/evaluate_seeds.py` regenerates N datasets with different
@@ -130,6 +131,15 @@ seeds and runs the full pipeline on each. Six seeds (42, 7, 123, 2024, 99, 555),
 | Illicit entities alerted | 0.968 ± 0.026 | 0.962 ± 0.022 |
 | Alerts per illicit entity | 9.9 | **5.8** |
 | Alerts that are illicit | 0.943 | 0.864 (same false alerts, list half as long) |
+
+**E5: graph neural network (SIGN-style).** For each wallet, 15 behaviour signals (Tor/VPN share, amounts, fan-in/out,
+E3 shape probabilities, anomaly, structuring, deposit-like destinations) are averaged over its 1- and 2-hop neighbours,
+separately along and against the money flow (60 columns). This is the message passing of a GCN / GraphSAGE layer done
+once up front (Frasca et al. 2020, SIGN); the calibrated LightGBM fusion is the readout, so it runs on a CPU in under a
+second without a deep-learning framework. Service hubs are cut out of the aggregation, and the network-derived columns
+count as network features in the ablation. Six-seed benchmark, before → after E5: PR-AUC 0.954 → **0.966**, recall at
+P ≥ 0.5 0.905 → **0.952**, typology on alerts 0.834 → **0.883**, entities alerted 0.962 → **0.984**, precision unchanged
+(0.953 → 0.955).
 
 **E1 changes.** (1) *Self-split heuristic*: a single non-hub owner (address seen in ≤ 6 transactions) splitting a
 balance into ≥ 7 near-identical parts (coefficient of variation ≤ 5 %, one change output allowed) on fresh addresses

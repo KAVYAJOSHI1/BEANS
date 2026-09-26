@@ -3,7 +3,7 @@
 Offline, Linux-native system for monitoring and analysing Bitcoin transaction traffic.
 **Smart India Hackathon · PS 26146 · National Technical Research Organisation (NTRO)**
 
-BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). It enriches every IP offline with country and ASN, and links IPs, transactions and wallets in one graph. Four ML engines then run: **entity clustering, anomaly detection, peel-chain / mixing detection, and risk propagation from seed wallets**. The result is a ranked, explainable alert list, viewed in an investigator dashboard with link-analysis, timeline, map and case views.
+BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). It enriches every IP offline with country and ASN, and links IPs, transactions and wallets in one graph. Five ML engines then run: **entity clustering, anomaly detection, peel-chain / mixing detection, risk propagation from seed wallets, and a graph neural network**. The result is a ranked, explainable alert list, viewed in an investigator dashboard with link-analysis, timeline, map and case views.
 Every alert also gets a **recommended action** from fixed, citable rules (draft a freeze request, draft a Section 94 BNSS
 notice, prepare an FIU-IND referral pack, put on taint watch, or review as a likely false positive). The legal drafts
 and evidence packs are sealed with SHA-256 and an offline RFC 3161 timestamp, and critical alerts can be pushed to a
@@ -19,7 +19,7 @@ funds in newly ingested data, and says whether the money just reached an exchang
 
 ```bash
 make install        # .venv + Python dependencies
-make demo           # synthetic data → ingest → 4 ML engines → alerts → dashboard
+make demo           # synthetic data → ingest → 5 ML engines → alerts → dashboard
 # open http://127.0.0.1:8000
 ```
 
@@ -55,31 +55,31 @@ Measured on the synthetic demo dataset (4,032 transactions, 13,542 wallets, 6.6 
 
 | | |
 |---|---|
-| Fused risk PR-AUC (random = 0.066) | **0.955**; without network-layer features 0.899 |
-| Illicit entities alerted | **97 %** (29 of 30) with 132 alerts (4.6 per entity); 89 % of alerts are illicit, top 10: 100 % |
-| Typology correct (grouped CV / on alerts) | 84 % / 81 % |
+| Fused risk PR-AUC (random = 0.066) | **0.961**; without network-layer features 0.914 |
+| Illicit entities alerted | **100 %** (30 of 30) with 144 alerts (4.8 per entity); 90 % of alerts are illicit, top 10: 100 % |
+| Typology correct (grouped CV / on alerts) | 86 % / 91 % |
 | Clustering: never mixes two actors / keeps an actor together | **1.00** / 0.79 |
 | Seed propagation: hidden wallets of seeded actors reached | 77 % (legitimate wallets reached: 8 %) |
 | E3 transaction-shape classifier macro-F1 | 0.993 |
 | Calibration error (ECE) | 0.006 |
-| End-to-end run (ingest + 4 engines + training) | 14 s on a laptop; scoring ≈ 3,300 rows/s ([benchmark](docs/BENCHMARK.md)) |
+| End-to-end run (ingest + 5 engines + training) | 14 s on a laptop; scoring ≈ 3,300 rows/s ([benchmark](docs/BENCHMARK.md)) |
 
 **Across 6 independently generated datasets** (`scripts/evaluate_seeds.py --seeds 42 7 123 2024 99 555`), mean:
 
-| | before | now |
-|---|---|---|
-| PR-AUC / recall at P ≥ 0.5 | 0.940 / 0.844 | **0.954 / 0.905** |
-| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | **0.831 / 0.834** |
-| E1 completeness (homogeneity) | 0.580 (0.999) | **0.744 (1.000)** |
-| E4 reach inside seeded actors / legitimate wallets reached | 0.533 / 0.169 | **0.861 / 0.097** |
-| Alerts per illicit entity (entities alerted) | 9.9 (0.968) | **5.8 (0.962)** |
+| | start | + context features, clustering, E4 fixes | + E5 GNN (now) |
+|---|---|---|---|
+| PR-AUC / recall at P ≥ 0.5 | 0.940 / 0.844 | 0.954 / 0.905 | **0.966 / 0.952** |
+| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | 0.831 / 0.834 | **0.845 / 0.883** |
+| E1 completeness (homogeneity) | 0.580 (0.999) | 0.744 (1.000) | 0.744 (1.000) |
+| E4 reach inside seeded actors / legitimate reached | 0.533 / 0.169 | 0.861 / 0.097 | 0.861 / 0.097 |
+| Illicit entities alerted (alerts per entity) | 0.968 (9.9) | 0.962 (5.8) | **0.984 (6.0)** |
 
 Alert *precision* is lower (0.94 → 0.86) only because each criminal now takes ~6 alerts instead of ~10: the same
 handful of false alerts weighs more in a list half as long.
 
 **On real data (Elliptic, 203k real Bitcoin transactions):** BEANS's detector recipe reaches illicit F1 0.799 on the
 standard temporal split, equal to the strongest published baseline (random forest 0.788; GCN 0.628), with calibration
-error 0.018; revealing 30 % of illicit transactions as seeds lifts PR-AUC from 0.740 to 0.823. Elliptic is anonymised
+error 0.018; revealing 30 % of illicit transactions as seeds lifts PR-AUC from 0.736 to 0.821. Elliptic is anonymised
 (no addresses, amounts or IPs), so it validates the modelling approach, not the whole pipeline:
 [`docs/VALIDATION_ELLIPTIC.md`](docs/VALIDATION_ELLIPTIC.md) (`beans validate-elliptic --download`).
 
@@ -98,7 +98,7 @@ beans/
   store/      embedded DuckDB storage
   graph/      IP ↔ TX ↔ wallet graph, first-spy attribution
   features/   transaction / wallet / network features
-  engines/    E1 clustering · E2 anomaly · E3 peel/mix · E4 risk propagation
+  engines/    E1 clustering · E2 anomaly · E3 peel/mix · E4 risk propagation · E5 graph neural network (SIGN)
   score/      fusion + calibration → risk and confidence
   decision/   action directives: deterministic rules → recommended next step per alert
   alerting/   SIEM / threat-intel webhooks (JSON, Splunk HEC, Elastic, STIX 2.1)

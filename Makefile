@@ -45,7 +45,7 @@ test:
 	$(PY) -m pytest -q
 
 validate-elliptic:
-	$(BEANS) validate-elliptic --download
+	$(BEANS) validate-elliptic --download --doc docs/VALIDATION_ELLIPTIC.md
 
 build-ui:
 	cd ui && $(NPM) ci && $(NPM) run build
