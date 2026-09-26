@@ -17,7 +17,7 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | M1/M2 | Ingest CSV/JSON/XML, array fields, fee check, quarantine (§5.1–5.2) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Load seeds + labels next to the input file into the DB; vectorise validation + inserts (pandas/DuckDB). Target 100k rows < 90 s | 16:30 |
 | M3 | Offline GeoIP + ASN type | ✅ done by Kavya/Claude (generator v2 + ML rewrite) |  Tor-exit + hosting/VPN ASN lists in `data/intel/` (dated snapshot) | 17:00 |
 | M4 | Graph + first-spy (§3, §6.0) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | Check first-spy confidence (Δt to 2nd relay), wallet↔IP weights, value-weighted flow edges on the new connected data | 17:30 |
-| S9 | Benchmark 1M rows | ✅ docs/BENCHMARK.md: scoring ≈3.3k rows/s, linear to 117k rows (1M needs ~16 GB RAM or chunking) | `bench` preset + timing printout for the Results slide | 19:00 |
+| S9 | Benchmark 1M rows | ✅ docs/BENCHMARK_1M.md: 980,803 rows (10 files) ingested in 96 s at 0.9 GB (chunked), scored in 190 s at 5.3 GB | `bench` preset + timing printout for the Results slide | 19:00 |
 | — | `--mapping` for unfamiliar column names (§5.2, finale risk) | ✅ CLI/API/UI + tests (docs/DATA_FORMATS.md) | Test with a renamed-column CSV + XML | 20:00 |
 | C4 | Watch-folder mode (`data/inbox/` auto-ingest) | ✅ `beans watch <folder>` | Only after the above | after 20:30 |
 | C5 | Neo4j CSV export + STIX 2.1 indicator export | ✅ `beans export --neo4j/--stix` | `beans export --neo4j / --stix` | after 20:30 |
@@ -41,8 +41,8 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | S6 | Model card with real metrics (§13) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
 | S5 | Investigator feedback → retrain | ✅ verdicts override labels / extend saved training set and retrain | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
 | — | Leakage test | ✅ done by Kavya/Claude (tests/test_ml.py::test_no_label_leakage) | 20:30 |
-| C1 | GNN (GraphSAGE) + GNNExplainer | ❌ | Only after all of the above | after 20:30 |
-| C7 | Validate on public Elliptic dataset | ❌ | Needs a one-time download; optional | after 20:30 |
+| C1 | GNN (GraphSAGE) + GNNExplainer | ✅ E5: SIGN-style GNN (beans/engines/e5_gnn.py), no torch; +0.012 PR-AUC, +0.047 recall (6 seeds); explained via SHAP | Only after all of the above | after 20:30 |
+| C7 | Validate on public Elliptic dataset | ✅ docs/VALIDATION_ELLIPTIC.md: illicit F1 0.799 (published RF 0.788, GCN 0.628); seeds lift PR-AUC 0.736 → 0.821 | `beans validate-elliptic --download` | after 20:30 |
 
 ---
 
@@ -55,13 +55,13 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | M11 | Dashboard: alerts, entity evidence, link graph (§8) | ✅ all pages on real API data, fakes removed | Check each page against real API data; relative `API_BASE="/api"`; empty and error states | **16:00** |
 | M13 | Offline, one-command demo (§10.1) | ✅ `make demo`, `make docker-offline-test` (passes with --network none), `make bundle` | `npm run build` → FastAPI serves `ui/dist` with SPA fallback; no CDN/remote fonts; `make demo`; `docker run --network none` test | 17:30 |
 | S7 | Graph filters + expand + path/peel highlight | ✅ center/hops/min-risk, click-expand, evidence highlight | Min-risk/typology/country/ASN filters; click to expand; highlight path-to-seed and peel chain | 18:00 |
-| S1 | Timeline + peel-chain replay | 🟡 API follows a wallet; UI replay unchanged | Wire to real flow data | 18:30 |
+| S1 | Timeline + peel-chain replay | ✅ 'Follow the money' replay (/api/timeline/trace): hop-by-hop peels, exchanges, play/pause | Wire to real flow data | 18:30 |
 | S2 | Geo map + impossible-travel arcs | ✅ offline world map, arcs computed from data | Offline world GeoJSON; wire to API | 18:30 |
 | S3/S4 | Cases + evidence pack PDF/JSON with SHA-256 | ✅ PDF/JSON/MD, source hashes, audit trail | End to end from the UI; include SHAP, reasons, evidence, input hash | 19:30 |
 | S8 | Seed upload → live re-propagation | ✅ CSV upload, rescore keeps analyst verdicts | UI upload + progress + refreshed alerts | 20:00 |
 | M14 | Technical write-up (§12) + README | ❌ | 6–8 pages; metrics from Dhairya's model card; screenshots; export PDF | 22:00 |
 | — | Demo rehearsal (§14) with Wi-Fi off | ❌ | Twice | 22:30 |
-| C6 | Login with analyst/supervisor roles | ❌ | Only if everything else is done | after 20:30 |
+| C6 | Login with analyst/supervisor roles | ✅ VIEWER/ANALYST/SUPERVISOR/ADMIN, four-eyes approval of legal drafts, audit by username | Only if everything else is done | after 20:30 |
 | C3 | Local LLM narrative report | ❌ | Skip unless there's spare time (large offline model) | optional |
 
 **Integration:** after every merge into `penultimate`, run the smoke test below. **23:00:** `penultimate → main`, tag `v1.0`.
