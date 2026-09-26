@@ -25,7 +25,7 @@ def _stamp_line(ts: Dict[str, Any] = None) -> str:
 class CaseReportGenerator:
     @classmethod
     def build(cls, case: Dict[str, Any], alerts: List[Dict[str, Any]], sources: List[Dict[str, Any]],
-              audit: List[Dict[str, Any]]) -> Dict[str, Any]:
+              audit: List[Dict[str, Any]], traces: Dict[str, Any] = None) -> Dict[str, Any]:
         generated = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         evidence = {
             "case": {k: case.get(k) for k in ("id", "case_name", "incident_type", "status", "priority",
@@ -48,7 +48,8 @@ class CaseReportGenerator:
         ts = stamp(digest)   # RFC 3161 token over the evidence hash (local TSA)
         return {
             "case_id": case["id"], "case_name": case["case_name"], "evidence_sha256": digest, "timestamp": ts,
-            "evidence": evidence, "markdown": cls._markdown(evidence, digest, ts), "html": cls._html(evidence, digest, ts),
+            "evidence": evidence, "markdown": cls._markdown(evidence, digest, ts),
+            "html": cls._html(evidence, digest, ts, traces or {}),
         }
 
     # ------------------------------------------------------------------ markdown (UI preview / download)
@@ -100,7 +101,9 @@ class CaseReportGenerator:
 
     # ------------------------------------------------------------------ HTML → PDF
     @staticmethod
-    def _html(ev: Dict[str, Any], digest: str, ts: Dict[str, Any] = None) -> str:
+    def _html(ev: Dict[str, Any], digest: str, ts: Dict[str, Any] = None, traces: Dict[str, Any] = None) -> str:
+        from beans.report.diagram import path_svg, trail_svg
+        traces = traces or {}
         esc = lambda v: html.escape(str(v if v is not None else ""))  # noqa: E731
         c = ev["case"]
         rows = "".join(
@@ -109,6 +112,7 @@ class CaseReportGenerator:
         findings = []
         for f in ev["findings"]:
             e = f["evidence"] or {}
+            f = {**f, "_figures": trail_svg(traces.get(f["entity_id"])) + path_svg(e.get("path_to_seed") or [])}
             reasons = "".join(f"<li>{esc(r)}</li>" for r in f["reasons"]) or "<li><i>none</i></li>"
             shap = "".join(f"<tr><td class=mono>{esc(s.get('feature'))}</td><td>{esc(s.get('value'))}</td>"
                            f"<td>{esc(s.get('impact'))}</td></tr>" for s in f["shap_top_features"])
@@ -125,7 +129,8 @@ class CaseReportGenerator:
             <b>Evidence</b><ul><li>Transaction <span class=mono>{esc(e.get('txid', 'n/a'))}</span></li>
             <li>First-relaying IP <span class=mono>{esc(e.get('first_spy_ip') or 'unknown')}</span>
                 (confidence {esc(e.get('first_spy_confidence', 'n/a'))})</li>
-            <li>Path to seed: {esc(' → '.join(e.get('path_to_seed') or []) or 'none found')}</li></ul></div>""")
+            <li>Path to seed: {esc(' → '.join(e.get('path_to_seed') or []) or 'none found')}</li></ul>
+            <div class=fig>{f.get('_figures', '')}</div></div>""")
         audit = "".join(f"<li>{esc(a.get('created_at'))} · {esc(a.get('investigator'))} · {esc(a.get('action'))} · "
                         f"{esc(a.get('entity_id'))}</li>" for a in ev["audit_trail"]) or "<li><i>empty</i></li>"
         return f"""<!doctype html><html><head><meta charset=utf-8><title>{esc(c['case_name'])}</title><style>
@@ -138,7 +143,7 @@ class CaseReportGenerator:
         .finding {{ border: 1px solid #ddd; border-radius: 4px; padding: 8px 10px; margin: 8px 0; page-break-inside: avoid; }}
         .sev {{ padding: 1px 6px; border-radius: 3px; color: #fff; font-weight: bold; font-size: 8pt; }}
         .CRITICAL {{ background: #b91c1c; }} .HIGH {{ background: #c2410c; }} .MEDIUM {{ background: #a16207; }} .LOW {{ background: #15803d; }}
-        .foot {{ color: #555; font-size: 8pt; margin-top: 16px; }}
+        .foot {{ color: #555; font-size: 8pt; margin-top: 16px; }} .fig svg {{ max-width: 100%; height: auto; }}
         </style></head><body>
         <h1>Case Evidence Pack: {esc(c['case_name'])}</h1>
         <table class=meta><tr><td>Case ID</td><td>{esc(c['id'])}</td><td>Type</td><td>{esc(c.get('incident_type'))}</td></tr>

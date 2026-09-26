@@ -75,7 +75,9 @@ def export_case(case_id: int, fmt: str = Query("json", pattern="^(json|md|pdf|ht
     audit = db.query("SELECT created_at, investigator, action, entity_type, entity_id FROM audit_log "
                      "WHERE (entity_type = 'CASE' AND entity_id = ?) OR list_contains(?, entity_id) ORDER BY created_at",
                      [str(case_id), [a["alert_id"] for a in case["alerts"]]])
-    pack = CaseReportGenerator.build(case, case["alerts"], sources, audit)
+    from beans.api.routes.timeline import follow_the_money
+    traces = {a["entity_id"]: follow_the_money(a["entity_id"], 20) for a in case["alerts"][:25]} if fmt in ("pdf", "html") else {}
+    pack = CaseReportGenerator.build(case, case["alerts"], sources, audit, traces)
     db.audit("CASE_EXPORT", "CASE", str(case_id), {"format": fmt, "evidence_sha256": pack["evidence_sha256"],
                                                    "timestamp_serial": (pack.get("timestamp") or {}).get("serial")})
     stem = f"BEANS_case_{case_id}"

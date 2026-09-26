@@ -14,7 +14,8 @@ from beans.report.timestamp import stamp
 CLASSIFICATION = "RESTRICTED: for official use by law enforcement / FIU-IND only"
 
 
-def build(alert: Dict[str, Any], wallet: Dict[str, Any], ips: List[Dict[str, Any]], sources: List[Dict[str, Any]]) -> Dict[str, Any]:
+def build(alert: Dict[str, Any], wallet: Dict[str, Any], ips: List[Dict[str, Any]], sources: List[Dict[str, Any]],
+          trace: Dict[str, Any] = None) -> Dict[str, Any]:
     ra = alert.get("recommended_action") or {}
     ev = alert.get("evidence") or {}
     dossier = {
@@ -41,11 +42,13 @@ def build(alert: Dict[str, Any], wallet: Dict[str, Any], ips: List[Dict[str, Any
     }
     digest = _canonical_hash(dossier)
     ts = stamp(digest)
+    from beans.report.diagram import path_svg, trail_svg
+    figures = trail_svg(trace) + path_svg(ev.get("path_to_seed") or [])
     return {"alert_id": alert["alert_id"], "evidence_sha256": digest, "timestamp": ts, "dossier": dossier,
-            "html": _html(dossier, digest, ts)}
+            "html": _html(dossier, digest, ts, figures)}
 
 
-def _html(d: Dict[str, Any], digest: str, ts: Dict[str, Any]) -> str:
+def _html(d: Dict[str, Any], digest: str, ts: Dict[str, Any], figures: str = "") -> str:
     e = lambda v: html.escape(str(v if v is not None else "n/a"))  # noqa: E731
     s, a, dr, m, n = d["subject"], d["assessment"], d["directive"], d["money_trail"], d["network_evidence"]
     kv = lambda rows: "<table>" + "".join(f"<tr><th>{e(k)}</th><td>{v}</td></tr>" for k, v in rows) + "</table>"  # noqa: E731
@@ -62,7 +65,7 @@ def _html(d: Dict[str, Any], digest: str, ts: Dict[str, Any]) -> str:
     h1 {{ font-size: 15pt; margin: 0; }} h2 {{ font-size: 11pt; border-bottom: 1px solid #ccc; margin-top: 16px; }}
     .cls {{ color: #b91c1c; font-weight: bold; font-size: 8.5pt; }} .mono {{ font-family: 'DejaVu Sans Mono', monospace; font-size: 8pt; word-break: break-all; }}
     table {{ border-collapse: collapse; width: 100%; margin: 4px 0; }} td, th {{ border: 1px solid #ddd; padding: 3px 5px; text-align: left; font-size: 8.5pt; vertical-align: top; }}
-    th {{ background: #f1f3f5; width: 26%; }} .seal {{ background: #f8fafc; border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 8pt; margin-top: 14px; }}
+    th {{ background: #f1f3f5; width: 26%; }} .fig {{ margin: 8px 0; page-break-inside: avoid; }} .fig svg {{ max-width: 100%; height: auto; }} .seal {{ background: #f8fafc; border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 8pt; margin-top: 14px; }}
     </style></head><body>
     <div class=cls>{CLASSIFICATION}</div>
     <h1>Intelligence Referral Pack: {e(a['typology'])}</h1>
@@ -78,6 +81,7 @@ def _html(d: Dict[str, Any], digest: str, ts: Dict[str, Any]) -> str:
     <h2>4. Money trail</h2>{kv([("Key transaction", f"<span class=mono>{e(m['key_transaction'])}</span>"),
         ("Path to known-bad seed", f"<span class=mono>{e(' → '.join(m['path_to_seed']) or 'none found')}</span>"),
         ("Peel chain", f"{len(m['peel_chain'])} transactions")])}
+    {f'<div class=fig>{figures}</div>' if figures else ''}
     <h2>5. Exchange exposure</h2><table><tr><th>Exchange</th><th>Country</th><th>Deposit address</th><th>BTC</th><th>Time (UTC)</th><th>Hops</th></tr>
     {exp or '<tr><td colspan=6><i>No known exchange deposit within 4 hops</i></td></tr>'}</table>
     <h2>6. Network evidence</h2>{kv([("First relay IP", f"<span class=mono>{e(n['first_relay_ip'])}</span> ({e(n['first_relay_asn_type'])}, confidence {e(n['first_relay_confidence'])})")])}
