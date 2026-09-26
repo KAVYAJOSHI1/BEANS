@@ -2,7 +2,9 @@
 fresh database, and report the mean ± std of the headline metrics. Use it to judge any model change: a change
 that helps one seed and hurts the others is noise, not an improvement.
 
-    .venv/bin/python scripts/evaluate_seeds.py --seeds 42 7 123 --n-tx 5000 [--out report.json]
+    .venv/bin/python scripts/evaluate_seeds.py --seeds 42 7 123 --n-tx 5000 [--out report.json] [--no-corpus]
+
+Keep the evaluation seeds apart from the typology-corpus seeds (default corpus: 1001-1008).
 
 Every run uses its own temp DB_PATH / MODELS_DIR / DATA_DIR, so the repository's data/ and models/ are untouched.
 """
@@ -41,9 +43,13 @@ print(json.dumps({
 """
 
 
-def run_seed(seed: int, n_tx: int) -> dict:
+CORPUS = ROOT / "models" / "typology_corpus.parquet"
+
+
+def run_seed(seed: int, n_tx: int, corpus: bool = True) -> dict:
     with tempfile.TemporaryDirectory(prefix=f"beans-eval-{seed}-") as tmp:
-        env = {**os.environ, "DB_PATH": f"{tmp}/eval.duckdb", "MODELS_DIR": f"{tmp}/models", "DATA_DIR": f"{tmp}/data"}
+        env = {**os.environ, "DB_PATH": f"{tmp}/eval.duckdb", "MODELS_DIR": f"{tmp}/models", "DATA_DIR": f"{tmp}/data",
+               "USE_TYPOLOGY_CORPUS": str(corpus and CORPUS.exists()).lower(), "TYPOLOGY_CORPUS_PATH": str(CORPUS)}
         out = subprocess.run([sys.executable, "-c", RUN, tmp, str(n_tx), str(seed)], cwd=ROOT, env=env,
                              capture_output=True, text=True, check=True)
         return json.loads(out.stdout.strip().splitlines()[-1])
@@ -54,8 +60,9 @@ def main():
     ap.add_argument("--seeds", type=int, nargs="+", default=[42, 7, 123])
     ap.add_argument("--n-tx", type=int, default=5000)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--no-corpus", action="store_true", help="evaluate without the typology reference corpus")
     a = ap.parse_args()
-    runs = {s: run_seed(s, a.n_tx) for s in a.seeds}
+    runs = {s: run_seed(s, a.n_tx, not a.no_corpus) for s in a.seeds}
     keys = list(next(iter(runs.values())))
     summary = {}
     print(f"{'metric':28s}" + "".join(f"{'seed ' + str(s):>12s}" for s in a.seeds) + f"{'mean':>10s}{'std':>8s}")

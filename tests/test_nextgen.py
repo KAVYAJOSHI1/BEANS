@@ -319,3 +319,16 @@ def test_gnn_mean_aggregation_and_hub_cut():
     assert F.loc["d", "gnn_in2_share_risky_asn"] == pytest.approx((z["a"] + z["c"]) / 2, rel=1e-5)   # 2 hops back
     assert F.loc["a", "gnn_out1_share_risky_asn"] == pytest.approx(z["b"], rel=1e-5)   # the hub edge is cut
     assert F.loc["x0", "gnn_in1_share_risky_asn"] == 0.0
+
+
+def test_typology_corpus_is_reindexed_and_switchable(tmp_path, monkeypatch):
+    from beans.config import settings
+    from beans.score import fuse
+    p = tmp_path / "corpus.parquet"
+    pd.DataFrame({"a": [1.0, 2.0], "old_col": [5.0, 6.0], "_typology": ["RANSOMWARE", "PEEL_CHAIN"],
+                  "_group": ["corpus1:x", "corpus1:y"]}).to_parquet(p)
+    monkeypatch.setattr(fuse, "TYPOLOGY_CORPUS", p)
+    c = fuse.typology_corpus(["a", "new_col"])
+    assert list(c.columns) == ["a", "new_col", "_typology", "_group"] and c["new_col"].eq(0).all()
+    monkeypatch.setattr(settings, "USE_TYPOLOGY_CORPUS", False)
+    assert fuse.typology_corpus(["a"]) is None

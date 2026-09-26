@@ -22,6 +22,7 @@ from beans.config import settings
 
 FUSION_MODEL = settings.MODELS_DIR / "fusion.joblib"
 TRAINING_SET = settings.MODELS_DIR / "fusion_training_set.parquet"   # kept so analyst feedback can be added later
+TYPOLOGY_CORPUS = settings.TYPOLOGY_CORPUS_PATH or settings.MODELS_DIR / "typology_corpus.parquet"   # beans typology-corpus
 warnings.filterwarnings("ignore", message=".*does not have valid feature names.*")
 # Wallet-level money-context features help detection but add noise to typology (3-seed benchmark,
 # scripts/evaluate_seeds.py); the typology model sees their cluster-level aggregates instead.
@@ -91,21 +92,32 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
     Xi, ti, gi = X.loc[ill, typ_cols], typology.values[ill], gv[ill]
     typ_oof = pd.Series("UNKNOWN", index=X.index)
     typ_acc = typ_acc_raw = None
+    corpus = typology_corpus(typ_cols)
+
+    def fit_typology(Xt, tt, gt):
+        """Typology model on this dataset's illicit wallets + the reference corpus (always on the training side)."""
+        if corpus is not None:
+            Xt = pd.concat([Xt, corpus[typ_cols]], ignore_index=True)
+            tt = np.r_[tt, corpus["_typology"].values]
+            gt = np.r_[gt.astype(str), corpus["_group"].values]
+        return _typology_model().fit(Xt, tt, sample_weight=_entity_balance(gt))
+
     if len(set(ti)) > 1 and pd.Series(gi).nunique() >= 4:
-        classes = sorted(set(ti))
+        classes = sorted(set(ti) | (set(corpus["_typology"]) if corpus is not None else set()))
         proba = pd.DataFrame(0.0, index=Xi.index, columns=classes)
         k = min(4, pd.Series(gi).nunique())
         for tr, te in GroupKFold(n_splits=k).split(Xi, groups=gi):
-            if len(set(ti[tr])) < 2:
+            if len(set(ti[tr])) < 2 and corpus is None:
                 proba.iloc[te, classes.index(ti[tr][0])] = 1.0
                 continue
-            m = _typology_model().fit(Xi.iloc[tr], ti[tr], sample_weight=_entity_balance(gi[tr]))
+            m = fit_typology(Xi.iloc[tr], ti[tr], gi[tr])
             proba.iloc[te, [classes.index(c) for c in m.classes_]] = m.predict_proba(Xi.iloc[te])
         typ_acc_raw = round(float((proba.idxmax(axis=1).values == ti).mean()), 4)
         pooled = pool_typology(proba, None if clusters is None else clusters.reindex(Xi.index),
                                pd.Series(oof, index=X.index).reindex(Xi.index))
         typ_acc = round(float((pooled.values == ti).mean()), 4)
         typ_oof.loc[Xi.index] = pooled
+    report["typology_corpus_entities"] = int(corpus["_group"].nunique()) if corpus is not None else 0
     report["typology_accuracy_grouped_cv"] = typ_acc
     report["typology_accuracy_grouped_cv_unpooled"] = typ_acc_raw
 
@@ -113,7 +125,7 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
     final = _lgbm(pw).fit(X, yv, sample_weight=wv)   # used for SHAP explanations
     X.assign(_y=yv, _group=gv, _typology=typology.values,
              _weight=1.0 if wv is None else wv).to_parquet(TRAINING_SET)
-    typ_model = _typology_model().fit(Xi, ti, sample_weight=_entity_balance(gi)) if len(set(ti)) > 1 else None
+    typ_model = fit_typology(Xi, ti, gi) if len(set(ti)) > 1 or corpus is not None else None
     FUSION_MODEL.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": final, "members": members, "features": list(X.columns), "typology_model": typ_model,
                  "typology_features": typ_cols,
@@ -124,6 +136,15 @@ def train(X: pd.DataFrame, y: pd.Series, groups: pd.Series, typology: pd.Series,
         if need.any():
             typ_oof.loc[need] = typ_model.predict(X.loc[need.values, typ_cols])
     return pd.Series(oof, index=X.index), typ_oof, report
+
+
+def typology_corpus(cols: list):
+    """Illicit wallets from other (synthetic) datasets with their typology: more criminal operations to learn from.
+    Built by `beans typology-corpus`; missing columns (older corpus) are filled with 0."""
+    if not settings.USE_TYPOLOGY_CORPUS or not TYPOLOGY_CORPUS.exists():
+        return None
+    c = pd.read_parquet(TYPOLOGY_CORPUS)
+    return c.reindex(columns=list(cols) + ["_typology", "_group"], fill_value=0)
 
 
 def _entity_balance(groups: np.ndarray) -> np.ndarray:

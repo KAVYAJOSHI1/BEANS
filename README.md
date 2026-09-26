@@ -57,7 +57,7 @@ Measured on the synthetic demo dataset (4,032 transactions, 13,542 wallets, 6.6 
 |---|---|
 | Fused risk PR-AUC (random = 0.066) | **0.961**; without network-layer features 0.914 |
 | Illicit entities alerted | **100 %** (30 of 30) with 144 alerts (4.8 per entity); 90 % of alerts are illicit, top 10: 100 % |
-| Typology correct (grouped CV / on alerts) | 86 % / 91 % |
+| Typology correct (grouped CV / on alerts) | 100 % / 100 % with the typology corpus (86 % / 91 % without); see the caveat below |
 | Clustering: never mixes two actors / keeps an actor together | **1.00** / 0.79 |
 | Seed propagation: hidden wallets of seeded actors reached | 77 % (legitimate wallets reached: 8 %) |
 | E3 transaction-shape classifier macro-F1 | 0.993 |
@@ -69,10 +69,16 @@ Measured on the synthetic demo dataset (4,032 transactions, 13,542 wallets, 6.6 
 | | start | + context features, clustering, E4 fixes | + E5 GNN (now) |
 |---|---|---|---|
 | PR-AUC / recall at P ≥ 0.5 | 0.940 / 0.844 | 0.954 / 0.905 | **0.966 / 0.952** |
-| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | 0.831 / 0.834 | **0.845 / 0.883** |
+| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | 0.831 / 0.834 | 0.845 / 0.883; **0.997 / 0.988 with the corpus** |
 | E1 completeness (homogeneity) | 0.580 (0.999) | 0.744 (1.000) | 0.744 (1.000) |
 | E4 reach inside seeded actors / legitimate reached | 0.533 / 0.169 | 0.861 / 0.097 | 0.861 / 0.097 |
 | Illicit entities alerted (alerts per entity) | 0.968 (9.9) | 0.962 (5.8) | **0.984 (6.0)** |
+
+**Typology corpus caveat.** `beans typology-corpus` adds the illicit wallets of 8 extra synthetic datasets (253 criminal
+operations, seeds 1001-1008, never the evaluation seeds) to the typology model's training side. A label-shuffling control
+drops accuracy to 0.48-0.61, so the gain is real, but near-perfect accuracy mainly shows that *synthetic* typologies are
+separable once enough operations are seen. Expect less on real cases; the corpus is the mechanism for adding
+confirmed real cases over time.
 
 Alert *precision* is lower (0.94 → 0.86) only because each criminal now takes ~6 alerts instead of ~10: the same
 handful of false alerts weighs more in a list half as long.
