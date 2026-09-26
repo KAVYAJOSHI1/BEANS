@@ -1,4 +1,4 @@
-"""E1: entity clustering = common-input-ownership (CIOH) + change heuristic + graph-embedding suggestions.
+"""E1: entity clustering = common-input-ownership (CIOH) + change heuristics + self-split heuristic + embedding suggestions.
 
 CoinJoin transactions (per E3) are excluded from CIOH, otherwise unrelated participants would be merged.
 Embeddings: truncated SVD of the cluster-level flow graph (+ behaviour) → HDBSCAN proposes clusters that
@@ -13,6 +13,12 @@ from scipy import sparse
 from sklearn.cluster import HDBSCAN
 from sklearn.decomposition import TruncatedSVD
 from sklearn.preprocessing import StandardScaler
+
+
+SWEEP_MIN_INPUTS = 10         # a tx spending this many inputs is a service sweep (exchange / merchant / pool)
+SPLIT_MIN_PARTS = 7            # self-split heuristic: at least this many near-identical parts …
+SPLIT_MAX_CV = 0.05            # … differing by ≤ 5 % (coefficient of variation; one change output is allowed) …
+SPLIT_MAX_SENDER_DEGREE = 6    # … sent by an address seen in at most this many transactions (not a service hub)
 
 
 class _UF:
@@ -51,12 +57,19 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         merged_cioh += 1
     # change heuristic (conservative): 2 outputs, exactly one has full 8-decimal precision → that one is change
     first_seen = frames.tout.groupby("address")["ts"].min()
+    # guards against false change picks (each one bridged an exchange into a criminal's cluster in testing):
+    #  - an address later swept in a big consolidation is a service deposit address, never the sender's change
+    #  - in a peel-shaped tx the tiny output is the payment; the change is the large one
+    swept = set(frames.tin.loc[frames.tin["txid"].isin(X_tx.index[X_tx["n_in"] >= SWEEP_MIN_INPUTS]), "address"])
+    peel_shaped = set(X_tx.index[X_tx["peel_shape"] == 1])
     two = frames.tout[frames.tout["txid"].isin(X_tx.index[(X_tx["n_out"] == 2) & (X_tx["n_in"] >= 1)])]
     for txid, g in two.groupby("txid"):
         if txid in coinjoin_txids or txid not in ins.index:
             continue
         prec = [(_decimals(v) >= 7, a, ts) for a, v, ts in zip(g["address"], g["amount"], g["ts"])]
         change = [a for p, a, ts in prec if p and first_seen.get(a) == ts]
+        if change and (change[0] in swept or (txid in peel_shaped and change[0] == g.loc[g["amount"].idxmin(), "address"])):
+            continue
         if len(change) == 1 and sum(p for p, _, _ in prec) == 1:
             uf.union(ins[txid][0], change[0])
             merged_change += 1
@@ -71,6 +84,33 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
             continue
         uf.union(ins[txid][0], addr)
         merged_peel += 1
+    # self-split heuristic: one (non-hub) owner splits a balance into ≥ 3 near-identical parts on fresh addresses.
+    # Launderers split loot this way before peeling / cashing out each part; payouts to many different users
+    # (exchanges, pools, payroll) have varied amounts and come from hub addresses, and CoinJoins are excluded.
+    merged_split = 0
+    degree = pd.concat([frames.tin[["txid", "address"]], frames.tout[["txid", "address"]]]).drop_duplicates() \
+        .groupby("address").size()
+    def parts_cv(amounts: pd.Series) -> float:
+        """CV of the outputs after setting aside the one furthest from the median (the change, if any)."""
+        a = amounts.values
+        if len(a) > SPLIT_MIN_PARTS:
+            a = np.delete(a, np.argmax(np.abs(a - np.median(a))))
+        return float(a.std() / a.mean()) if len(a) >= SPLIT_MIN_PARTS and a.mean() > 0 else 1.0
+    cand = X_tx.index[(X_tx["n_out"] >= SPLIT_MIN_PARTS) & (X_tx["n_in"] >= 1)]
+    cand = [t for t in cand if t not in coinjoin_txids and t in ins.index]
+    cv = frames.tout[frames.tout["txid"].isin(cand)].groupby("txid")["amount"].apply(parts_cv)
+    cand = [t for t in cand if cv.get(t, 1.0) <= SPLIT_MAX_CV]
+    outs = frames.tout[frames.tout["txid"].isin(cand)].groupby("txid")
+    for txid in cand:
+        senders = set(ins[txid])
+        if len({uf.find(a) for a in senders}) != 1 or max(degree.get(a, 0) for a in senders) > SPLIT_MAX_SENDER_DEGREE:
+            continue
+        g = outs.get_group(txid)
+        if not all(first_seen.get(a) == ts for a, ts in zip(g["address"], g["ts"])) or g["address"].isin(senders).any():
+            continue
+        for a in g["address"]:
+            uf.union(ins[txid][0], a)
+        merged_split += 1
     root = {a: uf.find(a) for a in uf.p}
     members = defaultdict(list)
     for a, r in root.items():
@@ -82,7 +122,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         for a in addrs:
             cid[a] = name
     return pd.Series(cid, name="cluster_id"), {"cioh_merges": merged_cioh, "change_merges": merged_change,
-                                               "peel_change_merges": merged_peel,
+                                               "peel_change_merges": merged_peel, "split_merges": merged_split,
                                                "clusters": len(members),
                                                "multi_address_clusters": sum(len(m) > 1 for m in members.values())}
 

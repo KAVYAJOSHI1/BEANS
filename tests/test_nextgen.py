@@ -247,3 +247,46 @@ def test_context_features_are_label_free():
     C = extractors.context_features(f, X)
     assert C.loc["a", "fund_below_round"] == 1.0          # 0.095 sits just below the 0.1 threshold
     assert C.loc["a", "fund_out_cv"] < 0.01               # near-identical sibling outputs (structuring)
+
+
+def _xtx(f):
+    n_in = f.tin.groupby("txid").size()
+    n_out = f.tout.groupby("txid").size()
+    X = pd.DataFrame({"n_in": n_in, "n_out": n_out}).fillna(0)
+    X["peel_shape"] = 0.0
+    X["peel_chain_len"] = 0.0
+    return X
+
+
+def test_self_split_merges_equal_fresh_parts_but_not_varied_payouts():
+    from beans.engines import e1_cluster
+    parts = [(f"p{i}", 0.5) for i in range(8)] + [("chg", 0.123456789)]
+    payout = [(f"u{i}", 0.05 * (i + 1)) for i in range(8)]
+    f = _frames([("t0", 0, [("src", 5.0)], [("L", 4.2)]), ("t1", 5, [("L", 4.2)], parts),
+                 ("t2", 10, [("HOT", 9.0)], payout)])
+    cl, rep = e1_cluster.cluster(f, _xtx(f), set())
+    assert rep["split_merges"] == 1
+    assert cl["p0"] == cl["p7"] == cl["L"] == cl["chg"]           # one owner split the balance
+    assert cl["u0"] != cl["u1"]                                     # varied payout amounts: different owners
+
+
+def test_change_heuristic_never_picks_a_swept_deposit_address():
+    from beans.engines import e1_cluster
+    sweep_inputs = [("DEP", 0.01234567)] + [(f"d{i}", 0.1) for i in range(12)]
+    f = _frames([("t0", 0, [("src", 2.0)], [("W", 1.0)]),
+                 ("t1", 5, [("W", 1.0)], [("DEP", 0.01234567), ("NEXT", 0.9870)]),    # precise small output
+                 ("t2", 60, sweep_inputs, [("COLD", 1.2)])])
+    cl, _ = e1_cluster.cluster(f, _xtx(f), set())
+    assert cl["W"] != cl["DEP"] and cl["W"] != cl["COLD"]
+
+
+def test_hubs_absorb_taint():
+    import networkx as nx
+    from beans.engines import e4_propagate as e4
+    G = nx.DiGraph()
+    G.add_edge("SEED", "HUB", weight=1.0)
+    for i in range(e4.HUB_DEGREE + 5):
+        G.add_edge("HUB", f"cust{i}", weight=1.0)
+    G.add_edge("SEED", "mule", weight=1.0)
+    df, _ = e4.propagate(G, {"SEED"})
+    assert df.loc["mule", "taint"] > 0.5 and df.loc["cust0", "taint"] == 0

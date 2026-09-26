@@ -105,7 +105,8 @@ def _run(conn, t0) -> dict:
     e4df, e4info = e4_propagate.propagate(G, seeds)
     W = W.join(e4df, how="left")
     W[["ppr", "ppr_reverse", "taint"]] = W[["ppr", "ppr_reverse", "taint"]].fillna(0)
-    W[["hops_from_seed", "hops_to_seed"]] = W[["hops_from_seed", "hops_to_seed"]].fillna(99).clip(upper=20)
+    hop_cols = ["hops_from_seed", "hops_to_seed", "hops_any_seed"]
+    W[hop_cols] = W[hop_cols].fillna(99).clip(upper=20)
     # a CIOH cluster is one owner: wallets sharing a cluster with a seed count as reached (evaluation + evidence).
     # Not a model input: in A/B tests, cluster-level seed features made the model over-trust cluster membership.
     seed_clusters = set(W.loc[W.index.isin(seeds), "cluster_id"])
@@ -273,7 +274,7 @@ def _write(conn, W, probs, alerts):
                     risk_score, threat_classification, cluster_id)
                     SELECT address, transaction_count, total_received, total_sent, balance, risk_score,
                     threat_classification, cluster_id FROM prof_in""")
-    scores = W[["p", "typology_pred", "cluster_id", "anomaly", "ppr", "ppr_reverse", "taint", "hops_from_seed",
+    scores = W[["p", "typology_pred", "cluster_id", "anomaly", "ppr", "ppr_reverse", "taint", "hops_from_seed", "hops_any_seed",
                 "hops_to_seed", "max_p_peel", "max_p_coinjoin", "share_risky_asn"]].reset_index(names="address")
     conn.execute("CREATE OR REPLACE TABLE wallet_scores AS SELECT * FROM scores")
     txs = probs.reset_index(names="txid")
@@ -298,8 +299,12 @@ def _propagation_quality(W, labels, seeds, in_seed_cluster) -> dict:
     if not len(hidden):
         return {}
     reach = lambda idx: float(((W.loc[idx, "taint"] > 0.01) | (W.loc[idx, "hops_from_seed"] <= 4) |
-                               (W.loc[idx, "hops_to_seed"] <= 4) | in_seed_cluster.loc[idx]).mean())
+                               (W.loc[idx, "hops_to_seed"] <= 4) | (W.loc[idx, "hops_any_seed"] <= 2) |
+                               in_seed_cluster.loc[idx]).mean())
+    seeded_ents = set(lab.loc[lab.index.isin(seeds), "entity_id"].dropna())
+    hidden_seeded = hidden[lab.loc[hidden, "entity_id"].isin(seeded_ents)]
     return {"hidden_illicit_wallets": int(len(hidden)), "hidden_reached": round(reach(hidden), 4),
+            "hidden_reached_in_seeded_entities": round(reach(hidden_seeded), 4) if len(hidden_seeded) else None,
             "legit_reached": round(reach(legit), 4), "hidden_flagged_p50": round(float((W.loc[hidden, "p"] >= 0.5).mean()), 4)}
 
 

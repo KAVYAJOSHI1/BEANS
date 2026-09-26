@@ -2,8 +2,9 @@
 
 - personalised PageRank from the seeds (downstream: where did seed money go)
 - reverse PPR (upstream: who funds the seeds)
-- decayed haircut taint (share of incoming value that traces back to seeds, ×0.9 per hop)
+- decayed haircut taint (share of incoming value that traces back to seeds, ×0.9 per hop); hubs absorb taint
 - hop distance + path to the nearest seed (evidence), not routed through hubs such as exchanges
+- hop distance ignoring direction (≤ 4), which reaches the sibling outputs of a seed's funder
 """
 from collections import deque
 
@@ -11,6 +12,7 @@ import networkx as nx
 import pandas as pd
 
 HUB_DEGREE = 60
+ANY_DIRECTION_MAX_HOPS = 4
 
 
 def graph(frames) -> nx.DiGraph:
@@ -25,8 +27,9 @@ def graph(frames) -> nx.DiGraph:
     return G
 
 
-def _bfs(G, seeds, reverse=False, max_hops=8):
-    nbrs = G.predecessors if reverse else G.successors
+def _bfs(G, seeds, reverse=False, max_hops=8, undirected=False):
+    nbrs = (lambda u: list(G.predecessors(u)) + list(G.successors(u))) if undirected else \
+        (G.predecessors if reverse else G.successors)
     dist, parent, q = {s: 0 for s in seeds}, {}, deque(seeds)
     while q:
         u = q.popleft()
@@ -44,7 +47,7 @@ def propagate(G: nx.DiGraph, seeds: set, decay: float = 0.9) -> tuple[pd.DataFra
     nodes = list(G.nodes)
     if not seeds:
         z = pd.DataFrame(0.0, index=nodes, columns=["ppr", "ppr_reverse", "taint"])
-        z["hops_from_seed"] = z["hops_to_seed"] = 99
+        z["hops_from_seed"] = z["hops_to_seed"] = z["hops_any_seed"] = 99
         return z, {}
     pers = {s: 1 / len(seeds) for s in seeds}
     ppr = nx.pagerank(G, alpha=0.85, personalization=pers, weight="weight", max_iter=200, tol=1e-8)
@@ -57,15 +60,20 @@ def propagate(G: nx.DiGraph, seeds: set, decay: float = 0.9) -> tuple[pd.DataFra
         for v in nodes:
             if v in seeds:
                 continue
-            s = sum(taint[u] * d["weight"] for u, _, d in G.in_edges(v, data=True))
+            # hubs (exchanges, pools) are taint sinks: they pool everyone's coins, so passing taint through them
+            # would mark their ordinary customers
+            s = sum(taint[u] * d["weight"] for u, _, d in G.in_edges(v, data=True) if G.degree(u) <= HUB_DEGREE)
             new[v] = min(1.0, decay * s / in_w[v])
         taint = new
     down, parent = _bfs(G, seeds)
     up, _ = _bfs(G, seeds, reverse=True)
+    # either direction (e.g. seed ← funder → sibling): siblings of a seeded split are one owner's other parts
+    anyway, _ = _bfs(G, seeds, max_hops=ANY_DIRECTION_MAX_HOPS, undirected=True)
     mx, mr = max(ppr.values()) or 1, max(rppr.values()) or 1
     df = pd.DataFrame({"ppr": pd.Series(ppr) / mx, "ppr_reverse": pd.Series(rppr) / mr, "taint": pd.Series(taint),
-                       "hops_from_seed": pd.Series(down), "hops_to_seed": pd.Series(up)}).reindex(nodes)
-    df[["hops_from_seed", "hops_to_seed"]] = df[["hops_from_seed", "hops_to_seed"]].fillna(99)
+                       "hops_from_seed": pd.Series(down), "hops_to_seed": pd.Series(up),
+                       "hops_any_seed": pd.Series(anyway)}).reindex(nodes)
+    df[["hops_from_seed", "hops_to_seed", "hops_any_seed"]] = df[["hops_from_seed", "hops_to_seed", "hops_any_seed"]].fillna(99)
 
     def path(a):
         p = [a]
