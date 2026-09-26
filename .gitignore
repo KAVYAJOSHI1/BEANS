@@ -20,3 +20,4 @@ ui/node_modules/
 models/model_card.json
 models/training_report.json
 data/tsa/
+data/quarantine.csv

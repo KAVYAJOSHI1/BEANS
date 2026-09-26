@@ -224,3 +224,26 @@ def test_section94_prefers_indian_exchange():
     assert bnss.build("section94", alert)["vasp"] == "VASP-IN"
     freeze = bnss.build("freeze", alert)
     assert freeze["vasp"] == "VASP-OFF" and "Section 112" in freeze["html"]
+
+
+def test_thresholds_come_from_config(monkeypatch, client):
+    from beans.config import settings
+    from beans.score import run
+    monkeypatch.setattr(settings, "RISK_CRITICAL_MIN", 95.0)
+    assert run._severity(90) == "HIGH" and run._severity(96) == "CRITICAL"
+    cfg = client.get("/api/config").json()
+    assert cfg["severity_thresholds"]["CRITICAL"] == 95.0
+    assert cfg["actions"]["ACTION_FREEZE_WINDOW_MIN"] == settings.ACTION_FREEZE_WINDOW_MIN
+    assert cfg["data_origin"] == "synthetic" and client.get("/api/health").json()["data_origin"] == "synthetic"
+
+
+def test_context_features_are_label_free():
+    from beans.features import extractors
+    src = Path(extractors.__file__).read_text()
+    assert "labels_" not in src.split('"""', 2)[2]
+    f = _frames([("t0", 0, [("hub", 5.0)], [("a", 0.095), ("b", 0.0951), ("c", 0.0949)]),
+                 ("t1", 10, [("a", 0.095)], [("dep", 0.094)])])
+    X = pd.DataFrame({"n_in": [1, 1], "n_out": [3, 1]}, index=["t0", "t1"])
+    C = extractors.context_features(f, X)
+    assert C.loc["a", "fund_below_round"] == 1.0          # 0.095 sits just below the 0.1 threshold
+    assert C.loc["a", "fund_out_cv"] < 0.01               # near-identical sibling outputs (structuring)

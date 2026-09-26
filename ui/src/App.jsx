@@ -1,6 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
+import { loadConfig, useConfig } from './risk';
 
 // Tabs are code-split so the first paint doesn't wait on echarts/cytoscape/world-atlas.
 const OverviewDashboard = lazy(() => import('./components/OverviewDashboard'));
@@ -50,6 +51,7 @@ export default function App() {
   const [graphVisited, setGraphVisited] = useState(activeTab === 'graph');
   if (activeTab === 'graph' && !graphVisited) setGraphVisited(true);
 
+  const { data_origin: dataOrigin } = useConfig();
   useEffect(() => {
     fetchAllData();
     const t = setTimeout(preloadGraph, 1500);
@@ -61,6 +63,7 @@ export default function App() {
     try {
       // All independent requests run in parallel; each panel fills in as soon as its data arrives.
       const getJson = (path, fallback) => fetch(`${API_BASE}${path}`).then((r) => r.json()).catch(() => fallback);
+      loadConfig();   // thresholds + whether the loaded data is synthetic
       const [, alertsRes] = await Promise.all([
         getJson('/stats/overview', null).then((res) => { if (res) setStats(res); }),
         getJson('/alerts?limit=500', []).then((res) => { if (Array.isArray(res)) setAlerts(res); return res; }),
@@ -345,7 +348,9 @@ export default function App() {
 
       <footer className="text-center text-[11px] text-slate-400 py-4">
         BEANS · SIH PS 26146 · runs fully offline · IP geolocation by{' '}
-        <a href="https://db-ip.com" className="underline">DB-IP</a> (CC BY 4.0) · all data shown is synthetic
+        <a href="https://db-ip.com" className="underline">DB-IP</a> (CC BY 4.0)
+        {dataOrigin === 'synthetic' && ' · the loaded dataset is synthetic (generated with ground truth)'}
+        {dataOrigin === 'operational' && ' · operational data: findings are leads that need analyst review'}
       </footer>
       </div>
     </div>

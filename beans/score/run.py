@@ -24,8 +24,8 @@ from beans.features.extractors import (WALLET_NETWORK_COLS, TX_NETWORK_COLS, loa
 from beans.score import fuse
 
 REPORT_PATH = settings.MODELS_DIR / "training_report.json"
-ALERT_MIN_P = 0.40
-MAX_ALERTS = 300
+ALERT_MIN_P = settings.ALERT_MIN_PROBABILITY
+MAX_ALERTS = settings.MAX_ALERTS
 P_COLS = [f"p_{c}" for c in e3_peelmix.CLASSES if c != "normal"]
 
 
@@ -34,7 +34,8 @@ def _table(conn, name: str) -> bool:
 
 
 def _severity(risk: float) -> str:
-    return "CRITICAL" if risk >= 85 else "HIGH" if risk >= 65 else "MEDIUM" if risk >= 40 else "LOW"
+    return ("CRITICAL" if risk >= settings.RISK_CRITICAL_MIN else "HIGH" if risk >= settings.RISK_HIGH_MIN
+            else "MEDIUM" if risk >= settings.RISK_MEDIUM_MIN else "LOW")
 
 
 def run_ml(store) -> dict:
@@ -89,6 +90,10 @@ def _run(conn, t0) -> dict:
     W["cluster_max_p_coinjoin"] = cg["max_p_coinjoin"].transform("max")
     W["cluster_share_risky"] = cg["share_risky_asn"].transform("mean")
     W["cluster_n_countries"] = cg["n_spend_countries"].transform("sum").clip(upper=50)
+    # origin of the owner's money, shared by every wallet of the cluster (the first split sees it, later hops don't)
+    for c in ("fund_parent_max_n_in", "fund_parent_in_hub", "fund_log_n_funders", "fund_in_hub", "fund_below_round"):
+        W[f"cluster_max_{c}"] = cg[c].transform("max")
+    W["cluster_log_size_spend"] = np.log1p(cg["sent_btc"].transform("sum"))
 
     # ---- E2: anomaly on behaviour + network (no model outputs)
     behaviour = [c for c in W.columns if c not in ("cluster_id",) and not c.startswith(("max_p_", "cluster_"))]
@@ -126,9 +131,9 @@ def _run(conn, t0) -> dict:
         weights = pd.Series(1.0, index=Xw.index)
         weights.loc[fb.index] = 5.0
         p, typ, fusion_rep = fuse.train(Xw[known], lab.loc[known, "is_illicit"], lab.loc[known, "entity_id"],
-                                        lab.loc[known, "typology"], network_cols, weights[known])
+                                        lab.loc[known, "typology"], network_cols, weights[known], W["cluster_id"])
         if (~known).any():
-            p2, t2, _ = fuse.predict(Xw[~known])
+            p2, t2, _ = fuse.predict(Xw[~known], W["cluster_id"])
             p, typ = pd.concat([p, p2]), pd.concat([typ, t2])
         trained = True
     elif len(fb) and fuse.training_set() is not None:
@@ -143,10 +148,10 @@ def _run(conn, t0) -> dict:
         ta = pd.Series(np.r_[base["_typology"].values, np.where(fb.values == 1, "ANALYST_CONFIRMED", "NORMAL")], index=Xa.index)
         wa = pd.Series(np.r_[base["_weight"].values, np.full(len(fb), 5.0)], index=Xa.index)
         _, _, fusion_rep = fuse.train(Xa, ya, ga, ta, network_cols, wa)
-        p, typ, _ = fuse.predict(Xw)
+        p, typ, _ = fuse.predict(Xw, W["cluster_id"])
         trained = True
     else:
-        p, typ, fusion_rep = fuse.predict(Xw)
+        p, typ, fusion_rep = fuse.predict(Xw, W["cluster_id"])
     fusion_rep["analyst_feedback_used"] = int(len(fb))
     p, typ = p.reindex(Xw.index).fillna(0), typ.reindex(Xw.index).fillna("UNKNOWN")
     timings["fusion"] = round(time.time() - t0, 2)
@@ -227,7 +232,7 @@ def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:
             "evidence": {
                 "txid": key_tx, "top_txids": mine["txid"].head(8).tolist(),
                 "first_spy_ip": None if s is None else s["spy_ip"],
-                "first_spy_confidence": None if s is None or pd.isna(s["spy_delta"]) else round(float(1 - math.exp(-s["spy_delta"] / 1.5)), 3),
+                "first_spy_confidence": None if s is None or pd.isna(s["spy_delta"]) else round(float(1 - math.exp(-s["spy_delta"] / settings.FIRST_SPY_TAU_SEC)), 3),
                 "first_spy_asn_type": None if s is None else s["spy_asn_type"],
                 "path_to_seed": path, "peel_chain": chain, "cluster_id": w["cluster_id"],
                 "cluster_size": int(cluster_size.get(w["cluster_id"], 1)),
@@ -305,7 +310,10 @@ def _alert_quality(alerts, labels) -> dict:
     lab = labels.reindex(ents)
     hit = lab["is_illicit"] == 1
     ill_entities = labels[labels["is_illicit"] == 1]["entity_id"].nunique()
+    shown = pd.Series([a["alert_type"].removesuffix("_PATTERN") for a in alerts], index=lab.index)
+    typ_ok = (shown[hit.values] == lab.loc[hit, "typology"]).mean() if hit.any() else None
     return {"alerts": len(alerts), "alert_precision": round(float(hit.mean()), 4),
+            "typology_accuracy": None if typ_ok is None else round(float(typ_ok), 4),
             "illicit_entities_alerted": int(lab[hit]["entity_id"].nunique()), "illicit_entities_total": int(ill_entities),
             "entity_recall": round(float(lab[hit]["entity_id"].nunique() / max(ill_entities, 1)), 4),
             "precision_top10": round(float(hit.head(10).mean()), 4)}

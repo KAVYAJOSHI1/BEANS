@@ -7,7 +7,8 @@ model's contribution is quoted next to the rule as SHAP support, but the rule de
 Inputs are the scored wallet matrix, the transaction frames and the attribution list `known_entities`
 (exchange / mining-pool addresses). Ground-truth tables are never read here.
 
-Rules, in priority order (the first match is the directive; every match is listed):
+Rules, in priority order (the first match is the directive; every match is listed). The numbers below are the
+defaults; they live in beans/config.py (ACTION_*) and can be overridden from the environment / .env:
   R0 REVIEW_LIKELY_BENIGN   the flagged wallet itself is a known exchange / mining-pool address
   R1 IMMEDIATE_FREEZE_DRAFT funds traced (≤ 4 hops) to a known exchange within ≤ 30 min of receipt, risk ≥ 65
   R2 DRAFT_SECTION_94_BNSS  funds traced to an exchange that operates in India (any delay)
@@ -22,11 +23,16 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-FREEZE_WINDOW_MIN = 30.0
-FREEZE_MIN_RISK = 65.0
-MAX_HOPS = 4
-LAYERING_MIN_BTC = 1.0
-DORMANT_H = 6.0
+from beans.config import settings
+
+FREEZE_WINDOW_MIN = settings.ACTION_FREEZE_WINDOW_MIN
+FREEZE_MIN_RISK = settings.ACTION_FREEZE_MIN_RISK
+MAX_HOPS = settings.ACTION_MAX_HOPS
+LAYERING_MIN_BTC = settings.ACTION_LAYERING_MIN_BTC
+DORMANT_H = settings.ACTION_DORMANT_H
+SEED_LINK_HOPS = settings.ACTION_SEED_LINK_HOPS
+MIN_PEEL_CHAIN = settings.ACTION_MIN_PEEL_CHAIN
+NO_SEED_PATH = 20   # E4 writes hops = 20 (clipped) when no path to a seed exists
 
 ACTIONS: Dict[str, Dict[str, str]] = {
     "IMMEDIATE_FREEZE_DRAFT": {
@@ -51,7 +57,7 @@ ACTIONS: Dict[str, Dict[str, str]] = {
     },
     "PASSIVE_TAINT_MONITOR": {
         "title": "Put on passive taint watch",
-        "rule": f"Unspent balance, dormant ≥ {DORMANT_H:.0f} h, linked to a seed wallet (taint > 0 or ≤ 4 hops)",
+        "rule": f"Unspent balance, dormant ≥ {DORMANT_H:.0f} h, linked to a seed wallet (taint > 0 or ≤ {SEED_LINK_HOPS} hops)",
         "legal_basis": "No legal step yet. Watch the funds and re-alert when they move",
         "priority": "4",
     },
@@ -159,7 +165,7 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
     risky_share = float(w.get("share_risky_asn", 0))
     layering = {k: round(float(w.get(c, 0)), 3) for k, c in (("peel", "max_p_peel"), ("coinjoin", "max_p_coinjoin"),
                                                              ("fan_out", "max_p_fan_out")) if float(w.get(c, 0)) > 0.5}
-    if float(w.get("max_peel_chain_len", 0)) >= 3:
+    if float(w.get("max_peel_chain_len", 0)) >= MIN_PEEL_CHAIN:
         layering["peel_chain_len"] = int(w["max_peel_chain_len"])
     if moved >= LAYERING_MIN_BTC and risky_share > 0 and layering:
         matched.append(("FIU_REFERRAL_PACK", {
@@ -173,13 +179,13 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
     last = flows.last_seen.get(addr)
     dormant_h = (now - last).total_seconds() / 3600 if last is not None else 0.0
     taint, hops_from, hops_to = float(w.get("taint", 0)), float(w.get("hops_from_seed", 99)), float(w.get("hops_to_seed", 99))
-    if balance > 1e-4 and dormant_h >= DORMANT_H and (taint > 0 or min(hops_from, hops_to) <= 4):
+    if balance > 1e-4 and dormant_h >= DORMANT_H and (taint > 0 or min(hops_from, hops_to) <= SEED_LINK_HOPS):
         matched.append(("PASSIVE_TAINT_MONITOR", {"unspent_btc": round(balance, 8), "dormant_h": round(dormant_h, 1),
                                                   "taint": round(taint, 4), "hops_to_nearest_seed": int(min(hops_from, hops_to))}))
 
     if not own:
         pools = sorted({known[a]["entity_name"] for a in flows.funders(addr) if known.get(a, {}).get("entity_type") == "MINING_POOL"})
-        if pools and taint == 0 and min(hops_from, hops_to) >= 20 and risky_share == 0:
+        if pools and taint == 0 and min(hops_from, hops_to) >= NO_SEED_PATH and risky_share == 0:
             matched.append(("REVIEW_LIKELY_BENIGN", {"funded_by": pools, "why": "mining-pool payout recipient, no seed link"}))
 
     if not matched:

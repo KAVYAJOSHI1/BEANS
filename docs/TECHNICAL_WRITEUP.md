@@ -91,24 +91,49 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 
 | Engine | Metric | Value | Reference |
 |---|---|---|---|
-| Fusion | PR-AUC, out-of-fold by entity | **0.931** | random ranking = 0.066 |
-| Fusion | ROC-AUC | 0.987 | |
-| Fusion | Precision@50 | **0.98** | |
-| Fusion | Recall of illicit wallets at P ≥ 0.5 | 0.708 | |
-| Fusion | Expected calibration error | **0.013** | |
-| **Ablation** | PR-AUC **without** network-layer features | 0.898 | with = 0.931 → the network ↔ chain correlation adds value |
-| Alert list | Alerts that are illicit | **95 %** (285/300) | top 10: 100 % |
-| Alert list | Illicit entities with ≥ 1 alert | **100 %** (30/30) | |
+| Fusion | PR-AUC, out-of-fold by entity | **0.950** | random ranking = 0.066 |
+| Fusion | ROC-AUC | 0.985 | |
+| Fusion | Precision / recall of illicit wallets at P ≥ 0.5 | **0.984** / 0.847 | |
+| Fusion | Expected calibration error | **0.005** | |
+| **Ablation** | PR-AUC **without** network-layer features | 0.917 | with = 0.950 → the network ↔ chain correlation adds value |
+| Alert list | Alerts that are illicit | **98 %** (295/300) | top 10: 100 % |
+| Alert list | Illicit entities with ≥ 1 alert | **97 %** (29/30) | |
+| Alert list | Typology on the alert is correct (illicit alerts) | 84 % | |
 | E3 | Macro-F1, grouped CV | **0.993** | peel · CoinJoin · round-trip · fan-in/out all ≥ 0.97 |
 | E1 | Homogeneity (no cluster mixes two actors) | 1.00 | all wallets: 0.9985 |
 | E1 | Completeness (an actor's wallets in one cluster) | 0.58 | was 0.47 before the peel-chain change heuristic |
 | E4 | Hidden (non-seed) illicit wallets reached from seeds | 0.18 | legitimate wallets reached: 0.10 |
-| Typology | Accuracy on illicit wallets, grouped CV | 0.69 | |
-| Throughput | Ingest + all engines + training, 11.9k observations | **11 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
+| Typology | Accuracy on illicit wallets, grouped CV, pooled per cluster | 0.79 | |
+| Throughput | Ingest + all engines + training, 11.9k observations | **15 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
+
+**Multi-seed benchmark.** One dataset is one draw; `scripts/evaluate_seeds.py` regenerates N datasets with different
+seeds and runs the full pipeline on each. Six seeds (42, 7, 123, 2024, 99, 555), mean ± std, before → after the
+money-context features:
+
+| Metric | Before | After |
+|---|---|---|
+| PR-AUC | 0.940 ± 0.013 | **0.953 ± 0.013** |
+| Recall at P ≥ 0.5 | 0.844 ± 0.071 | **0.891 ± 0.033** |
+| Precision at P ≥ 0.5 | 0.946 ± 0.026 | **0.964 ± 0.015** |
+| Alert precision | 0.943 ± 0.042 | **0.967 ± 0.028** |
+| Typology accuracy (grouped CV) | 0.772 ± 0.085 | **0.801 ± 0.049** |
+| Typology correct on alerts | 0.798 ± 0.115 | **0.857 ± 0.053** |
+| Illicit entities alerted | 0.968 ± 0.026 | 0.968 ± 0.019 |
+
+**Money-context features** (`beans/features/extractors.py::context_features`, no labels, no attribution list): for the
+transactions that funded a wallet, the spread of sibling outputs, amounts just below a power-of-ten threshold
+(structuring), whether the payer is a hub address and how many funders the payer's parents had; on the spending
+side, whether the money lands on addresses that are later swept in ≥ 10-input consolidations (deposit-like) and whether
+the wallet itself is swept. Their cluster-level maxima carry the money's origin to every wallet of the owner. The
+typology model uses the cluster-level versions only (the wallet-level ones added noise there), is trained with
+equal weight per criminal entity, and its class probabilities are pooled over each CIOH cluster.
 
 Most important features (mean |SHAP|): cluster share of Tor/VPN/bulletproof relays, wallet share of risky relays, round-trip probability, cluster size, anomaly score, fan-out probability, equal-output share, reverse PPR to seeds.
 
-**What we tried and rejected.** Cluster-level seed features ("shares a cluster with a seed", cluster taint) raised entity coverage but cut alert precision from 95 % to 87–90 %, because the model over-trusted cluster membership. They are used only for evidence and the E4 metric.
+**What we tried and rejected.** Counterparty features (risk signals of the wallets a wallet trades with) and a larger
+LightGBM (500 trees, 31 leaves) were neutral (counterparty: PR-AUC 0.954 vs 0.953 over 6 seeds; larger model: 0.946 vs 0.946 over 3 seeds, 35 % slower),
+so they were dropped. Typology accuracy is limited by the number of criminal entities per dataset (one darknet market, three hack
+crews), not by features: ransomware and hack laundering move money almost identically. Cluster-level seed features ("shares a cluster with a seed", cluster taint) raised entity coverage but cut alert precision from 95 % to 87–90 %, because the model over-trusted cluster membership. They are used only for evidence and the E4 metric.
 
 **Reading these numbers honestly.** The data is synthetic and generated by the same team, so absolute scores are optimistic. The meaningful signals are *relative*: the network-layer ablation (+0.033 PR-AUC), the grouped (by entity) evaluation, calibration, and the weaker engines, which we report rather than hide (E1 completeness, E4 reach, typology).
 
