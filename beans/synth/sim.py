@@ -30,6 +30,16 @@ DUST = 0.00000546
 DENOMS = [1.0, 0.5, 0.1, 0.05, 0.01]
 ILLICIT = {"RANSOMWARE", "PEEL_CHAIN", "HACK_LAUNDERING", "DARKNET_MARKET", "FAN_OUT_SMURF", "ROUND_TRIP", "DUSTING"}
 T0 = datetime(2026, 9, 1, tzinfo=timezone.utc)
+T0_HEIGHT = 862_000                 # block height at T0 (one block per 10 minutes)
+
+# Wallet-software fingerprints: (tx version, anti-fee-sniping locktime?, signals RBF?). Individuals (illicit or not)
+# draw from the SAME distribution, so fingerprints can link one owner's transactions but never mark someone as a
+# criminal by itself. Services run batch software. Chosen by a hash of the entity id: the simulation's random stream,
+# and so every dataset, is unchanged by this.
+SOFTWARE = {"core": (2, True, True), "electrum": (2, True, False), "mobile_a": (2, False, True),
+            "mobile_b": (1, False, False), "service_batch": (2, False, False)}
+PERSONAL_SOFTWARE = [("core", 40), ("electrum", 25), ("mobile_a", 20), ("mobile_b", 15)]
+SERVICE_TYPOLOGIES = {"EXCHANGE", "MINER", "MERCHANT"}
 
 
 @dataclass
@@ -96,6 +106,16 @@ class Sim:
         self.entities[eid] = e
         return e
 
+    def software(self, e: Entity) -> str:
+        if e.typology in SERVICE_TYPOLOGIES or e.eid.startswith("CJCOORD"):
+            return "service_batch"
+        h = int(hashlib.sha256(f"{self.seed}|sw|{e.eid}".encode()).hexdigest(), 16) % 100
+        for name, share in PERSONAL_SOFTWARE:
+            if h < share:
+                return name
+            h -= share
+        return PERSONAL_SOFTWARE[-1][0]
+
     def new_addr(self, e: Entity, script: Optional[str] = None) -> str:
         a = self.address(script or e.script)
         e.addresses.append(a)
@@ -161,12 +181,15 @@ class Sim:
         self.tx_counter += 1
         txid = hashlib.sha256(f"beans-{self.seed}-{self.tx_counter}".encode()).hexdigest()
         typ = typology or e.typology
+        version, anti_snipe, rbf = SOFTWARE[self.software(broadcaster or e)]
+        height = T0_HEIGHT + int((t - T0).total_seconds() // 600)
         self.txs.append({
             "txid": txid, "t": t, "entity": (broadcaster or e).eid, "typology": typ,
             "illicit": self.entities[(broadcaster or e).eid].illicit if illicit is None else illicit,
             "tx_class": tx_class, "fee": 0.0 if coinbase else round(total_in - sum(v for _, v in outputs), 8),
             "inputs": [(u[0], u[1]) for _, u in ins], "outputs": outputs,
             "script": (broadcaster or e).script,
+            "tx_version": version, "locktime": height if anti_snipe else 0, "rbf": rbf,
         })
         return outputs
 

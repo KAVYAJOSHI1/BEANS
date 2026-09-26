@@ -92,6 +92,22 @@ export default function Entity360({ entityData, onSearch, loading }) {
               </div>
             </div>
 
+            {profile.software_fingerprints?.length > 0 && (
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-100 text-xs">
+                <span className="text-slate-500 font-semibold">Wallet-software fingerprint of its spends</span>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  {profile.software_fingerprints.map((f) => (
+                    <span key={f.fingerprint} className="px-2 py-0.5 rounded bg-white border border-slate-200 font-mono text-[11px]">
+                      {f.fingerprint} <span className="text-slate-400">× {f.spends}</span>
+                    </span>
+                  ))}
+                </div>
+                {profile.software_fingerprints.length > 1 && (
+                  <div className="text-amber-700 mt-1.5">More than one fingerprint: several wallet programs (or several people) spend from this address.</div>
+                )}
+              </div>
+            )}
+
             {/* Transaction Ledger */}
             <div>
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">

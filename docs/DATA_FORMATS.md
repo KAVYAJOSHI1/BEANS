@@ -22,6 +22,12 @@ One row = one **network observation**: a peer relayed a transaction to one of ou
 
 Rows that fail validation go to `data/quarantine.csv` with the reason. BEANS never fills a missing required field with a placeholder. The ingest result reports `rows_read` and `rows_quarantined`.
 
+**Optional wallet-software fingerprint columns** (recognised names in brackets): `tx_version` (`version`, `nversion`),
+`locktime` (`nlocktime`, `lock_time`), `rbf` (`replaceable`, `bip125_replaceable`, `opt_in_rbf`; true/false or 1/0).
+When present, clustering refuses to call an output "change" if it is later spent by different wallet software than
+the sender's, and can identify change by matching software. When absent they are simply not used (never guessed).
+Entity 360 shows each wallet's fingerprint(s).
+
 ## 2. File formats
 
 **CSV** (header row, UTF-8, BOM tolerated)

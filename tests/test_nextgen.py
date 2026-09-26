@@ -403,3 +403,31 @@ def test_hindi_legal_draft(client):
     assert "धारा 94" in doc["html"] and "9/2026" in doc["html"] and "legal review" in doc["html"]
     assert doc["annex"]["lang"] == "hi"
     assert client.post(f"/api/alerts/{a['alert_id']}/legal/section94?lang=fr", json={}).status_code == 422
+
+
+def test_fingerprint_fields_parse_and_guard_change(tmp_path):
+    from beans.engines import e1_cluster
+    from beans.features.extractors import tx_fingerprint
+    from beans.ingest.mapping import ColumnMapper
+    rec = ColumnMapper().build_record({"timestamp": "2026-09-01T00:00:00Z", "txid": "ab" * 32, "src_ip": "1.2.3.4",
+                                       "output_addresses": "x", "output_amounts": "0.1", "version": "2",
+                                       "nlocktime": "862000", "rbf": "true"})
+    assert (rec.tx_version, rec.locktime, rec.rbf) == (2, 862000, True)
+    assert ColumnMapper().build_record({"timestamp": "2026-09-01T00:00:00Z", "txid": "ab" * 32, "src_ip": "1.2.3.4",
+                                        "output_addresses": "x", "output_amounts": "0.1"}).rbf is None
+    # W pays PAYEE with a precise amount; the precision rule would call PAYEE the change, but PAYEE is later spent by
+    # different wallet software than W's, so the merge is refused
+    f = _frames([("t0", 0, [("src", 1.0)], [("W", 0.9)]),
+                 ("t1", 5, [("W", 0.9)], [("PAYEE", 0.12345678), ("CHG", 0.7760)]),
+                 ("t2", 30, [("PAYEE", 0.12345678)], [("z", 0.12)])])
+    f.tx["tx_version"] = [2, 2, 1]
+    f.tx["locktime"] = [862000, 862001, 0]
+    f.tx["rbf"] = [True, True, False]
+    assert tx_fingerprint(f.tx)["t1"] == "v2|h|r" and tx_fingerprint(f.tx)["t2"] == "v1|0|n"
+    cl, _ = e1_cluster.cluster(f, _xtx(f), set())
+    assert cl["W"] != cl["PAYEE"]
+    f.tx["tx_version"] = [2, 2, 2]
+    f.tx["locktime"] = [862000, 862001, 862005]
+    f.tx["rbf"] = [True, True, True]
+    cl2, _ = e1_cluster.cluster(f, _xtx(f), set())
+    assert cl2["W"] == cl2["PAYEE"]                       # same software: the precision rule applies

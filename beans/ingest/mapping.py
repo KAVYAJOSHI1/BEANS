@@ -39,6 +39,9 @@ DEFAULT_COLUMN_MAPPING = {
     "output_amounts": ["output_amounts", "vout_amounts", "out_amts", "out_amounts", "outputs_value", "output_values"],
     "fee": ["fee", "tx_fee", "miner_fee", "fees"],
     "script_type": ["script_type", "type", "script", "tx_type", "address_type"],
+    "tx_version": ["tx_version", "version", "nversion"],
+    "locktime": ["locktime", "nlocktime", "lock_time"],
+    "rbf": ["rbf", "replaceable", "bip125_replaceable", "opt_in_rbf"],
 }
 SCRIPT_TYPES = {"P2PKH", "P2SH", "P2WPKH", "P2WSH", "P2TR"}
 OPTION_KEYS = {"amount_unit"}
@@ -125,4 +128,25 @@ class ColumnMapper:
             dst_ip=str(n["dst_ip"]).strip() if n.get("dst_ip") else None, dst_port=int(float(n.get("dst_port", 8333))),
             input_addresses=ins, input_amounts=in_amts, output_addresses=outs, output_amounts=out_amts,
             fee=fee, script_type=script if script in SCRIPT_TYPES else "UNKNOWN",
+            **fingerprint(n),
         )
+
+
+def _opt_int(v):
+    return None if v in (None, "") else int(float(v))
+
+
+def _opt_bool(v):
+    if v in (None, ""):
+        return None
+    s = str(v).strip().lower()
+    if s in ("1", "true", "yes", "y", "t"):
+        return True
+    if s in ("0", "false", "no", "n", "f"):
+        return False
+    raise ValueError(f"rbf: cannot read {v!r} as true/false")
+
+
+def fingerprint(n: dict) -> dict:
+    """Optional wallet-software fields; absent → None (never guessed)."""
+    return {"tx_version": _opt_int(n.get("tx_version")), "locktime": _opt_int(n.get("locktime")), "rbf": _opt_bool(n.get("rbf"))}
