@@ -43,6 +43,17 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
         None, e4.get("legit_reached"))
     add("Typology model", "Accuracy on illicit wallets, grouped CV", fu.get("typology_accuracy_grouped_cv"), ">= 0.70")
 
+    ext = _elliptic()
+    if ext:
+        best = ext["detection"].get("BEANS LightGBM + calibration (AF)", {})
+        add("External: Elliptic (real Bitcoin, temporal split)", "Illicit F1 (published random forest 0.788, GCN 0.628)",
+            best.get("f1"), ">= 0.70", ext["published_weber_2019"]["Random forest (AF)"]["f1"])
+        add("External: Elliptic (real Bitcoin, temporal split)", "Illicit precision / calibration error", best.get("precision"),
+            ">= 0.80", best.get("ece"))
+        prop = ext.get("propagation", {})
+        add("External: Elliptic (real Bitcoin, temporal split)", "PR-AUC with 30 % of illicit known as seeds (without: baseline column)",
+            prop.get("pr_auc_model_plus_seeds"), None, prop.get("pr_auc_model_only"))
+
     conf = e3.get("confusion")
     card = {
         "model_overview": {
@@ -67,10 +78,18 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
             "baseline_column": "PR-AUC/P@50: share of illicit wallets (random ranking); ablation row: PR-AUC with network features; E4: share of legitimate wallets also reached",
         },
     }
+    if ext:
+        card["external_validation_elliptic"] = {k: ext[k] for k in ("dataset", "split", "detection", "published_weber_2019",
+                                                                    "propagation", "notes") if k in ext}
     if conf is None:
         card["not_measured"] = {"E3 confusion matrix": "no labelled transactions in this dataset"}
     CARD_PATH.write_text(json.dumps(card, indent=2, default=str))
     return card
+
+
+def _elliptic() -> Optional[Dict[str, Any]]:
+    from beans.validate.elliptic import REPORT as ELLIPTIC_REPORT
+    return json.loads(ELLIPTIC_REPORT.read_text()) if ELLIPTIC_REPORT.exists() else None
 
 
 def default_labels_path() -> Optional[Path]:

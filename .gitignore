@@ -21,3 +21,4 @@ models/model_card.json
 models/training_report.json
 data/tsa/
 data/quarantine.csv
+data/external/

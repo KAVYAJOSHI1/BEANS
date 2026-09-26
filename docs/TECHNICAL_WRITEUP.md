@@ -106,6 +106,14 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 | Typology | Accuracy on illicit wallets, grouped CV, pooled per cluster | **0.84** | |
 | Throughput | Ingest + all engines + training, 11.9k observations | **14 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
 
+**External validation on real data (Elliptic).** Elliptic (Weber et al. 2019) has 203,769 real, labelled Bitcoin
+transactions but anonymised features (no addresses, amounts or IPs), so it tests the modelling approach rather than the
+full pipeline. On the standard temporal split BEANS's calibrated LightGBM reaches illicit F1 **0.799** (precision 0.92,
+recall 0.71, ECE 0.018), equal to the strongest published baseline (random forest 0.788; our re-run 0.799) and above
+the published GCN (0.628). With 30 % of illicit transactions revealed as seeds, propagation lifts PR-AUC from 0.740 to
+**0.823**. Like every published model, it fails after the dark-market closure at time step 43. Details and limits:
+`docs/VALIDATION_ELLIPTIC.md`.
+
 **Multi-seed benchmark.** One dataset is one draw; `scripts/evaluate_seeds.py` regenerates N datasets with different
 seeds and runs the full pipeline on each. Six seeds (42, 7, 123, 2024, 99, 555), mean ± std:
 

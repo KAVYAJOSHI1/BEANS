@@ -4,7 +4,7 @@ BEANS = $(PY) -m beans.cli
 NPM  ?= npm
 N_TX ?= 5000
 
-.PHONY: help install venv synth ingest pipeline serve demo test build-ui clean-db
+.PHONY: help install venv synth ingest pipeline serve demo test build-ui clean-db validate-elliptic
 
 help:
 	@echo "make install    create .venv and install Python deps"
@@ -15,6 +15,7 @@ help:
 	@echo "make demo       pipeline + serve (one command)"
 	@echo "make test       run tests"
 	@echo "make build-ui   rebuild ui/dist (needs Node >= 20.19)"
+	@echo "make validate-elliptic   external validation on the real Elliptic dataset (downloads once)"
 	@echo "make docker-offline-test   build image and run it with --network none"
 	@echo "make bundle     offline release tarballs in dist/ (needs internet once)"
 
@@ -42,6 +43,9 @@ demo: pipeline serve
 
 test:
 	$(PY) -m pytest -q
+
+validate-elliptic:
+	$(BEANS) validate-elliptic --download
 
 build-ui:
 	cd ui && $(NPM) ci && $(NPM) run build
