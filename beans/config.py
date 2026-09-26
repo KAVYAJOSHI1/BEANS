@@ -42,6 +42,9 @@ class BeansSettings(BaseSettings):
     ACTION_DORMANT_H: float = 6.0           # taint watch: unspent balance idle at least this long
     ACTION_SEED_LINK_HOPS: int = 4          # taint watch: "linked to a seed" = taint > 0 or within this many hops
     ACTION_MIN_PEEL_CHAIN: int = 3          # FIU referral: a peel chain this long counts as layering
+
+    # Watchlist (beans/alerting/watch.py)
+    WATCH_AUTO_TAINT_MONITOR: bool = True   # wallets with a taint-watch directive are watched automatically
     
     class Config:
         env_file = ".env"

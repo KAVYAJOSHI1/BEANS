@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug,
+  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio,
 } from 'lucide-react';
 import coffeeBean from '../coffee-bean.svg';
 
@@ -8,6 +8,7 @@ export const NAV_GROUPS = [
   { title: 'Monitor', items: [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'alerts', label: 'Alert Triage', icon: AlertTriangle, badge: 'alerts' },
+    { id: 'watchlist', label: 'Watchlist', icon: Radio, badge: 'movements', urgent: true },
   ] },
   { title: 'Investigate', items: [
     { id: 'graph', label: 'Link Graph', icon: Network },
@@ -47,7 +48,7 @@ export default function Sidebar({ activeTab, setActiveTab, counts = {} }) {
           <div key={group.title}>
             <div className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{group.title}</div>
             <div className="space-y-0.5">
-              {group.items.map(({ id, label, icon: Icon, badge }) => {
+              {group.items.map(({ id, label, icon: Icon, badge, urgent }) => {
                 const active = activeTab === id;
                 const n = badge ? counts[badge] : null;
                 return (
@@ -61,7 +62,7 @@ export default function Sidebar({ activeTab, setActiveTab, counts = {} }) {
                     <Icon className="w-4 h-4 shrink-0" />
                     <span className="flex-1 text-left">{label}</span>
                     {n > 0 && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'bg-white/20' : 'bg-slate-700 text-slate-200'}`}>{n}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${active ? 'bg-white/20' : urgent ? 'bg-red-600 text-white pulse-dot' : 'bg-slate-700 text-slate-200'}`}>{n}</span>
                     )}
                   </button>
                 );

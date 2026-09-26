@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Briefcase, Download, Plus, FileText, CheckCircle2, Shield, Hash, ArrowDownToLine } from 'lucide-react';
 
-export default function CaseManager({ cases, onCreateCase, onExportDossier, exportResult }) {
+export default function CaseManager({ cases, onCreateCase, onExportDossier, exportResult, onWatchCase }) {
   const [caseName, setCaseName] = useState('');
   const [incidentType, setIncidentType] = useState('RANSOMWARE');
   const [notes, setNotes] = useState('');
@@ -140,6 +140,10 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                 </div>
 
                 <div className="flex items-center space-x-2 w-full sm:w-auto">
+                  <button onClick={() => onWatchCase?.(c.id)} title="Re-alert when any suspect wallet moves funds"
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200">
+                    Watch suspects
+                  </button>
                   <button
                     onClick={() => onExportDossier(c.id)}
                     className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200"

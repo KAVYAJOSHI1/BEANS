@@ -7,7 +7,8 @@ Formats:
   elastic     Elasticsearch _bulk NDJSON (URL = https://es:9200/<index>/_bulk), header `Authorization: ApiKey <token>`
   stix        STIX 2.1 bundle (MISP `/events/upload_stix/2`, OpenCTI), header `Authorization: <token>`
 
-Only alerts at or above the hook's `min_severity` that were not delivered to that hook before are sent, so
+Only alerts at or above the hook's `min_severity` (plus movement events of watched wallets, always CRITICAL)
+that were not delivered to that hook before are sent, so
 re-scoring never floods the SIEM with duplicates. Every attempt is written to `webhook_log`. Delivery runs
 in a background thread with 3 attempts (1 s, 3 s back-off) and never breaks the scoring pipeline.
 The whole tool is offline: webhooks point at SIEMs on the local / agency network.
@@ -116,7 +117,15 @@ def pending(conn, hook: Dict[str, Any]) -> List[Dict[str, Any]]:
         WHERE list_contains(?, severity) AND NOT EXISTS (
             SELECT 1 FROM webhook_log l WHERE l.webhook_id = ? AND l.alert_id = a.alert_id AND l.status = 'SENT')
         ORDER BY risk_score DESC LIMIT 500""", [sevs, hook["id"]]).fetchall()
-    return [_alert_dict(r) for r in rows]
+    out = [_alert_dict(r) for r in rows]
+    from beans.alerting import watch   # movement events of watched wallets are always CRITICAL
+    if SEVERITY_RANK[watch.EVENT_SEVERITY] >= min_rank:
+        cur = conn.execute("""SELECT * FROM watch_events e WHERE NOT EXISTS (
+            SELECT 1 FROM webhook_log l WHERE l.webhook_id = ? AND l.alert_id = e.event_id AND l.status = 'SENT')
+            ORDER BY ts""", [hook["id"]])
+        cols = [d[0] for d in cur.description]
+        out = [watch.as_alert(dict(zip(cols, r))) for r in cur.fetchall()] + out
+    return out
 
 
 def _hooks(conn, only: Optional[int] = None) -> List[Dict[str, Any]]:

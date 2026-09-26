@@ -168,6 +168,11 @@ def _run(conn, t0) -> dict:
     directives.recommend(alerts, W, f, directives.load_known(conn))
     timings["actions"] = round(time.time() - t0, 2)
     _write(conn, W, probs, alerts)
+    # watchlist: movements of already-watched wallets, then start watching new taint-watch wallets
+    from beans.alerting import watch
+    known = directives.load_known(conn)
+    watch_events = watch.check(conn, f, known)
+    auto_watched = watch.auto_watch(conn, alerts)
     timings["total"] = round(time.time() - t0, 2)
 
     report = {
@@ -176,6 +181,7 @@ def _run(conn, t0) -> dict:
         "seeds_in_graph": e4info.get("seeds_in_graph", 0), "alerts": len(alerts),
         "e3": e3_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
         "feature_count": len(feats), "network_features": network_cols + TX_NETWORK_COLS,
+        "watchlist": {"new_movement_events": len(watch_events), "auto_watched": auto_watched},
     }
     if labels_addr is not None and len(labels_addr):
         report["e1"].update(_cluster_quality(W, labels_addr))
@@ -188,7 +194,8 @@ def _run(conn, t0) -> dict:
     build_model_card(conn)
     return {"total_transactions": int(len(X_tx)), "wallets": int(len(W)),
             "clusters_computed": e1_rep.get("clusters"), "alerts_generated": len(alerts),
-            "seeds_propagated": len(seeds), "trained": trained, "seconds": timings["total"]}
+            "seeds_propagated": len(seeds), "trained": trained, "seconds": timings["total"],
+            "watch_events": len(watch_events)}
 
 
 def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:

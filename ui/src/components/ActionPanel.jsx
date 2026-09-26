@@ -28,6 +28,7 @@ export function ActionBadge({ action, pulse = false }) {
 const FACT_LABELS = {
   vasp: 'Exchange', country: 'Country', deposit_address: 'Deposit address', txid: 'Deposit tx', hops: 'Hops',
   amount_btc: 'Amount (BTC)', deposit_ts: 'Deposited (UTC)', minutes_after_receipt: 'Minutes after receipt',
+  minutes_before_latest_data: 'Minutes before latest data',
   check: 'Rule check', jurisdiction_note: 'Jurisdiction', vasps_reached: 'Exchanges reached', deposits_found: 'Deposits found',
   btc_moved: 'BTC moved', risky_broadcast_share: 'Risky broadcast share', first_relay_asn_type: 'First relay ASN',
   layering: 'Layering', offshore_vasps: 'Offshore exchanges', measured_over: 'Measured over', unspent_btc: 'Unspent (BTC)',
@@ -43,10 +44,10 @@ const fmtVal = (v) => {
   return String(v);
 };
 
-export function ActionCard({ alert, onUpdateStatus, onOpenDoc }) {
+export function ActionCard({ alert, onUpdateStatus, onOpenDoc, isWatched = false, onWatch }) {
   const ra = alert.recommended_action || {};
   if (!ra.action) return null;
-  const facts = Object.entries(ra.facts || {}).filter(([k]) => !HIDDEN.has(k));
+  const facts = Object.entries(ra.facts || {}).filter(([k, v]) => !HIDDEN.has(k) && v != null);
   const hasIndian = (ra.vasp_exposure || []).some((h) => h.in_jurisdiction);
   const hasExposure = (ra.vasp_exposure || []).length > 0;
   const btn = 'px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all';
@@ -114,9 +115,12 @@ export function ActionCard({ alert, onUpdateStatus, onOpenDoc }) {
             className={`${btn} ${ra.action === 'FIU_REFERRAL_PACK' ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>
             <FileText className="w-3.5 h-3.5" /> Export referral pack
           </button>
-          {ra.action === 'PASSIVE_TAINT_MONITOR' && (
-            <button onClick={() => onUpdateStatus(alert.alert_id, 'INVESTIGATING')} className={`${btn} bg-sky-600 text-white hover:bg-sky-700`}>
-              <Eye className="w-3.5 h-3.5" /> Start taint watch
+          {isWatched ? (
+            <span className={`${btn} bg-sky-50 text-sky-700 border border-sky-100`}><Eye className="w-3.5 h-3.5" /> On watchlist</span>
+          ) : (
+            <button onClick={() => { onWatch?.(alert.entity_id, alert.alert_id); if (ra.action === 'PASSIVE_TAINT_MONITOR') onUpdateStatus(alert.alert_id, 'INVESTIGATING'); }}
+              className={`${btn} ${ra.action === 'PASSIVE_TAINT_MONITOR' ? 'bg-sky-600 text-white hover:bg-sky-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>
+              <Eye className="w-3.5 h-3.5" /> {ra.action === 'PASSIVE_TAINT_MONITOR' ? 'Start taint watch' : 'Watch wallet'}
             </button>
           )}
           {ra.action === 'REVIEW_LIKELY_BENIGN' && (

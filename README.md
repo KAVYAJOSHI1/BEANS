@@ -7,7 +7,8 @@ BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). 
 Every alert also gets a **recommended action** from fixed, citable rules (draft a freeze request, draft a Section 94 BNSS
 notice, prepare an FIU-IND referral pack, put on taint watch, or review as a likely false positive). The legal drafts
 and evidence packs are sealed with SHA-256 and an offline RFC 3161 timestamp, and critical alerts can be pushed to a
-SIEM (Splunk, Elastic, Wazuh, MISP/OpenCTI via STIX 2.1).
+SIEM (Splunk, Elastic, Wazuh, MISP/OpenCTI via STIX 2.1). A **watchlist** re-alerts the moment a watched wallet moves
+funds in newly ingested data, and says whether the money just reached an exchange where it can still be frozen.
 
 - Vision, architecture, feature plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) ([PDF](MASTER_ROADMAP.pdf))
 - Team task split: [`TASKS_FINAL.md`](TASKS_FINAL.md)

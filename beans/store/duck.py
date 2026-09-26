@@ -172,6 +172,29 @@ class DuckStore:
             error VARCHAR,
             sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- watchlist: re-alert when these wallets spend (beans/alerting/watch.py)
+        CREATE TABLE IF NOT EXISTS watchlist (
+            address VARCHAR PRIMARY KEY,
+            reason VARCHAR,              -- AUTO_TAINT_WATCH | ANALYST | CASE
+            alert_id VARCHAR,
+            case_id INTEGER,
+            note VARCHAR,
+            watched_from TIMESTAMP,      -- data time: spends after this raise an event
+            balance_at_watch DOUBLE,
+            active BOOLEAN DEFAULT TRUE,
+            added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS watch_events (
+            event_id VARCHAR PRIMARY KEY,
+            address VARCHAR, txid VARCHAR, ts TIMESTAMP, amount_btc DOUBLE, destinations JSON,
+            first_spy_ip VARCHAR, first_spy_asn_type VARCHAR, first_spy_country VARCHAR,
+            vasp VARCHAR, vasp_in_jurisdiction BOOLEAN, vasp_deposit_address VARCHAR, vasp_deposit_ts VARCHAR,
+            minutes_since_move DOUBLE, watch_reason VARCHAR, alert_id VARCHAR, case_id INTEGER, recommended VARCHAR,
+            status VARCHAR DEFAULT 'OPEN',   -- OPEN | ACKNOWLEDGED
+            detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """)
         # migrations for databases created by earlier versions
         conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")

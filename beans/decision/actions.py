@@ -10,7 +10,8 @@ Inputs are the scored wallet matrix, the transaction frames and the attribution 
 Rules, in priority order (the first match is the directive; every match is listed). The numbers below are the
 defaults; they live in beans/config.py (ACTION_*) and can be overridden from the environment / .env:
   R0 REVIEW_LIKELY_BENIGN   the flagged wallet itself is a known exchange / mining-pool address
-  R1 IMMEDIATE_FREEZE_DRAFT funds traced (≤ 4 hops) to a known exchange within ≤ 30 min of receipt, risk ≥ 65
+  R1 IMMEDIATE_FREEZE_DRAFT funds traced (≤ 4 hops) to a known exchange ≤ 30 min after receipt or ≤ 30 min before
+                            the latest data (money still likely on the exchange), risk ≥ 65
   R2 DRAFT_SECTION_94_BNSS  funds traced to an exchange that operates in India (any delay)
   R3 FIU_REFERRAL_PACK      ≥ 1 BTC moved (by the wallet's cluster), broadcast via Tor/VPN/bulletproof hosting, with a layering pattern
   R4 PASSIVE_TAINT_MONITOR  unspent balance, dormant ≥ 6 h, linked to a seed (taint or ≤ 4 hops)
@@ -37,8 +38,8 @@ NO_SEED_PATH = 20   # E4 writes hops = 20 (clipped) when no path to a seed exist
 ACTIONS: Dict[str, Dict[str, str]] = {
     "IMMEDIATE_FREEZE_DRAFT": {
         "title": "Draft freeze / hold request to exchange",
-        "rule": f"Funds traced to a known exchange deposit within ≤ {FREEZE_WINDOW_MIN:.0f} min of receipt "
-                f"(≤ {MAX_HOPS} hops) and risk ≥ {FREEZE_MIN_RISK:.0f}",
+        "rule": f"Funds traced (≤ {MAX_HOPS} hops) to a known exchange deposit made ≤ {FREEZE_WINDOW_MIN:.0f} min after "
+                f"receipt or ≤ {FREEZE_WINDOW_MIN:.0f} min before the latest data, and risk ≥ {FREEZE_MIN_RISK:.0f}",
         "legal_basis": "Section 106 BNSS 2023 (seizure of property), request to the exchange to hold the credited funds",
         "priority": "1",
     },
@@ -148,12 +149,22 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
                                                  "why": "the flagged address is on the attribution list"}))
 
     hits = [] if own else flows.trace_to_vasp(addr, known)
-    timed = sorted((h for h in hits if h["minutes_after_receipt"] is not None), key=lambda h: h["minutes_after_receipt"])
-    if timed and timed[0]["minutes_after_receipt"] <= FREEZE_WINDOW_MIN and risk >= FREEZE_MIN_RISK:
-        h = timed[0]
-        matched.append(("IMMEDIATE_FREEZE_DRAFT", {**h, "risk": risk, "jurisdiction_note": None if h["in_jurisdiction"] else
+    # freeze while the money is likely still on the exchange: it arrived fast after receipt (quick cash-out), or it
+    # arrived within the window before the latest data (e.g. a dormant watched wallet that just woke up)
+    fresh = []
+    for h in hits:
+        age = (now - pd.Timestamp(h["deposit_ts"])).total_seconds() / 60
+        quick = h["minutes_after_receipt"] is not None and h["minutes_after_receipt"] <= FREEZE_WINDOW_MIN
+        if quick or 0 <= age <= FREEZE_WINDOW_MIN:
+            fresh.append((0 if quick else 1, h["minutes_after_receipt"] if quick else age, h, round(age, 1), quick))
+    if fresh and risk >= FREEZE_MIN_RISK:
+        _, _, h, age, quick = min(fresh, key=lambda x: (x[0], x[1]))
+        check = (f"{h['minutes_after_receipt']} min after receipt ≤ {FREEZE_WINDOW_MIN:.0f} min" if quick
+                 else f"deposited {age} min before the latest data ≤ {FREEZE_WINDOW_MIN:.0f} min")
+        matched.append(("IMMEDIATE_FREEZE_DRAFT", {**h, "risk": risk, "minutes_before_latest_data": age,
+                        "jurisdiction_note": None if h["in_jurisdiction"] else
                         "exchange is outside India: send as a voluntary hold request; formal route is a Letter of Request (Section 112 BNSS) / MLAT",
-                                                   "check": f"{h['minutes_after_receipt']} min ≤ {FREEZE_WINDOW_MIN:.0f} min"}))
+                        "check": check}))
     indian = [h for h in hits if h["in_jurisdiction"]]
     if indian:
         h = min(indian, key=lambda x: x["hops"])

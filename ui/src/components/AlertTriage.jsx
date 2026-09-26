@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, X, Sparkles, ArrowRight } from 'lucide-react';
 import { ACTION_META, ActionBadge, ActionCard, DocModal } from './ActionPanel';
 
-export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, onInspectEntity, onOpenGraph, onOpenTimeline, cases, onAddToCase, onCreateCase }) {
+export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, onInspectEntity, onOpenGraph, onOpenTimeline, cases, onAddToCase, onCreateCase, watched = [], onWatch }) {
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [statusFilter] = useState('ALL');
   const [actionFilter, setActionFilter] = useState('ALL');
@@ -208,7 +208,8 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
             </div>
           </div>
 
-          <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc} />
+          <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc}
+            isWatched={watched.includes(selectedAlert.entity_id)} onWatch={onWatch} />
 
           {/* Plain-English Reasons (XAI) */}
           <div>

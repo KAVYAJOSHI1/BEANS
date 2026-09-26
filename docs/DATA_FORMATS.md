@@ -118,6 +118,12 @@ from a local offline TSA (`data/tsa/`, created on first use; needs the `openssl`
 `openssl ts -verify -digest <sha256> -in token.tsr -CAfile tsa_ca.pem -untrusted tsa.pem` (certificates at
 `GET /api/tsa/tsa_ca.pem` and `/api/tsa/tsa.pem`), or `POST /api/tsa/verify`.
 
+**Watchlist** (`/api/watchlist`, `/api/watch-events`, Watchlist page): wallets with a taint-watch directive are watched
+automatically (`WATCH_AUTO_TAINT_MONITOR`); analysts can watch any alert's wallet or all suspects of a case. A wallet is
+watched from the latest transaction time in the database, so replayed historical files behave like live traffic.
+After every scoring run, each spend by a watched wallet after that time becomes one movement event (unique per wallet +
+transaction), traced forward to known exchanges and pushed to the webhooks as a CRITICAL `WATCHED_FUNDS_MOVED` alert.
+
 **SIEM webhooks** (`/api/webhooks`, Rules & Integrations page): formats `json` (Wazuh / custom), `splunk_hec`,
 `elastic` (`_bulk` NDJSON) and `stix` (STIX 2.1 bundle for MISP `/events/upload_stix/2` or OpenCTI). After every
 scoring run, alerts at or above each hook's `min_severity` are sent once per hook (3 attempts, logged in `webhook_log`).

@@ -51,7 +51,7 @@ def test_fast_exchange_deposit_is_a_freeze_draft():
 
 def test_slow_or_low_risk_deposit_is_a_section94_draft():
     f = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 300, [("W", 0.5)], [("X", 0.49)]),
-                 ("t2", 320, [("X", 0.49)], [("DEP", 0.48)])])
+                 ("t2", 320, [("X", 0.49)], [("DEP", 0.48)]), ("t9", 600, [("a", 1)], [("b", 1)])])   # deposit is stale
     ra = _decide(f, "W", {"DEP": VASP_IN})
     assert ra["action"] == "DRAFT_SECTION_94_BNSS" and ra["facts"]["hops"] == 2
     fast = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 5, [("W", 0.5)], [("DEP", 0.49)])])
@@ -290,3 +290,15 @@ def test_hubs_absorb_taint():
     G.add_edge("SEED", "mule", weight=1.0)
     df, _ = e4.propagate(G, {"SEED"})
     assert df.loc["mule", "taint"] > 0.5 and df.loc["cust0", "taint"] == 0
+
+
+def test_fresh_deposit_by_dormant_wallet_is_a_freeze():
+    # received at t=0, dormant 2 days, then cashes out 10 min before the end of the data
+    f = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 2880, [("W", 0.5)], [("DEP", 0.49)]),
+                 ("t2", 2890, [("x", 1)], [("y", 1)])])
+    ra = _decide(f, "W", {"DEP": VASP_IN})
+    assert ra["action"] == "IMMEDIATE_FREEZE_DRAFT"
+    assert ra["facts"]["minutes_before_latest_data"] == 10.0 and "before the latest data" in ra["facts"]["check"]
+    stale = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 2880, [("W", 0.5)], [("DEP", 0.49)]),
+                     ("t2", 4000, [("x", 1)], [("y", 1)])])
+    assert _decide(stale, "W", {"DEP": VASP_IN})["action"] == "DRAFT_SECTION_94_BNSS"
