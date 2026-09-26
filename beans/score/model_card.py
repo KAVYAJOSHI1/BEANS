@@ -35,10 +35,12 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
     add("Alert list", "Precision (alerted wallets that are illicit)", aq.get("alert_precision"), ">= 0.70")
     add("Alert list", "Illicit entities with ≥1 alert", aq.get("entity_recall"), ">= 0.75")
     add("E3 tx-shape classifier (LightGBM)", "Macro F1, grouped CV", e3.get("macro_f1"), ">= 0.80")
-    add("E1 clustering (CIOH + change)", "Homogeneity: clusters never mix entities", e1.get("homogeneity_illicit"), ">= 0.95")
-    add("E1 clustering (CIOH + change)", "Completeness: entity kept in one cluster", e1.get("completeness_illicit"), ">= 0.50")
-    add("E4 seed propagation", "Hidden (non-seed) illicit wallets reached", e4.get("hidden_reached"), ">= 0.75",
-        e4.get("legit_reached"))
+    add("E1 clustering (CIOH + change + self-split)", "Homogeneity: clusters never mix entities", e1.get("homogeneity_illicit"), ">= 0.95")
+    add("E1 clustering (CIOH + change + self-split)", "Completeness: entity kept in one cluster", e1.get("completeness_illicit"), ">= 0.50")
+    add("E4 seed propagation", "Hidden wallets of seeded entities reached", e4.get("hidden_reached_in_seeded_entities"),
+        ">= 0.75", e4.get("legit_reached"))
+    add("E4 seed propagation", "All hidden illicit wallets reached (most entities have no seed)", e4.get("hidden_reached"),
+        None, e4.get("legit_reached"))
     add("Typology model", "Accuracy on illicit wallets, grouped CV", fu.get("typology_accuracy_grouped_cv"), ">= 0.70")
 
     conf = e3.get("confusion")

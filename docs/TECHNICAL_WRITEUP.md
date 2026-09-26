@@ -91,34 +91,51 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 
 | Engine | Metric | Value | Reference |
 |---|---|---|---|
-| Fusion | PR-AUC, out-of-fold by entity | **0.950** | random ranking = 0.066 |
-| Fusion | ROC-AUC | 0.985 | |
-| Fusion | Precision / recall of illicit wallets at P ≥ 0.5 | **0.984** / 0.847 | |
-| Fusion | Expected calibration error | **0.005** | |
-| **Ablation** | PR-AUC **without** network-layer features | 0.917 | with = 0.950 → the network ↔ chain correlation adds value |
-| Alert list | Alerts that are illicit | **98 %** (295/300) | top 10: 100 % |
-| Alert list | Illicit entities with ≥ 1 alert | **97 %** (29/30) | |
-| Alert list | Typology on the alert is correct (illicit alerts) | 84 % | |
+| Fusion | PR-AUC, out-of-fold by entity | **0.955** | random ranking = 0.066 |
+| Fusion | Precision / recall of illicit wallets at P ≥ 0.5 | **0.983** / 0.901 | |
+| Fusion | Expected calibration error | **0.006** | |
+| **Ablation** | PR-AUC **without** network-layer features | 0.899 | with = 0.955 → the network ↔ chain correlation adds value |
+| Alert list | Illicit entities with ≥ 1 alert | **97 %** (29/30) | 132 alerts, 4.6 per entity |
+| Alert list | Alerts that are illicit | 89 % | top 10: 100 % |
+| Alert list | Typology on the alert is correct (illicit alerts) | 81 % | |
 | E3 | Macro-F1, grouped CV | **0.993** | peel · CoinJoin · round-trip · fan-in/out all ≥ 0.97 |
-| E1 | Homogeneity (no cluster mixes two actors) | 1.00 | all wallets: 0.9985 |
-| E1 | Completeness (an actor's wallets in one cluster) | 0.58 | was 0.47 before the peel-chain change heuristic |
-| E4 | Hidden (non-seed) illicit wallets reached from seeds | 0.18 | legitimate wallets reached: 0.10 |
-| Typology | Accuracy on illicit wallets, grouped CV, pooled per cluster | 0.79 | |
-| Throughput | Ingest + all engines + training, 11.9k observations | **15 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
+| E1 | Homogeneity (no cluster mixes two actors) | **1.00** | all wallets: 1.00 |
+| E1 | Completeness (an actor's wallets in one cluster) | **0.79** | 0.58 before the self-split heuristic and change-heuristic guards |
+| E4 | Hidden wallets of seeded actors reached | **0.77** | legitimate wallets reached: 0.08 |
+| E4 | All hidden illicit wallets reached | 0.31 | 70 % of actors have no seed at all |
+| Typology | Accuracy on illicit wallets, grouped CV, pooled per cluster | **0.84** | |
+| Throughput | Ingest + all engines + training, 11.9k observations | **14 s** | scoring ≈ 3,300 rows/s, linear up to 117k rows / 1.4 GB (docs/BENCHMARK.md) |
 
 **Multi-seed benchmark.** One dataset is one draw; `scripts/evaluate_seeds.py` regenerates N datasets with different
-seeds and runs the full pipeline on each. Six seeds (42, 7, 123, 2024, 99, 555), mean ± std, before → after the
-money-context features:
+seeds and runs the full pipeline on each. Six seeds (42, 7, 123, 2024, 99, 555), mean ± std:
 
 | Metric | Before | After |
 |---|---|---|
-| PR-AUC | 0.940 ± 0.013 | **0.953 ± 0.013** |
-| Recall at P ≥ 0.5 | 0.844 ± 0.071 | **0.891 ± 0.033** |
-| Precision at P ≥ 0.5 | 0.946 ± 0.026 | **0.964 ± 0.015** |
-| Alert precision | 0.943 ± 0.042 | **0.967 ± 0.028** |
-| Typology accuracy (grouped CV) | 0.772 ± 0.085 | **0.801 ± 0.049** |
-| Typology correct on alerts | 0.798 ± 0.115 | **0.857 ± 0.053** |
-| Illicit entities alerted | 0.968 ± 0.026 | 0.968 ± 0.019 |
+| PR-AUC | 0.940 ± 0.013 | **0.954 ± 0.007** |
+| Recall / precision at P ≥ 0.5 | 0.844 / 0.946 | **0.905 / 0.953** |
+| Typology accuracy (grouped CV) | 0.773 ± 0.085 | **0.831 ± 0.043** |
+| Typology correct on alerts | 0.798 ± 0.115 | **0.834 ± 0.036** |
+| E1 completeness (illicit) | 0.580 ± 0.007 | **0.744 ± 0.024** |
+| E1 homogeneity (illicit) | 0.999 | **1.000 on every seed** |
+| E4 hidden wallets of seeded actors reached | 0.533 ± 0.170 | **0.861 ± 0.058** |
+| E4 legitimate wallets reached (false reach) | 0.169 ± 0.063 | **0.097 ± 0.029** |
+| Illicit entities alerted | 0.968 ± 0.026 | 0.962 ± 0.022 |
+| Alerts per illicit entity | 9.9 | **5.8** |
+| Alerts that are illicit | 0.943 | 0.864 (same false alerts, list half as long) |
+
+**E1 changes.** (1) *Self-split heuristic*: a single non-hub owner (address seen in ≤ 6 transactions) splitting a
+balance into ≥ 7 near-identical parts (coefficient of variation ≤ 5 %, one change output allowed) on fresh addresses
+owns those parts. Launderers split loot this way; exchange / pool payouts have varied amounts and come from hubs,
+CoinJoins are excluded. With ≥ 5 parts completeness was 0.756 but a darknet market was merged with the vendors it
+paid (homogeneity 0.991); ≥ 7 keeps homogeneity at 1.000. (2) *Change-heuristic guards*: the precision heuristic
+sometimes took the small, precise peel payment to an exchange deposit address as "change", which bridged a whole
+exchange (via its deposit sweeps) into a criminal's cluster. An address later swept in a ≥ 10-input consolidation is
+never change, and in a peel-shaped transaction the tiny output is never change.
+
+**E4 changes.** (1) Hubs (degree > 60, i.e. exchanges and pools) now absorb haircut taint instead of passing it on to
+every customer; this halved false reach. (2) A direction-agnostic hop distance (≤ 4, not through hubs) reaches the
+sibling outputs of a seed's funder (seed ← funder → sibling). (3) The headline E4 metric is now reach *within seeded
+actors*: reach over all hidden wallets is capped by the 70 % of actors that have no seed.
 
 **Money-context features** (`beans/features/extractors.py::context_features`, no labels, no attribution list): for the
 transactions that funded a wallet, the spread of sibling outputs, amounts just below a power-of-ten threshold

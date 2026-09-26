@@ -34,7 +34,7 @@ print(json.dumps({
     "precision_at_100": f.get("precision_at_100"), "ece": f.get("ece"),
     "typology_accuracy": f.get("typology_accuracy_grouped_cv"), "typology_unpooled": f.get("typology_accuracy_grouped_cv_unpooled"), "alert_typology_accuracy": q.get("typology_accuracy"),
     "e3_macro_f1": r["e3"].get("macro_f1"), "e1_completeness_illicit": e1.get("completeness_illicit"),
-    "e1_homogeneity_illicit": e1.get("homogeneity_illicit"), "e4_hidden_reached": e4.get("hidden_reached"),
+    "e1_homogeneity_illicit": e1.get("homogeneity_illicit"), "e1_homogeneity_all": e1.get("homogeneity_all"), "e4_hidden_reached": e4.get("hidden_reached"), "e4_reached_seeded_entities": e4.get("hidden_reached_in_seeded_entities"), "alerts": q.get("alerts"), "alerts_per_entity": (q.get("alerts") or 0) / max(q.get("illicit_entities_alerted") or 1, 1), "e4_legit_reached": e4.get("legit_reached"),
     "alert_precision": q.get("alert_precision"), "entity_recall": q.get("entity_recall"),
     "seconds": r["timings_s"]["total"],
 }))
