@@ -161,7 +161,7 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
         _, _, h, age, quick = min(fresh, key=lambda x: (x[0], x[1]))
         check = (f"{h['minutes_after_receipt']} min after receipt ≤ {FREEZE_WINDOW_MIN:.0f} min" if quick
                  else f"deposited {age} min before the latest data ≤ {FREEZE_WINDOW_MIN:.0f} min")
-        matched.append(("IMMEDIATE_FREEZE_DRAFT", {**h, "risk": risk, "minutes_before_latest_data": age,
+        matched.append(("IMMEDIATE_FREEZE_DRAFT", {**h, "risk": risk, "minutes_before_latest_data": None if quick else age,
                         "jurisdiction_note": None if h["in_jurisdiction"] else
                         "exchange is outside India: send as a voluntary hold request; formal route is a Letter of Request (Section 112 BNSS) / MLAT",
                         "check": check}))
