@@ -57,7 +57,7 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
     conf = e3.get("confusion")
     card = {
         "model_overview": {
-            "name": "BEANS: four engines + calibrated fusion",
+            "name": "BEANS: five engines + calibrated fusion",
             "evaluated_at": r.get("evaluated_at"), "trained_this_run": r.get("trained"),
             "transactions": r.get("transactions"), "wallets": r.get("wallets"),
             "illicit_wallets": fu.get("illicit_wallets"), "illicit_entities": fu.get("illicit_entities"),

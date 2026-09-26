@@ -25,6 +25,9 @@ class BeansSettings(BaseSettings):
     RISK_HIGH_MIN: float = 65.0
     RISK_MEDIUM_MIN: float = 40.0
     
+    # Engines
+    E5_GNN: bool = True                   # SIGN-style graph neural features (beans/engines/e5_gnn.py)
+
     # Alert list
     ALERT_MIN_PROBABILITY: float = 0.40   # a wallet becomes an alert candidate at this calibrated P(illicit)
     MAX_ALERTS: int = 300                 # one alert per cluster, highest risk first

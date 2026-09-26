@@ -302,3 +302,20 @@ def test_fresh_deposit_by_dormant_wallet_is_a_freeze():
     stale = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 2880, [("W", 0.5)], [("DEP", 0.49)]),
                      ("t2", 4000, [("x", 1)], [("y", 1)])])
     assert _decide(stale, "W", {"DEP": VASP_IN})["action"] == "DRAFT_SECTION_94_BNSS"
+
+
+def test_gnn_mean_aggregation_and_hub_cut():
+    import networkx as nx
+    from beans.engines import e4_propagate, e5_gnn
+    G = nx.DiGraph([("a", "b"), ("c", "b"), ("b", "d")])
+    for i in range(e4_propagate.HUB_DEGREE + 2):          # "hub" talks to everyone
+        G.add_edge("hub", f"x{i}")
+    G.add_edge("a", "hub")
+    W = pd.DataFrame({"share_risky_asn": [1.0, 0.0, 0.0, 0.0, 0.0] + [0.0] * (e4_propagate.HUB_DEGREE + 2)},
+                     index=["a", "b", "c", "d", "hub"] + [f"x{i}" for i in range(e4_propagate.HUB_DEGREE + 2)])
+    F = e5_gnn.sign_features(G, W, cols=["share_risky_asn"])
+    z = (W["share_risky_asn"] - W["share_risky_asn"].mean()) / W["share_risky_asn"].std(ddof=0)
+    assert F.loc["b", "gnn_in1_share_risky_asn"] == pytest.approx((z["a"] + z["c"]) / 2, rel=1e-5)   # mean of senders
+    assert F.loc["d", "gnn_in2_share_risky_asn"] == pytest.approx((z["a"] + z["c"]) / 2, rel=1e-5)   # 2 hops back
+    assert F.loc["a", "gnn_out1_share_risky_asn"] == pytest.approx(z["b"], rel=1e-5)   # the hub edge is cut
+    assert F.loc["x0", "gnn_in1_share_risky_asn"] == 0.0

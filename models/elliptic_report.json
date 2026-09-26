@@ -40,6 +40,22 @@
       "roc_auc": 0.8823,
       "ece": 0.02
     },
+    "BEANS LightGBM + calibration (LF + GNN (E5))": {
+      "precision": 0.8035,
+      "recall": 0.7211,
+      "f1": 0.7601,
+      "pr_auc": 0.7554,
+      "roc_auc": 0.8813,
+      "ece": 0.0243
+    },
+    "BEANS LightGBM + calibration (AF + GNN (E5))": {
+      "precision": 0.8531,
+      "recall": 0.7184,
+      "f1": 0.7799,
+      "pr_auc": 0.7559,
+      "roc_auc": 0.8909,
+      "ece": 0.017
+    },
     "Random forest (LF), re-run here": {
       "precision": 0.8538,
       "recall": 0.7175,
@@ -91,42 +107,42 @@
     {
       "time_step": 35,
       "illicit": 182,
-      "f1": 0.9638
+      "f1": 0.9667
     },
     {
       "time_step": 36,
       "illicit": 33,
-      "f1": 0.8767
+      "f1": 0.9014
     },
     {
       "time_step": 37,
       "illicit": 40,
-      "f1": 0.7463
+      "f1": 0.7385
     },
     {
       "time_step": 38,
       "illicit": 111,
-      "f1": 0.9159
+      "f1": 0.9282
     },
     {
       "time_step": 39,
       "illicit": 81,
-      "f1": 0.9067
+      "f1": 0.9007
     },
     {
       "time_step": 40,
       "illicit": 112,
-      "f1": 0.7619
+      "f1": 0.7539
     },
     {
       "time_step": 41,
       "illicit": 116,
-      "f1": 0.952
+      "f1": 0.9474
     },
     {
       "time_step": 42,
       "illicit": 239,
-      "f1": 0.8578
+      "f1": 0.8565
     },
     {
       "time_step": 43,
@@ -136,7 +152,7 @@
     {
       "time_step": 44,
       "illicit": 24,
-      "f1": 0.1143
+      "f1": 0.0645
     },
     {
       "time_step": 45,
@@ -146,7 +162,7 @@
     {
       "time_step": 46,
       "illicit": 2,
-      "f1": 0.2
+      "f1": 0.0
     },
     {
       "time_step": 47,
@@ -156,12 +172,12 @@
     {
       "time_step": 48,
       "illicit": 36,
-      "f1": 0.0526
+      "f1": 0.0
     },
     {
       "time_step": 49,
       "illicit": 56,
-      "f1": 0.0317
+      "f1": 0.0312
     }
   ],
   "propagation": {
@@ -171,11 +187,11 @@
     "hidden_illicit_within_2_hops_of_a_seed": 0.4993,
     "licit_within_2_hops_of_a_seed": 0.0522,
     "pr_auc_ppr_only": 0.1972,
-    "pr_auc_model_only": 0.7396,
-    "pr_auc_model_plus_seeds": 0.8225,
+    "pr_auc_model_only": 0.7359,
+    "pr_auc_model_plus_seeds": 0.8206,
     "base_rate": 0.0483
   },
-  "seconds": 30.3,
+  "seconds": 44.2,
   "notes": [
     "Elliptic features are anonymised: no addresses, amounts or IPs, so this validates the modelling approach, not BEANS's ingest / clustering / network layer.",
     "Published numbers are quoted from Weber et al. 2019 (arXiv:1908.02591), Table 1.",
