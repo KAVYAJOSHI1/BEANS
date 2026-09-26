@@ -207,11 +207,14 @@ def tx_fingerprint(tx: pd.DataFrame) -> pd.Series:
     Missing fields → NaN (unknown; never guessed)."""
     if "tx_version" not in tx:
         return pd.Series(np.nan, index=tx["txid"], dtype=object)
-    lt = tx["locktime"]
-    lock = np.where(lt.isna(), None, np.where(lt >= 500_000_000, "t", np.where(lt > 0, "h", "0")))
-    fp = ("v" + tx["tx_version"].astype("Int64").astype(str) + "|" + pd.Series(lock, index=tx.index).astype(str) + "|"
-          + np.where(tx["rbf"].astype("boolean").fillna(False), "r", "n"))
-    known = tx["tx_version"].notna() & tx["locktime"].notna() & tx["rbf"].notna()
+    # plain floats: files with and without these fields can be mixed, and nullable NA breaks np.where
+    lt = pd.to_numeric(tx["locktime"], errors="coerce").astype(float)
+    ver = pd.to_numeric(tx["tx_version"], errors="coerce").astype(float)
+    rbf = tx["rbf"].map(lambda v: None if v is None or v is pd.NA or (isinstance(v, float) and np.isnan(v)) else bool(v))
+    lock = np.where(lt >= 500_000_000, "t", np.where(lt > 0, "h", "0"))
+    fp = ("v" + ver.fillna(-1).astype(int).astype(str) + "|" + pd.Series(lock, index=tx.index) + "|"
+          + np.where(rbf.fillna(False).astype(bool), "r", "n"))
+    known = ver.notna() & lt.notna() & rbf.notna()
     return pd.Series(np.where(known, fp, None), index=tx["txid"].values, dtype=object)
 
 
