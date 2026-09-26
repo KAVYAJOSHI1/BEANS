@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import MoneyTrail from './MoneyTrail';
 import { Play, Pause, RotateCcw, ArrowRight, Clock, ShieldCheck, ShieldAlert, Cpu } from 'lucide-react';
 
 export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [entity, setEntity] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
+  const [mode, setMode] = useState('trail');
 
   const events = timelineEvents || [];
   const activeEvent = events[currentStep] || events[0];
@@ -12,6 +14,13 @@ export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
   const handleNext = () => {
     setCurrentStep((prev) => (prev < events.length - 1 ? prev + 1 : 0));
   };
+
+  useEffect(() => {   // autoplay through the wallet's history
+    if (!isPlaying) return undefined;
+    if (currentStep >= events.length - 1) { setIsPlaying(false); return undefined; }
+    const t = setTimeout(() => setCurrentStep((s) => s + 1), 900);
+    return () => clearTimeout(t);
+  }, [isPlaying, currentStep, events.length]);
 
   return (
     <div className="space-y-6">
@@ -32,6 +41,18 @@ export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
 
         {/* Playback Controls */}
         <div className="flex items-center space-x-2">
+          <div className="flex rounded-lg bg-slate-100 p-0.5 mr-2">
+            {[['trail', 'Follow the money'], ['history', 'Wallet history']].map(([m, label]) => (
+              <button key={m} onClick={() => setMode(m)}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold ${mode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600'}`}>{label}</button>
+            ))}
+          </div>
+          {mode === 'history' && (
+            <button onClick={() => { if (currentStep >= events.length - 1) setCurrentStep(0); setIsPlaying(!isPlaying); }}
+              className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700" title={isPlaying ? 'Pause' : 'Play'}>
+              {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            </button>
+          )}
           <button
             onClick={() => setCurrentStep(0)}
             className="p-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
@@ -49,6 +70,9 @@ export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
         </div>
       </div>
 
+      {mode === 'trail' && <MoneyTrail entity={events[0]?.entity} />}
+
+      {mode === 'history' && <>
       {/* Progress Slider */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex justify-between text-xs font-semibold text-slate-600">
@@ -107,6 +131,7 @@ export default function TimelineReplay({ timelineEvents, onLoadTimeline }) {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

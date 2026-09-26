@@ -353,3 +353,16 @@ def test_counterfactual_groups_related_columns_and_finds_minimal_change():
     assert one["Tor / VPN / bulletproof relaying"] == 35.0          # both risky columns reset together
     assert cf["minimal_change"] == {"factors": ["Tor / VPN / bulletproof relaying"], "risk_after": 35.0}
     assert "alone decides" in cf["summary"]
+
+
+def test_follow_the_money_trace(client):
+    alerts = client.get("/api/alerts?limit=1000").json()
+    start = next((a for a in alerts if a["alert_type"] == "PEEL_CHAIN_PATTERN"), alerts[0])["entity_id"]
+    t = client.get("/api/timeline/trace", params={"entity": start}).json()
+    assert t["start"] == start and t["stop_reason"]
+    hops = t["hops"]
+    if hops:
+        assert hops[0]["from"] == start and hops[0]["minutes_since_previous"] is None
+        assert all(b["from"] == a["change_address"] for a, b in zip(hops, hops[1:]))       # follows the change
+        assert all(b["peeled_total"] >= a["peeled_total"] for a, b in zip(hops, hops[1:]))
+        assert t["summary"]["hops"] == len(hops)
