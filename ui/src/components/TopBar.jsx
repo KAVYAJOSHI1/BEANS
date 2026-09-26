@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, RefreshCw, Moon, Sun } from 'lucide-react';
+import { Search, RefreshCw, Moon, Sun, LogOut, UserRound } from 'lucide-react';
+import { logout, useSession } from '../session';
 import { toggleTheme, useTheme } from '../theme';
 import { PAGE_TITLES } from './Sidebar';
 
@@ -11,6 +12,7 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
   const page = PAGE_TITLES[activeTab] || { label: '', group: '' };
   const k = stats?.kpis;
   const theme = useTheme();
+  const { user, authEnabled } = useSession();
 
   const submit = (e) => {
     e.preventDefault();
@@ -43,6 +45,16 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
             <span><b className="text-slate-800">{k.total_transactions.toLocaleString()}</b> tx</span>
             <span><b className="text-slate-800">{k.total_wallets.toLocaleString()}</b> wallets</span>
             <span><b className="text-rose-600">{k.open_alerts ?? k.total_alerts}</b> open alerts</span>
+          </div>
+        )}
+        {authEnabled && user && (
+          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+            <UserRound className="w-4 h-4 text-slate-400" />
+            <div className="leading-tight">
+              <div className="font-semibold text-slate-800">{user.display_name || user.username}</div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400">{user.role}</div>
+            </div>
+            <button onClick={logout} title="Sign out" className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100"><LogOut className="w-4 h-4" /></button>
           </div>
         )}
         <button onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}

@@ -163,11 +163,13 @@ export function DocModal({ doc, onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  const url = (fmt) => legal
-    ? `${API_BASE}/alerts/${alert.alert_id}/legal/${kind}?fmt=${fmt}`
-    : `${API_BASE}/alerts/${alert.alert_id}/referral?fmt=${fmt}`;
-  const call = (fmt) => fetch(url(fmt), legal
-    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) } : undefined);
+  // generating a legal draft files an approval request; downloads then read that stored request (never re-file it)
+  const call = (fmt) => {
+    if (!legal) return fetch(`${API_BASE}/alerts/${alert.alert_id}/referral?fmt=${fmt}`);
+    if (fmt !== 'json' && result?.request) return fetch(`${API_BASE}/legal-requests/${result.request.id}?fmt=${fmt}`);
+    return fetch(`${API_BASE}/alerts/${alert.alert_id}/legal/${kind}?fmt=${fmt}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) });
+  };
 
   const generate = async () => {
     setBusy(true);
@@ -234,7 +236,7 @@ export function DocModal({ doc, onClose }) {
                 ))}
                 <button onClick={generate} disabled={busy}
                   className="w-full py-2 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-1.5">
-                  {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Gavel className="w-3.5 h-3.5" />} {result ? 'Regenerate draft' : 'Generate draft'}
+                  {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Gavel className="w-3.5 h-3.5" />} {result ? 'Redraft (files a new request)' : 'Generate draft'}
                 </button>
               </>
             ) : (
@@ -256,6 +258,12 @@ export function DocModal({ doc, onClose }) {
                     <div className="text-amber-700">Not timestamped: {ts?.reason}</div>
                   )}
                 </div>
+                {result.request && (
+                  <div className="p-2.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-800">
+                    Filed as request <b>#{result.request.id}</b>: pending supervisor approval (Legal Approvals page).
+                    Downloads are marked as drafts until a different supervisor approves.
+                  </div>
+                )}
                 {result.missing_fields?.length > 0 && (
                   <div className="text-amber-700">Blank for the IO: {result.missing_fields.join(', ')}</div>
                 )}

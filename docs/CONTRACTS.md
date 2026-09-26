@@ -113,5 +113,9 @@ beans.report.case_pdf(con, case_id | alert_id, out_path) -> Path                
 | GET/POST/DELETE | /watchlist, /watchlist/{address}, /cases/{id}/watch | wallets whose next spend raises a movement event |
 | GET/PATCH | /watch-events?status=, /watch-events/{id} | movement events (OPEN / ACKNOWLEDGED) |
 | GET | /config | thresholds from `beans/config.py` + whether the loaded data is synthetic |
+| POST/GET | /auth/login, /auth/logout, /auth/me, /auth/password | session cookie; login required once a user exists |
+| GET/POST/PATCH | /users, /users/{name} | user management (ADMIN) |
+| GET | /legal-requests?status=, /legal-requests/{id}?fmt=json\|html\|pdf | filed legal drafts with approval state |
+| POST | /legal-requests/{id}/decision | APPROVE / REJECT (SUPERVISOR, not the drafter) |
 
 `BEANS_MOCK=1` makes the API serve `data/samples/mock_*.json`, so the UI can be built before real data exists.
