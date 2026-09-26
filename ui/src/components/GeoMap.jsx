@@ -1,9 +1,10 @@
 import React from 'react';
 import * as echarts from 'echarts';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './Chart';
 import { feature } from 'topojson-client';
 import worldTopo from 'world-atlas/countries-110m.json';
 import { Globe, Plane, ShieldAlert, Radio, Server } from 'lucide-react';
+import { useTheme } from '../theme';
 
 // Natural Earth 110m outlines bundled at build time, so the map works fully offline.
 if (!echarts.getMap('world')) echarts.registerMap('world', feature(worldTopo, worldTopo.objects.countries));
@@ -11,15 +12,16 @@ if (!echarts.getMap('world')) echarts.registerMap('world', feature(worldTopo, wo
 const RISKY = new Set(['TOR_EXIT', 'BULLETPROOF', 'VPN']);
 
 function WorldMap({ points, arcs }) {
+  const dark = useTheme() === 'dark';
   const option = {
     tooltip: { trigger: 'item', formatter: (p) => p.data?.tip || p.name },
-    geo: { map: 'world', roam: true, zoom: 1.15, itemStyle: { areaColor: '#e2e8f0', borderColor: '#fff' },
-      emphasis: { itemStyle: { areaColor: '#cbd5e1' }, label: { show: false } } },
+    geo: { map: 'world', roam: true, zoom: 1.15, itemStyle: { areaColor: dark ? '#1c2940' : '#e2e8f0', borderColor: dark ? '#0f1729' : '#fff' },
+      emphasis: { itemStyle: { areaColor: dark ? '#2b3b58' : '#cbd5e1' }, label: { show: false } } },
     series: [
       { type: 'effectScatter', coordinateSystem: 'geo', rippleEffect: { scale: 3 }, zlevel: 2,
         data: points.map((p) => ({ name: p.ip, value: [p.lon, p.lat, p.tx_count],
           tip: `${p.ip}<br/>${p.country}${p.approximate ? ' (country centroid)' : ''} · ${p.asn || ''}<br/>${p.asn_type} · ${p.tx_count} obs`,
-          itemStyle: { color: RISKY.has(p.asn_type) ? '#dc2626' : '#2563eb' } })),
+          itemStyle: { color: RISKY.has(p.asn_type) ? '#ef4444' : (dark ? '#60a5fa' : '#2563eb') } })),
         symbolSize: (v) => Math.min(6 + Math.sqrt(v[2]) * 2, 26) },
       { type: 'lines', coordinateSystem: 'geo', zlevel: 1,
         effect: { show: true, period: 4, symbol: 'arrow', symbolSize: 6, color: '#dc2626' },

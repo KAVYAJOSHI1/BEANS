@@ -1,6 +1,7 @@
 import React from 'react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './Chart';
 import { Cpu, AlertCircle, Play } from 'lucide-react';
+import { useTheme } from '../theme';
 
 const KNOWN = new Set(['status', 'source', 'message', 'model_overview', 'engine_metrics', 'confusion_matrix', 'feature_importances']);
 
@@ -29,6 +30,7 @@ function Value({ v }) {
 }
 
 export default function ModelCard({ modelCard, onEvaluate, loading, verdicts = 0 }) {
+  const dark = useTheme() === 'dark';
   if (!modelCard) return <div className="text-sm text-slate-500">Loading model card…</div>;
 
   if (modelCard.status !== 'evaluated') {
@@ -100,7 +102,7 @@ export default function ModelCard({ modelCard, onEvaluate, loading, verdicts = 0
               grid: { left: 110, bottom: 90, top: 10, right: 10 },
               xAxis: { type: 'category', data: cm.labels, axisLabel: { rotate: 40, fontSize: 10 } },
               yAxis: { type: 'category', data: cm.labels, inverse: true, axisLabel: { fontSize: 10 } },
-              visualMap: { min: 0, max: Math.max(...cm.matrix.flat(), 1), show: false, inRange: { color: ['#f8fafc', '#1d4ed8'] } },
+              visualMap: { min: 0, max: Math.max(...cm.matrix.flat(), 1), show: false, inRange: { color: [dark ? '#0f1729' : '#f8fafc', dark ? '#3b82f6' : '#1d4ed8'] } },
               series: [{ type: 'heatmap', label: { show: true, fontSize: 10 },
                 data: cm.matrix.flatMap((row, i) => row.map((v, j) => [j, i, v])) }],
             }} />

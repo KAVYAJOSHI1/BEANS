@@ -103,5 +103,12 @@ beans.report.case_pdf(con, case_id | alert_id, out_path) -> Path                
 | GET | /model/card | model_card as JSON |
 | POST/GET | /cases, /cases/{id}, /cases/{id}/export?fmt=pdf\|json | case management + evidence pack |
 | GET | /audit | audit log |
+| GET | /alerts?action= | filter by recommended action; every alert carries `recommended_action {action, title, rule, legal_basis, facts, shap_support, vasp_exposure, also_matched}` (`beans/decision/actions.py`) |
+| GET | /actions/summary | the directive rulebook + counts |
+| POST | /alerts/{id}/legal/{section94\|freeze}?fmt=json\|html\|pdf | legal request draft for the IO, sealed (SHA-256 + RFC 3161) |
+| GET | /alerts/{id}/referral?fmt=json\|html\|pdf | FIU-IND intelligence referral pack, sealed |
+| GET/POST | /known-entities, /known-entities/upload | attribution list (exchanges / mining pools) |
+| GET/POST/PATCH/DELETE | /webhooks, /webhooks/{id}, /webhooks/{id}/test, /webhooks/dispatch, /webhooks/log | SIEM delivery |
+| GET/POST | /tsa, /tsa/{tsa_ca.pem\|tsa.pem}, /tsa/verify | local RFC 3161 TSA |
 
 `BEANS_MOCK=1` makes the API serve `data/samples/mock_*.json`, so the UI can be built before real data exists.

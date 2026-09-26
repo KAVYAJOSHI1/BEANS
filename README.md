@@ -4,6 +4,10 @@ Offline, Linux-native system for monitoring and analysing Bitcoin transaction tr
 **Smart India Hackathon · PS 26146 · National Technical Research Organisation (NTRO)**
 
 BEANS ingests bulk Bitcoin transaction and network metadata (CSV / JSON / XML). It enriches every IP offline with country and ASN, and links IPs, transactions and wallets in one graph. Four ML engines then run: **entity clustering, anomaly detection, peel-chain / mixing detection, and risk propagation from seed wallets**. The result is a ranked, explainable alert list, viewed in an investigator dashboard with link-analysis, timeline, map and case views.
+Every alert also gets a **recommended action** from fixed, citable rules (draft a freeze request, draft a Section 94 BNSS
+notice, prepare an FIU-IND referral pack, put on taint watch, or review as a likely false positive). The legal drafts
+and evidence packs are sealed with SHA-256 and an offline RFC 3161 timestamp, and critical alerts can be pushed to a
+SIEM (Splunk, Elastic, Wazuh, MISP/OpenCTI via STIX 2.1).
 
 - Vision, architecture, feature plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) ([PDF](MASTER_ROADMAP.pdf))
 - Team task split: [`TASKS_FINAL.md`](TASKS_FINAL.md)
@@ -18,7 +22,7 @@ make demo           # synthetic data → ingest → 4 ML engines → alerts → 
 # open http://127.0.0.1:8000
 ```
 
-`make demo` runs fully offline. The dashboard is served from the pre-built `ui/dist/`, so Node.js is only needed to rebuild the UI (`make build-ui`, Node ≥ 20.19).
+`make demo` runs fully offline. The dashboard is served from the pre-built `ui/dist/`, so Node.js is only needed to rebuild the UI (`make build-ui`, Node ≥ 20.19). Timestamping needs the `openssl` binary (present on most Linux systems and in the Docker image).
 
 ## CLI
 
@@ -28,6 +32,7 @@ make demo           # synthetic data → ingest → 4 ML engines → alerts → 
 .venv/bin/python -m beans.cli export --neo4j out/ --stix alerts.json       # graph + STIX 2.1 indicators
 .venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
 .venv/bin/python -m beans.cli ingest data/synth/demo/transactions.xml      # ingest + enrich + graph + ML + alerts
+.venv/bin/python -m beans.cli known-entities exchanges.csv                 # exchange / mining-pool attribution for the action rules
 .venv/bin/python -m beans.cli serve --port 8000                            # API (/api, docs at /docs) + dashboard
 ```
 
@@ -59,8 +64,10 @@ beans/
   features/   transaction / wallet / network features
   engines/    E1 clustering · E2 anomaly · E3 peel/mix · E4 risk propagation
   score/      fusion + calibration → risk and confidence
+  decision/   action directives: deterministic rules → recommended next step per alert
+  alerting/   SIEM / threat-intel webhooks (JSON, Splunk HEC, Elastic, STIX 2.1)
   explain/    SHAP-based reasons
-  report/     case evidence pack export
+  report/     case evidence pack, Section 94 / freeze drafts, FIU referral pack, RFC 3161 timestamps
   api/        FastAPI routes
 ui/           React + Vite + Tailwind + Cytoscape.js + ECharts (built into ui/dist)
 data/geoip/   DB-IP Lite country + ASN databases (offline)

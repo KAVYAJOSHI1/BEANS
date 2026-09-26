@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud,
+  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug,
 } from 'lucide-react';
 import coffeeBean from '../coffee-bean.svg';
 
@@ -21,6 +21,7 @@ export const NAV_GROUPS = [
   ] },
   { title: 'Data', items: [
     { id: 'ingest', label: 'Ingest & Seeds', icon: UploadCloud },
+    { id: 'integrations', label: 'Rules & Integrations', icon: Plug },
   ] },
 ];
 

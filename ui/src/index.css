@@ -1,27 +1,109 @@
 @import "tailwindcss";
 
+/* Fonts ship inside the bundle (@fontsource), so the offline build needs no font CDN. */
+@theme {
+  --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root {
+  --page: #f8fafc;
+  --ink: #0f172a;
+  --scroll-track: #f1f5f9;
+  --scroll-thumb: #cbd5e1;
+  color-scheme: light;
+}
+
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scroll-track); }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 3px; }
+
+/* ---------------------------------------------------------------------------------------------------------
+   Dark "intelligence" theme. Tailwind v4 utilities read colours from CSS variables, so re-pointing the palette
+   under `.dark .themed` restyles every component without per-class `dark:` variants. The sidebar sits outside
+   `.themed` and keeps its own dark palette in both modes.
+   --------------------------------------------------------------------------------------------------------- */
+html.dark {
+  --page: #0a1020;
+  --ink: #e2e8f0;
+  --scroll-track: #0f172a;
+  --scroll-thumb: #334155;
+  color-scheme: dark;
 }
 
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
+.dark .themed {
+  --surface: #0f1729;
+  --color-slate-50: #0c1426;
+  --color-slate-100: #152036;
+  --color-slate-200: #22304b;
+  --color-slate-300: #34445f;
+  --color-slate-400: #7d8ba3;
+  --color-slate-500: #97a3b8;
+  --color-slate-600: #b3bdcd;
+  --color-slate-700: #cbd3df;
+  --color-slate-800: #e1e7ef;
+  --color-slate-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+
+  /* light tints (badges, callouts) become deep translucent tints; dark text shades become light */
+  --color-blue-50: #12254a;   --color-blue-100: #173063;   --color-blue-200: #1f3f80;   --color-blue-700: #93c5fd;   --color-blue-800: #bfdbfe;   --color-blue-900: #dbeafe;
+  --color-red-50: #3a1418;    --color-red-100: #4c1a1f;    --color-red-200: #6b2129;    --color-red-700: #fca5a5;    --color-red-800: #fecaca;    --color-red-900: #fee2e2;
+  --color-rose-50: #3a1420;   --color-rose-100: #4c1a29;   --color-rose-200: #6b2138;   --color-rose-700: #fda4af;   --color-rose-800: #fecdd3;
+  --color-orange-50: #3a2010; --color-orange-100: #4a2812; --color-orange-200: #6b3a17; --color-orange-700: #fdba74; --color-orange-800: #fed7aa;
+  --color-amber-50: #33260d;  --color-amber-100: #45320f;  --color-amber-200: #634812;  --color-amber-700: #fcd34d;  --color-amber-800: #fde68a;
+  --color-yellow-50: #332d0d; --color-yellow-100: #453c10; --color-yellow-200: #635613; --color-yellow-700: #fde047;
+  --color-emerald-50: #0c2e24; --color-emerald-100: #0f3b2e; --color-emerald-200: #14533f; --color-emerald-700: #6ee7b7; --color-emerald-800: #a7f3d0;
+  --color-green-50: #0e2e1a;  --color-green-100: #123b22;  --color-green-700: #86efac;
+  --color-indigo-50: #1a1b4b; --color-indigo-100: #22245e; --color-indigo-200: #2e3180; --color-indigo-700: #a5b4fc; --color-indigo-800: #c7d2fe;
+  --color-violet-50: #241647; --color-violet-100: #2e1c5c; --color-violet-700: #c4b5fd;
+  --color-purple-50: #2a1542; --color-purple-100: #351a54; --color-purple-700: #d8b4fe;
+  --color-sky-50: #0c2a3d;    --color-sky-100: #10364f;    --color-sky-700: #7dd3fc;
+  --color-cyan-50: #0b2c33;   --color-cyan-700: #67e8f9;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
+/* white surfaces → dark surfaces (text-white stays white, so blue buttons keep their contrast) */
+.dark .themed .bg-white,
+.dark .themed [class*="bg-white/"] { background-color: color-mix(in oklab, var(--surface) 92%, transparent); }
+.dark .themed .bg-white { background-color: var(--surface); }
+.dark .themed .hover\:bg-white:hover { background-color: var(--surface); }
+/* dark emphasis fills (black buttons, code blocks) stay dark instead of flipping to near-white */
+.dark .themed .bg-slate-900, .dark .themed .bg-slate-950 { background-color: #273552; }
+.dark .themed .bg-slate-800, .dark .themed .hover\:bg-slate-800:hover { background-color: #31405f; }
+.dark .themed .border-slate-900 { border-color: #3b4c6e; }
+.dark .themed .shadow-sm, .dark .themed .shadow-md, .dark .themed .shadow-xl, .dark .themed .shadow-2xl {
+  --tw-shadow-color: rgb(0 0 0 / 0.45);
 }
+.dark .themed iframe.doc-preview { background: #fff; }   /* printed documents stay paper-white */
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+/* ---- micro-interactions ---------------------------------------------------------------------------------- */
+.themed .rounded-xl.border.shadow-sm { transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+.themed .rounded-xl.border.shadow-sm:hover { box-shadow: 0 4px 16px -4px rgb(15 23 42 / 0.12); }
+.dark .themed .rounded-xl.border.shadow-sm:hover { box-shadow: 0 4px 18px -4px rgb(0 0 0 / 0.6); border-color: var(--color-slate-300); }
+.themed button:not(:disabled):active { transform: translateY(0.5px) scale(0.99); }
+
+.glass {
+  background-color: color-mix(in oklab, var(--surface, #ffffff) 78%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+}
+:root:not(.dark) .glass { --surface: #ffffff; }
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgb(220 38 38 / 0.55); }
+  70% { box-shadow: 0 0 0 7px rgb(220 38 38 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(220 38 38 / 0); }
+}
+.pulse-dot { animation: pulse-ring 1.8s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot { animation: none; }
+  .themed button:not(:disabled):active { transform: none; }
 }

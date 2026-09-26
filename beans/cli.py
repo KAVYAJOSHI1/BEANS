@@ -88,6 +88,20 @@ def export(
         console.print(ex.stix(Path(stix), min_risk))
 
 
+@app.command("known-entities")
+def known_entities(
+    file_path: str = typer.Argument(..., help="CSV: address, entity_name[, entity_type, country, in_jurisdiction, source]"),
+    rescore: bool = typer.Option(True, "--rescore/--no-rescore", help="Re-run scoring so action directives use the list"),
+):
+    """Load an attribution list (exchange / mining-pool addresses) used by the action directive rules."""
+    from beans.store.duck import DuckStore
+    store = DuckStore()
+    n = store.load_known_entities(Path(file_path))
+    console.print(f"[bold cyan]{n} attribution addresses loaded.[/bold cyan]")
+    if rescore:
+        console.print(ForensicPipeline(store).execute_ml_pipeline())
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host address"),

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, ShieldAlert, Activity, ArrowDownLeft, ArrowUpRight, Network, UserCheck } from 'lucide-react';
-import ReactECharts from 'echarts-for-react';
+import ReactECharts from './Chart';
 
 export default function Entity360({ entityData, onSearch, loading }) {
   const [inputAddress, setInputAddress] = useState('');

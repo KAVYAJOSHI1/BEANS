@@ -37,9 +37,11 @@ def _esc(v) -> str:
     return html.escape(str(v if v is not None and v != "" else BLANK))
 
 
-def _deposits(alert: Dict[str, Any], vasp: Optional[str]) -> tuple:
+def _deposits(alert: Dict[str, Any], vasp: Optional[str], kind: str) -> tuple:
     ra = alert.get("recommended_action") or {}
     hits = ra.get("vasp_exposure") or []
+    if not vasp and kind == "section94":   # a Section 94 notice goes to an exchange that operates in India
+        vasp = next((h["vasp"] for h in hits if h.get("in_jurisdiction")), None)
     vasp = vasp or ra.get("facts", {}).get("vasp") or (hits[0]["vasp"] if hits else None)
     return [h for h in hits if h["vasp"] == vasp], vasp
 
@@ -48,7 +50,7 @@ def build(kind: str, alert: Dict[str, Any], io: Optional[Dict[str, Any]] = None,
     if kind not in KINDS:
         raise ValueError(f"kind must be one of {sorted(KINDS)}")
     io = {k: (io or {}).get(k) for k in IO_FIELDS}
-    deposits, vasp = _deposits(alert, vasp)
+    deposits, vasp = _deposits(alert, vasp, kind)
     if not deposits:
         raise LookupError("no known exchange deposit is linked to this alert; nothing to request from an exchange")
     in_jur = bool(deposits[0].get("in_jurisdiction"))
