@@ -12,7 +12,7 @@ from beans.store.duck import DuckStore
 
 class ForensicPipeline:
     """
-    Master pipeline executing the full ingestion -> enrich -> graph -> 4 engines -> fusion -> XAI -> alert cycle.
+    Master pipeline executing the full ingestion -> enrich -> graph -> 5 engines -> fusion -> XAI -> alert cycle.
     """
 
     def __init__(self, store: Optional[DuckStore] = None, mapping: Optional[Path] = None):

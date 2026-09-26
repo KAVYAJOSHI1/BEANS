@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 class BeansSettings(BaseSettings):
@@ -27,6 +28,8 @@ class BeansSettings(BaseSettings):
     
     # Engines
     E5_GNN: bool = True                   # SIGN-style graph neural features (beans/engines/e5_gnn.py)
+    USE_TYPOLOGY_CORPUS: bool = True      # typology model also learns from the reference corpus …
+    TYPOLOGY_CORPUS_PATH: Optional[Path] = None   # … at this path (default: MODELS_DIR/typology_corpus.parquet)
 
     # Alert list
     ALERT_MIN_PROBABILITY: float = 0.40   # a wallet becomes an alert candidate at this calibrated P(illicit)

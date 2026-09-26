@@ -127,6 +127,19 @@ def validate_elliptic(
         console.print(f"Write-up: {doc}")
 
 
+@app.command("typology-corpus")
+def typology_corpus(
+    seeds: str = typer.Option("1001,1002,1003,1004,1005,1006,1007,1008", "--seeds",
+                              help="Comma-separated generator seeds (keep them apart from evaluation seeds)"),
+    n_tx: int = typer.Option(5000, "--n-tx"),
+):
+    """Build models/typology_corpus.parquet: illicit wallets of extra synthetic datasets for the typology model."""
+    from beans.score import typology_corpus as tc
+    corpus = tc.build([int(s) for s in seeds.split(",")], n_tx, log=console.print)
+    console.print(f"[bold green]{len(corpus)} wallets from {corpus['_group'].nunique()} operations → {tc.TYPOLOGY_CORPUS}[/bold green]")
+    console.print(corpus.groupby("_typology")["_group"].nunique().to_dict())
+
+
 user_app = typer.Typer(help="Local users (login switches on once the first user exists)")
 app.add_typer(user_app, name="user")
 

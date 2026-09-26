@@ -141,6 +141,16 @@ count as network features in the ablation. Six-seed benchmark, before → after 
 P ≥ 0.5 0.905 → **0.952**, typology on alerts 0.834 → **0.883**, entities alerted 0.962 → **0.984**, precision unchanged
 (0.953 → 0.955).
 
+**Typology reference corpus.** A 5,000-transaction dataset holds about 30 criminal operations (one darknet market, three
+hack crews), too few for the typology model. `beans typology-corpus` scores 8 extra synthetic datasets (seeds 1001-1008,
+each in its own temporary database with the corpus off) and keeps their illicit wallets' features and typology
+(`models/typology_corpus.parquet`, 253 operations, 1.5 MB). The typology model trains on the current dataset plus the
+corpus; the corpus is always on the training side, so the grouped CV of the current dataset stays honest. Six-seed
+typology accuracy: 0.845 → **0.997** (on alerts 0.883 → 0.988). Control: with the corpus's typology labels shuffled
+between operations, accuracy falls to 0.48-0.61, so the gain comes from the labels, not from a leak. The honest reading
+is that synthetic typologies become separable once enough operations are seen; real ones will be harder. The corpus is
+also how confirmed real cases can be added over time.
+
 **E1 changes.** (1) *Self-split heuristic*: a single non-hub owner (address seen in ≤ 6 transactions) splitting a
 balance into ≥ 7 near-identical parts (coefficient of variation ≤ 5 %, one change output allowed) on fresh addresses
 owns those parts. Launderers split loot this way; exchange / pool payouts have varied amounts and come from hubs,
