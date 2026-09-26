@@ -1,0 +1,11 @@
+{
+  "files": 10,
+  "rows": 980803,
+  "transactions": 336260,
+  "wallets": 726035,
+  "ingest_s": 96,
+  "ingest_peak_gb": 0.88,
+  "score_s": 190,
+  "score_peak_gb": 5.29,
+  "note": "values of the run recorded in docs/BENCHMARK_1M.md (scripts/benchmark_1m.py --files 10)"
+}

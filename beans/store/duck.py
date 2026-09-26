@@ -1,3 +1,4 @@
+import os
 import duckdb
 import json
 from pathlib import Path
@@ -5,6 +6,16 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from beans.config import settings
 from beans.schema import CanonicalRecord, AlertRecord
+
+_SCHEMA_READY: set = set()
+
+
+def _inode(path: str):
+    try:
+        return os.stat(path).st_ino
+    except OSError:
+        return None
+
 
 class DuckStore:
     """
@@ -14,7 +25,12 @@ class DuckStore:
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = str(db_path or settings.DB_PATH)
         settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
-        self.init_schema()
+        # the schema DDL runs once per database file per process (not on every API request); a deleted and recreated
+        # file is noticed through its inode
+        key = (self.db_path, _inode(self.db_path))
+        if key not in _SCHEMA_READY:
+            self.init_schema()
+            _SCHEMA_READY.add((self.db_path, _inode(self.db_path)))
 
     def get_connection(self):
         return duckdb.connect(self.db_path)
