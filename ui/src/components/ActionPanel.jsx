@@ -159,6 +159,7 @@ export function DocModal({ doc, onClose }) {
   const { kind, alert } = doc;
   const legal = kind !== 'referral';
   const [io, setIO] = useState(loadIO);
+  const [lang, setLang] = useState('en');
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -167,7 +168,7 @@ export function DocModal({ doc, onClose }) {
   const call = (fmt) => {
     if (!legal) return fetch(`${API_BASE}/alerts/${alert.alert_id}/referral?fmt=${fmt}`);
     if (fmt !== 'json' && result?.request) return fetch(`${API_BASE}/legal-requests/${result.request.id}?fmt=${fmt}`);
-    return fetch(`${API_BASE}/alerts/${alert.alert_id}/legal/${kind}?fmt=${fmt}`,
+    return fetch(`${API_BASE}/alerts/${alert.alert_id}/legal/${kind}?fmt=${fmt}&lang=${lang}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) });
   };
 
@@ -227,6 +228,14 @@ export function DocModal({ doc, onClose }) {
               <>
                 <p className="text-slate-500">BEANS fills in the blockchain facts. Fields left empty stay as visible blanks for the
                   Investigating Officer. IO details are remembered in this browser only.</p>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">Language</span>
+                  {[['en', 'English'], ['hi', 'हिंदी']].map(([v, l]) => (
+                    <button key={v} onClick={() => setLang(v)}
+                      className={`px-2.5 py-1 rounded-md font-bold ${lang === v ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{l}</button>
+                  ))}
+                </div>
+                {lang === 'hi' && <p className="text-amber-700">Hindi drafts need a native legal reviewer before issue; the document says so.</p>}
                 {IO_FIELDS.map(([k, label]) => (
                   <label key={k} className="block">
                     <span className="font-semibold text-slate-700">{label}</span>

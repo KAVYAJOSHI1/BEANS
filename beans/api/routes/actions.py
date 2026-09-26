@@ -49,13 +49,14 @@ def actions_summary() -> Dict[str, Any]:
 
 @router.post("/alerts/{alert_id}/legal/{kind}")
 def legal_draft(alert_id: str, kind: str, io: Dict[str, Any] = Body(default={}),
-                fmt: str = Query("json", pattern="^(json|html|pdf)$"), vasp: str = Query(None)):
-    """Draft a Section 94 / freeze request. It is stored PENDING_APPROVAL until a (different) supervisor decides."""
+                fmt: str = Query("json", pattern="^(json|html|pdf)$"), vasp: str = Query(None),
+                lang: str = Query("en", pattern="^(en|hi)$")):
+    """Draft a Section 94 / freeze request (English or Hindi). It is stored PENDING_APPROVAL until a (different) supervisor decides."""
     if kind not in bnss.KINDS:
         raise HTTPException(422, f"kind must be one of {sorted(bnss.KINDS)}")
     alert = _alert(alert_id)
     try:
-        doc = bnss.build(kind, alert, io, vasp)
+        doc = bnss.build(kind, alert, io, vasp, lang)
     except LookupError as e:
         raise HTTPException(409, str(e)) from e
     req_id = int(db.scalar("SELECT COALESCE(MAX(id), 0) + 1 FROM legal_requests"))
