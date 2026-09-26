@@ -10,6 +10,7 @@ and evidence packs are sealed with SHA-256 and an offline RFC 3161 timestamp, an
 SIEM (Splunk, Elastic, Wazuh, MISP/OpenCTI via STIX 2.1). A **watchlist** re-alerts the moment a watched wallet moves
 funds in newly ingested data, and says whether the money just reached an exchange where it can still be frozen.
 
+- **Technical report (PDF): [`docs/BEANS_Technical_Report.pdf`](docs/BEANS_Technical_Report.pdf)**: implementation, features and every measured result (rebuild: `scripts/build_report.py`)
 - Vision, architecture, feature plan: [`MASTER_ROADMAP.md`](MASTER_ROADMAP.md) ([PDF](MASTER_ROADMAP.pdf))
 - Team task split: [`TASKS_FINAL.md`](TASKS_FINAL.md)
 - Interfaces: [`docs/CONTRACTS.md`](docs/CONTRACTS.md)

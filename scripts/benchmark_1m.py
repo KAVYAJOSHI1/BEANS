@@ -74,6 +74,11 @@ Scoring stages (cumulative seconds): {stages}.
 Reproduce: `.venv/bin/python scripts/benchmark_1m.py --files {a.files}`
 """
     (ROOT / "docs" / "BENCHMARK_1M.md").write_text(md)
+    (ROOT / "docs" / "results").mkdir(exist_ok=True)
+    (ROOT / "docs" / "results" / "benchmark_1m.json").write_text(json.dumps({
+        "files": a.files, "rows": rows, "transactions": rep["transactions"], "wallets": rep["wallets"],
+        "ingest_s": round(ing_s, 1), "ingest_peak_gb": round(ing_gb, 2), "score_s": round(sc_s, 1),
+        "score_peak_gb": round(sc_gb, 2), "stages_s": {k: v for k, v in t.items() if not k.startswith("mem")}}, indent=2))
     print(md)
     shutil.rmtree(work, ignore_errors=True)
 
