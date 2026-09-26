@@ -126,7 +126,8 @@ def referral_pack(alert_id: str, fmt: str = Query("json", pattern="^(json|html|p
                    "any_value(asn_type) AS asn_type, COUNT(*) AS n FROM transactions "
                    "WHERE list_contains(input_addresses, ?) GROUP BY 1 ORDER BY n DESC LIMIT 20", [a["entity_id"]])
     sources = db.query("SELECT file, sha256, records, ingested_at FROM ingest_log ORDER BY ingested_at")
-    pack = referral.build(a, wallet, ips, sources)
+    from beans.api.routes.timeline import follow_the_money
+    pack = referral.build(a, wallet, ips, sources, follow_the_money(a["entity_id"], 30))
     db.audit("REFERRAL_PACK", "ALERT", alert_id, {"evidence_sha256": pack["evidence_sha256"], "format": fmt})
     return _render(pack["html"], fmt, f"BEANS_referral_{alert_id}", pack)
 

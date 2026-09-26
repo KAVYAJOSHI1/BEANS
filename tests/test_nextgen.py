@@ -366,3 +366,14 @@ def test_follow_the_money_trace(client):
         assert all(b["from"] == a["change_address"] for a, b in zip(hops, hops[1:]))       # follows the change
         assert all(b["peeled_total"] >= a["peeled_total"] for a, b in zip(hops, hops[1:]))
         assert t["summary"]["hops"] == len(hops)
+
+
+def test_evidence_diagrams(client):
+    from beans.report.diagram import path_svg, trail_svg
+    assert path_svg(["only-one"]) == "" and trail_svg({"hops": []}) == ""
+    svg = path_svg(["SEEDaddress000000", "mid0000000000000", "WALLETaddress0000"])
+    assert svg.startswith("<svg") and "seed:" in svg and "flagged:" in svg
+    a = client.get("/api/alerts?limit=1000").json()
+    spender = next(x for x in a if client.get("/api/timeline/trace", params={"entity": x["entity_id"]}).json()["hops"])
+    html_doc = client.get(f"/api/alerts/{spender['alert_id']}/referral?fmt=html").text
+    assert "Money trail" in html_doc and "<svg" in html_doc

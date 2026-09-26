@@ -41,10 +41,14 @@ def get_timeline_sequence(
 
 
 @router.get("/trace")
-def follow_the_money(
+def trace_endpoint(
     entity: Optional[str] = Query(None, description="wallet to start from; default = highest-risk alert"),
     max_hops: int = Query(60, ge=1, le=500),
 ) -> Dict[str, Any]:
+    return follow_the_money(entity, max_hops)
+
+
+def follow_the_money(entity: Optional[str] = None, max_hops: int = 60) -> Dict[str, Any]:
     """Peel-chain replay: from `entity`, follow each spend's change (largest output) hop by hop.
 
     Every hop lists what was peeled off and where it went (known exchanges flagged from the attribution list).
