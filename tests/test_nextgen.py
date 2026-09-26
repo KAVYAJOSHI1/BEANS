@@ -377,3 +377,29 @@ def test_evidence_diagrams(client):
     spender = next(x for x in a if client.get("/api/timeline/trace", params={"entity": x["entity_id"]}).json()["hops"])
     html_doc = client.get(f"/api/alerts/{spender['alert_id']}/referral?fmt=html").text
     assert "Money trail" in html_doc and "<svg" in html_doc
+
+
+def test_alerts_show_linked_cases(client):
+    from beans.api import db
+    alerts = client.get("/api/alerts?limit=1000").json()
+    a = next(x for x in alerts if not x["evidence"].get("cluster_id", "SOLO").startswith("SOLO"))
+    other = db.scalar("SELECT address FROM wallet_profiles WHERE cluster_id = ? AND address != ? LIMIT 1",
+                      [a["evidence"]["cluster_id"], a["entity_id"]])
+    case = client.post("/api/cases", json={"case_name": "linked", "suspect_entities": [other]}).json()
+    got = client.get(f"/api/alerts/{a['alert_id']}").json()["linked_cases"]
+    assert {"case_id": case["case_id"], "case_name": "linked", "link": "same entity cluster"} in got
+    listed = next(x for x in client.get("/api/alerts?limit=1000").json() if x["alert_id"] == a["alert_id"])
+    assert listed["linked_cases"] == got
+    client.patch(f"/api/cases/{case['case_id']}", json={"status": "CLOSED"})
+    assert not any(c["case_id"] == case["case_id"] for c in client.get(f"/api/alerts/{a['alert_id']}").json()["linked_cases"])
+
+
+def test_hindi_legal_draft(client):
+    alerts = client.get("/api/alerts?limit=1000").json()
+    a = next(x for x in alerts if any(h["in_jurisdiction"] for h in x["recommended_action"].get("vasp_exposure", [])))
+    r = client.post(f"/api/alerts/{a['alert_id']}/legal/section94?lang=hi", json={"fir_no": "9/2026"})
+    assert r.status_code == 200
+    doc = r.json()
+    assert "धारा 94" in doc["html"] and "9/2026" in doc["html"] and "legal review" in doc["html"]
+    assert doc["annex"]["lang"] == "hi"
+    assert client.post(f"/api/alerts/{a['alert_id']}/legal/section94?lang=fr", json={}).status_code == 422

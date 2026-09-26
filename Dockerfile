@@ -1,9 +1,9 @@
 # BEANS: offline image. Build once with internet; run with `--network none`.
 FROM python:3.12-slim
 
-# WeasyPrint (PDF evidence packs) needs Pango/HarfBuzz + a font; LightGBM needs OpenMP (libgomp1); openssl = RFC 3161 TSA
+# WeasyPrint (PDF evidence packs) needs Pango/HarfBuzz + a font; LightGBM needs OpenMP (libgomp1); openssl = RFC 3161 TSA; Lohit Devanagari = Hindi legal drafts
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core libgomp1 openssl \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libharfbuzz-subset0 fonts-dejavu-core libgomp1 openssl fonts-lohit-deva \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -10,7 +10,25 @@ STATUSES = {"OPEN", "INVESTIGATING", "CONFIRMED", "RESOLVED", "FALSE_POSITIVE"}
 FEEDBACK_LABEL = {"FALSE_POSITIVE": "FALSE_POSITIVE", "CONFIRMED": "TRUE_POSITIVE"}
 
 
-def alert_out(row: Dict[str, Any]) -> Dict[str, Any]:
+def case_links(alert_ids: Optional[List[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+    """Open cases whose suspects are the alert's wallet, or share its (multi-address) entity cluster."""
+    if not db.scalar("SELECT COUNT(*) FROM case_files WHERE status != 'CLOSED'"):
+        return {}
+    rows = db.query("""
+        WITH s AS (SELECT id AS case_id, case_name, unnest(suspect_entities) AS addr FROM case_files WHERE status != 'CLOSED'),
+             sc AS (SELECT s.*, w.cluster_id FROM s LEFT JOIN wallet_profiles w ON w.address = s.addr)
+        SELECT DISTINCT a.alert_id, sc.case_id, sc.case_name, bool_or(a.entity_id = sc.addr) OVER (PARTITION BY a.alert_id, sc.case_id) AS direct
+        FROM alerts a JOIN wallet_profiles wa ON wa.address = a.entity_id
+        JOIN sc ON a.entity_id = sc.addr OR (sc.cluster_id = wa.cluster_id AND sc.cluster_id NOT LIKE 'SOLO%')""")
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for r in rows:
+        if alert_ids is None or r["alert_id"] in alert_ids:
+            out.setdefault(r["alert_id"], []).append({"case_id": r["case_id"], "case_name": r["case_name"],
+                                                      "link": "suspect" if r["direct"] else "same entity cluster"})
+    return out
+
+
+def alert_out(row: Dict[str, Any], links: Optional[Dict[str, list]] = None) -> Dict[str, Any]:
     return {
         "alert_id": row["alert_id"],
         "entity_id": row["entity_id"],
@@ -27,6 +45,7 @@ def alert_out(row: Dict[str, Any]) -> Dict[str, Any]:
         "status": row.get("status") or "OPEN",
         "assigned_to": row.get("assigned_to") or "Unassigned",
         "created_at": row.get("created_at"),
+        "linked_cases": (links or {}).get(row["alert_id"], []),
     }
 
 
@@ -63,7 +82,8 @@ def list_alerts(
         f"SELECT * FROM alerts WHERE {cond} ORDER BY risk_score DESC, calibrated_confidence DESC LIMIT ? OFFSET ?",
         params + [limit, offset],
     )
-    return [alert_out(r) for r in rows]
+    links = case_links([r["alert_id"] for r in rows])
+    return [alert_out(r, links) for r in rows]
 
 
 @router.get("/{alert_id}")
@@ -71,7 +91,7 @@ def get_alert(alert_id: str) -> Dict[str, Any]:
     row = db.one("SELECT * FROM alerts WHERE alert_id = ?", [alert_id])
     if not row:
         raise HTTPException(404, f"alert {alert_id} not found")
-    return alert_out(row)
+    return alert_out(row, case_links([alert_id]))
 
 
 @router.patch("/{alert_id}/status")

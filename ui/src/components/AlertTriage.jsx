@@ -121,6 +121,12 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
                   <td className="py-3 px-4 font-mono text-xs text-slate-400 font-semibold">#{idx + 1}</td>
                   <td className="py-3 px-4 font-mono text-xs font-semibold text-slate-900">
                     {a.entity_id.substring(0, 16)}...
+                    {a.linked_cases?.length > 0 && (
+                      <span title={a.linked_cases.map((c) => `#${c.case_id} ${c.case_name} (${c.link})`).join('\n')}
+                        className="ml-1.5 font-sans text-[10px] font-bold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100">
+                        case #{a.linked_cases[0].case_id}{a.linked_cases.length > 1 ? ` +${a.linked_cases.length - 1}` : ''}
+                      </span>
+                    )}
                   </td>
                   <td className="py-3 px-4">
                     <span className="text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
@@ -207,6 +213,14 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
               <div className="text-2xl font-bold text-slate-900 mt-0.5">{(selectedAlert.calibrated_confidence * 100).toFixed(0)}%</div>
             </div>
           </div>
+
+          {selectedAlert.linked_cases?.length > 0 && (
+            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3 text-xs text-violet-800">
+              <b>Already under investigation:</b>{' '}
+              {selectedAlert.linked_cases.map((c) => `case #${c.case_id} "${c.case_name}" (${c.link})`).join('; ')}.
+              Coordinate with that case before acting.
+            </div>
+          )}
 
           <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc}
             isWatched={watched.includes(selectedAlert.entity_id)} onWatch={onWatch} />
