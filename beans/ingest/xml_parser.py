@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Generator, Tuple, Optional
 from datetime import datetime
 from beans.schema import CanonicalRecord
-from beans.ingest.mapping import SCRIPT_TYPES, ColumnMapper
+from beans.ingest.mapping import fingerprint, SCRIPT_TYPES, ColumnMapper
 from beans.ingest.quarantine import QuarantineLogger
 
 class StreamingXMLParser:
@@ -105,5 +105,6 @@ class StreamingXMLParser:
             output_addresses=out_addrs,
             output_amounts=out_amts,
             fee=fee,
-            script_type=script_type
+            script_type=script_type,
+            **fingerprint({k: elem.attrib.get(k) or elem.findtext(k) for k in ("tx_version", "locktime", "rbf")}),
         )

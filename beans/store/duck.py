@@ -220,6 +220,8 @@ class DuckStore:
         """)
         # migrations for databases created by earlier versions
         conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")
+        for col, typ in (("tx_version", "INTEGER"), ("locktime", "BIGINT"), ("rbf", "BOOLEAN")):
+            conn.execute(f"ALTER TABLE transactions ADD COLUMN IF NOT EXISTS {col} {typ}")
         conn.close()
 
     def insert_records(self, records: List[CanonicalRecord]):
@@ -241,6 +243,7 @@ class DuckStore:
                     "src_port": r.src_port, "dst_ip": r.dst_ip, "dst_port": r.dst_port, "geo_country": r.geo_country,
                     "geo_city": r.geo_city, "geo_lat": r.geo_lat, "geo_lon": r.geo_lon, "asn": r.asn,
                     "asn_name": r.asn_name, "asn_type": r.asn_type,
+                    "tx_version": r.tx_version, "locktime": r.locktime, "rbf": r.rbf,
                 }
             obs_rows.append({
                 "id": f"obs_{r.txid[:12]}_{r.src_ip}_{int(ts.timestamp() * 1000)}", "timestamp": ts, "txid": r.txid,

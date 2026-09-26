@@ -25,7 +25,7 @@ from typing import Any, Dict
 from beans.synth.sim import ILLICIT, Sim
 
 COLS = ["timestamp", "src_ip", "src_port", "dst_ip", "dst_port", "txid", "input_addresses", "input_amounts",
-        "output_addresses", "output_amounts", "fee", "script_type"]
+        "output_addresses", "output_amounts", "fee", "script_type", "tx_version", "locktime", "rbf"]
 
 
 class SyntheticDatasetWriter:
@@ -46,6 +46,7 @@ class SyntheticDatasetWriter:
                 "input_addresses": [a for a, _ in o["inputs"]], "input_amounts": [v for _, v in o["inputs"]],
                 "output_addresses": [a for a, _ in o["outputs"]], "output_amounts": [v for _, v in o["outputs"]],
                 "fee": o["fee"], "script_type": o["script"],
+                "tx_version": o["tx_version"], "locktime": o["locktime"], "rbf": int(o["rbf"]),
             }
 
         records = [rec(o) for o in rows]
@@ -59,7 +60,8 @@ class SyntheticDatasetWriter:
         root = ET.Element("transactions")
         for r in records:
             tx = ET.SubElement(root, "tx", {"txid": r["txid"], "timestamp": r["timestamp"], "fee": str(r["fee"]),
-                                            "script_type": r["script_type"]})
+                                            "script_type": r["script_type"], "tx_version": str(r["tx_version"]),
+                                            "locktime": str(r["locktime"]), "rbf": str(r["rbf"])})
             ET.SubElement(tx, "net", {k: str(r[k]) for k in ("src_ip", "src_port", "dst_ip", "dst_port")})
             ins = ET.SubElement(tx, "inputs")
             for a, v in zip(r["input_addresses"], r["input_amounts"]):

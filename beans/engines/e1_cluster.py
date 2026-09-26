@@ -61,6 +61,20 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
     #  - an address later swept in a big consolidation is a service deposit address, never the sender's change
     #  - in a peel-shaped tx the tiny output is the payment; the change is the large one
     swept = set(frames.tin.loc[frames.tin["txid"].isin(X_tx.index[X_tx["n_in"] >= SWEEP_MIN_INPUTS]), "address"])
+    # wallet-software fingerprints: the tx's own, and that of the tx that later spends each address
+    from beans.features.extractors import tx_fingerprint
+    fp = tx_fingerprint(frames.tx) if "tx_version" in frames.tx else pd.Series(dtype=object)
+    # a CoinJoin is built by its coordinator's software, so a CoinJoin spend says nothing about the owner's wallet
+    own_spends = frames.tin[~frames.tin["txid"].isin(coinjoin_txids)]
+    first_spend = own_spends.sort_values("ts").drop_duplicates("address").set_index("address")["txid"]
+    spend_fp = first_spend.map(fp) if len(fp) else pd.Series(dtype=object)
+
+    def fp_conflict(txid, addr) -> bool:
+        """True when the tx and the later spend of `addr` were built by different wallet software."""
+        a, b = fp.get(txid), spend_fp.get(addr)
+        return isinstance(a, str) and isinstance(b, str) and a != b
+
+    merged_fp = 0
     peel_shaped = set(X_tx.index[X_tx["peel_shape"] == 1])
     two = frames.tout[frames.tout["txid"].isin(X_tx.index[(X_tx["n_out"] == 2) & (X_tx["n_in"] >= 1)])]
     for txid, g in two.groupby("txid"):
@@ -68,11 +82,21 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
             continue
         prec = [(_decimals(v) >= 7, a, ts) for a, v, ts in zip(g["address"], g["amount"], g["ts"])]
         change = [a for p, a, ts in prec if p and first_seen.get(a) == ts]
-        if change and (change[0] in swept or (txid in peel_shaped and change[0] == g.loc[g["amount"].idxmin(), "address"])):
+        if change and (change[0] in swept or (txid in peel_shaped and change[0] == g.loc[g["amount"].idxmin(), "address"])
+                       or fp_conflict(txid, change[0])):
             continue
         if len(change) == 1 and sum(p for p, _, _ in prec) == 1:
             uf.union(ins[txid][0], change[0])
             merged_change += 1
+        elif not change:
+            # fingerprint change rule: exactly one fresh, non-swept output is later spent by the same wallet software
+            # as this transaction → it is the sender's change
+            same = [a for a, ts in zip(g["address"], g["ts"]) if first_seen.get(a) == ts and a not in swept
+                    and isinstance(fp.get(txid), str) and spend_fp.get(a) == fp.get(txid)]
+            other = [a for a in g["address"] if isinstance(spend_fp.get(a), str) and spend_fp.get(a) != fp.get(txid)]
+            if len(same) == 1 and len(other) == 1:
+                uf.union(ins[txid][0], same[0])
+                merged_fp += 1
     # peel-chain change heuristic: inside a peel chain (≥ 3 linked peel-shaped hops, where each hop's large output
     # is spent by the next peel-shaped hop), the large output is the sender's change. Restricting to chains avoids
     # merging a victim who pays a ransom with a small change output.
@@ -80,7 +104,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
     peel_tx = X_tx.index[(X_tx["peel_shape"] == 1) & (X_tx["peel_chain_len"] >= 3)]
     big = frames.tout[frames.tout["txid"].isin(peel_tx)].sort_values("amount").groupby("txid").tail(1)
     for txid, addr in zip(big["txid"], big["address"]):
-        if txid in coinjoin_txids or txid not in ins.index:
+        if txid in coinjoin_txids or txid not in ins.index or fp_conflict(txid, addr):
             continue
         uf.union(ins[txid][0], addr)
         merged_peel += 1
@@ -108,6 +132,8 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
         g = outs.get_group(txid)
         if not all(first_seen.get(a) == ts for a, ts in zip(g["address"], g["ts"])) or g["address"].isin(senders).any():
             continue
+        if sum(fp_conflict(txid, a) for a in g["address"]) > len(g) // 2:   # most parts spent by other software
+            continue
         for a in g["address"]:
             uf.union(ins[txid][0], a)
         merged_split += 1
@@ -123,6 +149,7 @@ def cluster(frames, X_tx: pd.DataFrame, coinjoin_txids: set) -> tuple[pd.Series,
             cid[a] = name
     return pd.Series(cid, name="cluster_id"), {"cioh_merges": merged_cioh, "change_merges": merged_change,
                                                "peel_change_merges": merged_peel, "split_merges": merged_split,
+                                               "fingerprint_change_merges": merged_fp,
                                                "clusters": len(members),
                                                "multi_address_clusters": sum(len(m) > 1 for m in members.values())}
 

@@ -175,6 +175,15 @@ equal weight per criminal entity, and its class probabilities are pooled over ea
 
 Most important features (mean |SHAP|): cluster share of Tor/VPN/bulletproof relays, wallet share of risky relays, round-trip probability, cluster size, anomaly score, fan-out probability, equal-output share, reverse PPR to seeds.
 
+**Wallet-software fingerprints (partly kept).** Inputs may carry transaction version, nLockTime and RBF signalling.
+The generator gives every individual (illicit or not) a software profile from the same distribution and services a
+batch profile, so fingerprints can link one owner's transactions but cannot mark criminals by themselves. Used in E1 as
+a guard (no "change" spent by different software; CoinJoin spends ignored because the coordinator builds them) and as a
+change rule. On synthetic data the rule fires only 4 times per dataset, because the precision rule already finds almost
+all change outputs; clustering and detection are unchanged. Wallet-level fingerprint features lowered recall
+(0.952 → 0.922) and were dropped. On real data, where wallets pay full-precision amounts, fingerprints matter more;
+that cannot be shown with our generator, so no gain is claimed.
+
 **What we tried and rejected.** Counterparty features (risk signals of the wallets a wallet trades with) and a larger
 LightGBM (500 trees, 31 leaves) were neutral (counterparty: PR-AUC 0.954 vs 0.953 over 6 seeds; larger model: 0.946 vs 0.946 over 3 seeds, 35 % slower),
 so they were dropped. Typology accuracy is limited by the number of criminal entities per dataset (one darknet market, three hack

@@ -8,7 +8,12 @@ from beans.api.routes.alerts import alert_out
 router = APIRouter(prefix="/entity", tags=["Entity 360"])
 
 TX_COLS = ("txid, timestamp, input_addresses, input_amounts, output_addresses, output_amounts, "
-           "total_output, fee, src_ip, geo_country, geo_city, asn, asn_name, asn_type")
+           "total_output, fee, src_ip, geo_country, geo_city, asn, asn_name, asn_type, tx_version, locktime, rbf")
+
+
+def _describe_fingerprint(version, locktime, rbf) -> str:
+    lock = "no locktime" if not locktime else ("anti-fee-sniping locktime" if locktime < 500_000_000 else "time locktime")
+    return f"version {version} · {lock} · {'RBF on' if rbf else 'RBF off'}"
 
 
 def _latest_alert(entity_id: str):
@@ -52,8 +57,14 @@ def get_wallet_360(address: str) -> Dict[str, Any]:
         cluster_members = [r["address"] for r in db.query(
             "SELECT address FROM wallet_profiles WHERE cluster_id = ? AND address != ? LIMIT 50", [cluster_id, address])]
 
+    fps = {}
+    for t in txs:
+        if address in (t["input_addresses"] or []) and t.get("tx_version") is not None and t.get("rbf") is not None:
+            key = _describe_fingerprint(t["tx_version"], t.get("locktime") or 0, t["rbf"])
+            fps[key] = fps.get(key, 0) + 1
     profile = {
         "address": address,
+        "software_fingerprints": [{"fingerprint": k, "spends": v} for k, v in sorted(fps.items(), key=lambda kv: -kv[1])],
         "first_seen": txs[0]["timestamp"] if txs else stored.get("first_seen"),
         "last_seen": txs[-1]["timestamp"] if txs else stored.get("last_seen"),
         "transaction_count": len(txs),

@@ -27,7 +27,8 @@ class Frames:
 def load_frames(conn) -> Frames:
     # every query is explicitly ordered: DuckDB's parallel scans return rows in varying order, and row order
     # changes model training (bagging) → results must be reproducible run to run
-    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type FROM transactions ORDER BY txid").df()
+    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type, tx_version, locktime, rbf FROM transactions "
+                      "ORDER BY txid").df()
     tin = conn.execute("""SELECT * FROM (SELECT txid, timestamp AS ts, generate_subscripts(input_addresses, 1) AS idx,
                           unnest(input_addresses) AS address, unnest(input_amounts) AS amount FROM transactions)
                           ORDER BY txid, idx""").df().drop(columns="idx")
@@ -199,6 +200,19 @@ def wallet_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
            "fund_log_n_funders", "spend_to_consolidated", "is_consolidated"]
     W[ctx] = W[ctx].fillna(0)
     return W.drop(columns=["first_recv", "last_recv", "first_spend", "last_spend"])
+
+
+def tx_fingerprint(tx: pd.DataFrame) -> pd.Series:
+    """Wallet-software fingerprint per txid: 'v<version>|<locktime: h=height, t=time, 0=none>|<r=RBF, n=final>'.
+    Missing fields → NaN (unknown; never guessed)."""
+    if "tx_version" not in tx:
+        return pd.Series(np.nan, index=tx["txid"], dtype=object)
+    lt = tx["locktime"]
+    lock = np.where(lt.isna(), None, np.where(lt >= 500_000_000, "t", np.where(lt > 0, "h", "0")))
+    fp = ("v" + tx["tx_version"].astype("Int64").astype(str) + "|" + pd.Series(lock, index=tx.index).astype(str) + "|"
+          + np.where(tx["rbf"].astype("boolean").fillna(False), "r", "n"))
+    known = tx["tx_version"].notna() & tx["locktime"].notna() & tx["rbf"].notna()
+    return pd.Series(np.where(known, fp, None), index=tx["txid"].values, dtype=object)
 
 
 CONSOLIDATION_MIN_INPUTS = 10   # a tx spending this many inputs is a service sweep (exchange / merchant / pool)

@@ -36,6 +36,10 @@ class CanonicalRecord(BaseModel):
     asn_name: Optional[str] = Field("Unknown Provider", description="ASN Organization")
     asn_type: ISP_TYPES = Field("RESIDENTIAL", description="Infrastructure type")
     block_height: Optional[int] = Field(0, ge=0)
+    # optional wallet-software fingerprint (links an owner's transactions; see beans/engines/e1_cluster.py)
+    tx_version: Optional[int] = Field(None, description="Transaction nVersion")
+    locktime: Optional[int] = Field(None, ge=0, description="nLockTime (block height < 500,000,000, else Unix time)")
+    rbf: Optional[bool] = Field(None, description="Signals BIP-125 replace-by-fee")
 
     @field_validator("txid")
     @classmethod
