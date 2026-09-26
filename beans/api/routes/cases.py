@@ -75,7 +75,8 @@ def export_case(case_id: int, fmt: str = Query("json", pattern="^(json|md|pdf|ht
                      "WHERE (entity_type = 'CASE' AND entity_id = ?) OR list_contains(?, entity_id) ORDER BY created_at",
                      [str(case_id), [a["alert_id"] for a in case["alerts"]]])
     pack = CaseReportGenerator.build(case, case["alerts"], sources, audit)
-    db.audit("CASE_EXPORT", "CASE", str(case_id), {"format": fmt, "evidence_sha256": pack["evidence_sha256"]})
+    db.audit("CASE_EXPORT", "CASE", str(case_id), {"format": fmt, "evidence_sha256": pack["evidence_sha256"],
+                                                   "timestamp_serial": (pack.get("timestamp") or {}).get("serial")})
     stem = f"BEANS_case_{case_id}"
     if fmt == "pdf":
         try:
@@ -89,4 +90,4 @@ def export_case(case_id: int, fmt: str = Query("json", pattern="^(json|md|pdf|ht
     if fmt == "md":
         return Response(pack["markdown"], media_type="text/markdown",
                         headers={"Content-Disposition": f'attachment; filename="{stem}.md"'})
-    return {k: pack[k] for k in ("case_id", "case_name", "evidence_sha256", "evidence", "markdown")}
+    return {k: pack[k] for k in ("case_id", "case_name", "evidence_sha256", "timestamp", "evidence", "markdown")}

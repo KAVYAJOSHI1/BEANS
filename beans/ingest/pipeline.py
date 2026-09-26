@@ -73,6 +73,10 @@ class ForensicPipeline:
                     FROM read_csv_auto(?, all_varchar=true)""", [str(seeds)])
                 conn.close()
                 loaded.append(seeds.name)
+        known = folder / "known_entities.csv"
+        if known.exists():
+            self.store.load_known_entities(known)
+            loaded.append(known.name)
         for name, table in (("labels_address.csv", "labels_address"), ("labels_tx.csv", "labels_tx")):
             if (folder / name).exists():
                 self.store.load_sidecar(table, folder / name, [])

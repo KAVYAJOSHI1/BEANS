@@ -56,23 +56,39 @@ def neo4j(out_dir: Path) -> dict:
 
 def stix(path: Path, min_risk: float = 65) -> dict:
     conn = DuckStore().get_connection()
-    alerts = conn.execute("SELECT alert_id, entity_id, alert_type, risk_score, calibrated_confidence, severity, reasons, "
-                          "evidence FROM alerts WHERE risk_score >= ? ORDER BY risk_score DESC", [min_risk]).fetchall()
+    rows = conn.execute("SELECT alert_id, entity_id, alert_type, risk_score, calibrated_confidence, severity, reasons, "
+                        "evidence, recommended_action FROM alerts WHERE risk_score >= ? ORDER BY risk_score DESC",
+                        [min_risk]).fetchall()
     conn.close()
+    keys = ("alert_id", "entity_id", "alert_type", "risk_score", "calibrated_confidence", "severity", "reasons",
+            "evidence", "recommended_action")
+    bundle = stix_bundle([dict(zip(keys, r)) for r in rows])
+    Path(path).write_text(json.dumps(bundle, indent=2))
+    n_ip = sum(1 for o in bundle["objects"] if o["type"] == "indicator" and "addr:value" in o["pattern"])
+    return {"indicators": len(bundle["objects"]) - 2, "wallets": len(rows), "ips": n_ip}
+
+
+def stix_bundle(alerts: list) -> dict:
+    """STIX 2.1 bundle: one indicator per alerted wallet (+ one per first-relay IP) and a report."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     identity = {"type": "identity", "spec_version": "2.1", "id": f"identity--{uuid.uuid5(NS, 'beans')}",
                 "created": now, "modified": now, "name": "BEANS (offline Bitcoin forensics)", "identity_class": "system"}
     objs, ips = [identity], set()
-    for aid, wallet, atype, risk, conf, sev, reasons, ev in alerts:
-        ev = json.loads(ev) if isinstance(ev, str) else (ev or {})
+    for a in alerts:
+        ev = a.get("evidence") or {}
+        ev = json.loads(ev) if isinstance(ev, str) else ev
+        ra = a.get("recommended_action") or {}
+        ra = json.loads(ra) if isinstance(ra, str) else ra
+        wallet, atype, sev = a["entity_id"], a["alert_type"], a["severity"]
         objs.append({
             "type": "indicator", "spec_version": "2.1", "id": f"indicator--{uuid.uuid5(NS, wallet)}",
             "created": now, "modified": now, "created_by_ref": identity["id"],
             "name": f"{atype.replace('_PATTERN', '')} wallet {wallet[:16]}…",
-            "description": " · ".join(reasons or []), "indicator_types": ["malicious-activity"],
+            "description": " · ".join(a.get("reasons") or []), "indicator_types": ["malicious-activity"],
             "pattern": f"[x-cryptocurrency-wallet:address = '{wallet}']", "pattern_type": "stix", "valid_from": now,
-            "confidence": int(round(float(conf) * 100)), "labels": [sev.lower(), atype.lower()],
-            "x_beans_risk": risk, "x_beans_alert_id": aid,
+            "confidence": int(round(float(a["calibrated_confidence"]) * 100)), "labels": [sev.lower(), atype.lower()],
+            "x_beans_risk": a["risk_score"], "x_beans_alert_id": a["alert_id"],
+            "x_beans_recommended_action": ra.get("action"),
         })
         if ev.get("first_spy_ip") and ev["first_spy_ip"] not in ips:
             ips.add(ev["first_spy_ip"])
@@ -88,6 +104,4 @@ def stix(path: Path, min_risk: float = 65) -> dict:
     objs.append({"type": "report", "spec_version": "2.1", "id": f"report--{uuid.uuid4()}", "created": now,
                  "modified": now, "created_by_ref": identity["id"], "name": "BEANS alert export", "published": now,
                  "report_types": ["threat-report"], "object_refs": [o["id"] for o in objs[1:]]})
-    bundle = {"type": "bundle", "id": f"bundle--{uuid.uuid4()}", "objects": objs}
-    Path(path).write_text(json.dumps(bundle, indent=2))
-    return {"indicators": len(objs) - 2, "wallets": len(alerts), "ips": len(ips)}
+    return {"type": "bundle", "id": f"bundle--{uuid.uuid4()}", "objects": objs}

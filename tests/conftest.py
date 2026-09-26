@@ -6,6 +6,7 @@ from pathlib import Path
 _TMP = Path(tempfile.mkdtemp(prefix="beans-test-"))
 os.environ["DB_PATH"] = str(_TMP / "test.duckdb")
 os.environ["MODELS_DIR"] = str(_TMP / "models")
+os.environ["DATA_DIR"] = str(_TMP / "data")          # inbox uploads, local TSA keys
 
 import pytest  # noqa: E402
 

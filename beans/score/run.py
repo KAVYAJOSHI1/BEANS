@@ -15,6 +15,7 @@ import pandas as pd
 import pyarrow as pa
 
 from beans.config import settings
+from beans.decision import actions as directives
 from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate
 from beans.explain.reasons import reasons_from_shap
 from beans.explain.shap_explain import explain
@@ -40,9 +41,12 @@ def run_ml(store) -> dict:
     t0 = time.time()
     conn = store.get_connection()
     try:
-        return _run(conn, t0)
+        result = _run(conn, t0)
     finally:
         conn.close()
+    from beans.alerting import webhooks   # push new high-severity alerts to configured SIEM webhooks
+    webhooks.dispatch_in_background(store)
+    return result
 
 
 def _run(conn, t0) -> dict:
@@ -155,6 +159,8 @@ def _run(conn, t0) -> dict:
     if not global_imp and fuse.final_model() is not None:
         _, global_imp = explain(fuse.final_model(), Xw.sample(min(500, len(Xw)), random_state=1))
     alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map)
+    directives.recommend(alerts, W, f, directives.load_known(conn))
+    timings["actions"] = round(time.time() - t0, 2)
     _write(conn, W, probs, alerts)
     timings["total"] = round(time.time() - t0, 2)
 
@@ -169,6 +175,7 @@ def _run(conn, t0) -> dict:
         report["e1"].update(_cluster_quality(W, labels_addr))
         report["e4"] = _propagation_quality(W, labels_addr, seeds, in_seed_cluster)
         report["alert_quality"] = _alert_quality(alerts, labels_addr)
+    report["actions"] = {k: int(v) for k, v in pd.Series([a["recommended_action"]["action"] for a in alerts]).value_counts().items()}
     settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(json.dumps(report, indent=2, default=str))
     from beans.score.model_card import build_model_card
@@ -238,12 +245,13 @@ def _write(conn, W, probs, alerts):
             "alert_type": a["alert_type"], "risk_score": a["risk_score"], "calibrated_confidence": a["calibrated_confidence"],
             "severity": a["severity"], "reasons": a["reasons"], "shap_top_features": json.dumps(a["shap_top_features"]),
             "engine_scores": json.dumps(a["engine_scores"]), "evidence": json.dumps(a["evidence"], default=str),
+            "recommended_action": json.dumps(a.get("recommended_action") or {}, default=str),
         } for a in alerts])
         conn.register("alerts_in", tab)
         conn.execute("""INSERT INTO alerts (alert_id, entity_id, entity_type, alert_type, risk_score, calibrated_confidence,
-                        severity, reasons, shap_top_features, engine_scores, evidence)
+                        severity, reasons, shap_top_features, engine_scores, evidence, recommended_action)
                         SELECT alert_id, entity_id, entity_type, alert_type, risk_score, calibrated_confidence, severity,
-                        reasons, shap_top_features, engine_scores, evidence FROM alerts_in""")
+                        reasons, shap_top_features, engine_scores, evidence, recommended_action FROM alerts_in""")
         for eid, st, who in kept:
             conn.execute("UPDATE alerts SET status = ?, assigned_to = ? WHERE entity_id = ?", [st, who, eid])
 

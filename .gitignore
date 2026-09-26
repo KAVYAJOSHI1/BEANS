@@ -19,3 +19,4 @@ ui/node_modules/
 *.log
 models/model_card.json
 models/training_report.json
+data/tsa/
