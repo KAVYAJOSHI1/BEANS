@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -332,3 +333,23 @@ def test_typology_corpus_is_reindexed_and_switchable(tmp_path, monkeypatch):
     assert list(c.columns) == ["a", "new_col", "_typology", "_group"] and c["new_col"].eq(0).all()
     monkeypatch.setattr(settings, "USE_TYPOLOGY_CORPUS", False)
     assert fuse.typology_corpus(["a"]) is None
+
+
+def test_counterfactual_groups_related_columns_and_finds_minimal_change():
+    from beans.explain import counterfactual
+    X = pd.DataFrame({"share_risky_asn": [1.0, 0, 0, 0], "cluster_share_risky": [1.0, 0, 0, 0],
+                      "max_p_peel": [1.0, 0, 0, 0], "max_p_coinjoin": [1.0, 0, 0, 0]}, index=["W", "a", "b", "c"])
+    # risky relaying (either column) is worth 0.6, peel 0.3, coinjoin 0.05
+    predict = lambda D: pd.Series(np.clip(0.6 * D[["share_risky_asn", "cluster_share_risky"]].max(axis=1)
+                                          + 0.3 * D["max_p_peel"] + 0.05 * D["max_p_coinjoin"], 0, 1))
+    shap = {"W": [{"feature": "share_risky_asn", "value": 1, "impact": 2.0},
+                  {"feature": "max_p_peel", "value": 1, "impact": 1.0},
+                  {"feature": "max_p_coinjoin", "value": 1, "impact": 0.1}]}
+    alert = {"entity_id": "W", "evidence": {}}
+    counterfactual.compute([alert], X, shap, predict)
+    cf = alert["evidence"]["counterfactual"]
+    assert cf["risk_before"] == 95.0
+    one = {s["factor"]: s["risk_after"] for s in cf["single_factor"]}
+    assert one["Tor / VPN / bulletproof relaying"] == 35.0          # both risky columns reset together
+    assert cf["minimal_change"] == {"factors": ["Tor / VPN / bulletproof relaying"], "risk_after": 35.0}
+    assert "alone decides" in cf["summary"]
