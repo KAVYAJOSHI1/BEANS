@@ -14,6 +14,14 @@ def _canonical_hash(payload: Dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
+def _stamp_line(ts: Dict[str, Any] = None) -> str:
+    if not ts:
+        return "not requested"
+    if ts.get("status") != "stamped":
+        return f"not available ({ts.get('reason')})"
+    return f"{ts['gen_time']} · serial {ts['serial']} · {ts['tsa']} · CA SHA-256 {ts['tsa_ca_sha256_fingerprint']}"
+
+
 class CaseReportGenerator:
     @classmethod
     def build(cls, case: Dict[str, Any], alerts: List[Dict[str, Any]], sources: List[Dict[str, Any]],
@@ -30,18 +38,22 @@ class CaseReportGenerator:
                 "calibrated_confidence": a["calibrated_confidence"], "status": a["status"],
                 "reasons": a["reasons"], "shap_top_features": a["shap_top_features"],
                 "engine_scores": a["engine_scores"], "evidence": a["evidence"],
+                "recommended_action": {k: (a.get("recommended_action") or {}).get(k)
+                                       for k in ("action", "title", "rule", "legal_basis", "facts")},
             } for a in alerts],
             "audit_trail": audit,
         }
         digest = _canonical_hash(evidence)
+        from beans.report.timestamp import stamp
+        ts = stamp(digest)   # RFC 3161 token over the evidence hash (local TSA)
         return {
-            "case_id": case["id"], "case_name": case["case_name"], "evidence_sha256": digest,
-            "evidence": evidence, "markdown": cls._markdown(evidence, digest), "html": cls._html(evidence, digest),
+            "case_id": case["id"], "case_name": case["case_name"], "evidence_sha256": digest, "timestamp": ts,
+            "evidence": evidence, "markdown": cls._markdown(evidence, digest, ts), "html": cls._html(evidence, digest, ts),
         }
 
     # ------------------------------------------------------------------ markdown (UI preview / download)
     @staticmethod
-    def _markdown(ev: Dict[str, Any], digest: str) -> str:
+    def _markdown(ev: Dict[str, Any], digest: str, ts: Dict[str, Any] = None) -> str:
         c = ev["case"]
         md = [f"# BEANS Case Evidence Pack: {c['case_name']}", "",
               f"- **Case ID:** {c['id']} · **Type:** {c.get('incident_type')} · **Status:** {c.get('status')} · "
@@ -49,6 +61,7 @@ class CaseReportGenerator:
               f"- **Investigator:** {c.get('investigator') or 'unassigned'}",
               f"- **Generated:** {ev['generated_at']}",
               f"- **Evidence SHA-256:** `{digest}` (hash of the JSON evidence below; recompute it to verify integrity)",
+              f"- **RFC 3161 timestamp:** {_stamp_line(ts)}",
               "", "## Investigator notes", "", c.get("notes") or "_none_", "", "## Source data", ""]
         if ev["source_files"]:
             md += ["| File | SHA-256 | Records | Ingested |", "|---|---|---|---|"]
@@ -64,6 +77,8 @@ class CaseReportGenerator:
             md += [f"### {f['entity_type']} `{f['entity_id']}`",
                    f"**{f['alert_type']}** · severity **{f['severity']}** · risk **{f['risk_score']:.0f}/100** · "
                    f"confidence **{f['calibrated_confidence'] * 100:.0f}%** · status {f['status']}", "",
+                   f"**Recommended action:** {(f.get('recommended_action') or {}).get('title') or 'n/a'} "
+                   f"({(f.get('recommended_action') or {}).get('rule') or 'no rule'})", "",
                    "**Why flagged:**"]
             md += [f"- {r}" for r in f["reasons"]] or ["- _no reasons recorded_"]
             if f["shap_top_features"]:
@@ -82,7 +97,7 @@ class CaseReportGenerator:
 
     # ------------------------------------------------------------------ HTML → PDF
     @staticmethod
-    def _html(ev: Dict[str, Any], digest: str) -> str:
+    def _html(ev: Dict[str, Any], digest: str, ts: Dict[str, Any] = None) -> str:
         esc = lambda v: html.escape(str(v if v is not None else ""))  # noqa: E731
         c = ev["case"]
         rows = "".join(
@@ -99,6 +114,8 @@ class CaseReportGenerator:
             <p><span class="sev {esc(f['severity'])}">{esc(f['severity'])}</span> {esc(f['alert_type'])} ·
                risk <b>{f['risk_score']:.0f}/100</b> · confidence <b>{f['calibrated_confidence'] * 100:.0f}%</b> ·
                status {esc(f['status'])}</p>
+            <p><b>Recommended action:</b> {esc((f.get('recommended_action') or {}).get('title') or 'n/a')}
+               <i>({esc((f.get('recommended_action') or {}).get('rule') or 'no rule')})</i></p>
             <b>Why flagged</b><ul>{reasons}</ul>
             {f'<b>Top feature contributions</b><table><tr><th>Feature</th><th>Value</th><th>Impact</th></tr>{shap}</table>' if shap else ''}
             <b>Evidence</b><ul><li>Transaction <span class=mono>{esc(e.get('txid', 'n/a'))}</span></li>
@@ -123,7 +140,7 @@ class CaseReportGenerator:
         <table class=meta><tr><td>Case ID</td><td>{esc(c['id'])}</td><td>Type</td><td>{esc(c.get('incident_type'))}</td></tr>
         <tr><td>Status</td><td>{esc(c.get('status'))}</td><td>Priority</td><td>{esc(c.get('priority'))}</td></tr>
         <tr><td>Investigator</td><td>{esc(c.get('investigator'))}</td><td>Generated</td><td>{esc(ev['generated_at'])}</td></tr></table>
-        <p>Evidence SHA-256: <span class=mono>{esc(digest)}</span></p>
+        <p>Evidence SHA-256: <span class=mono>{esc(digest)}</span><br>RFC 3161 timestamp: {esc(_stamp_line(ts))}</p>
         <h2>Investigator notes</h2><p>{esc(c.get('notes') or '—')}</p>
         <h2>Source data</h2><table><tr><th>File</th><th>SHA-256</th><th>Records</th></tr>{rows}</table>
         <h2>Findings ({len(ev['findings'])})</h2>{''.join(findings) or '<p><i>No alerts linked to the suspect entities.</i></p>'}

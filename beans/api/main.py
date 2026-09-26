@@ -6,7 +6,7 @@ import logging
 
 from beans.api import db
 from beans.config import settings
-from beans.api.routes import stats, alerts, entities, graph, timeline, geomap, cases, seeds, ingest, modelcard
+from beans.api.routes import stats, alerts, entities, graph, timeline, geomap, cases, seeds, ingest, modelcard, actions, webhooks
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
@@ -36,6 +36,8 @@ app.include_router(cases.router, prefix=settings.API_PREFIX)
 app.include_router(seeds.router, prefix=settings.API_PREFIX)
 app.include_router(ingest.router, prefix=settings.API_PREFIX)
 app.include_router(modelcard.router, prefix=settings.API_PREFIX)
+app.include_router(actions.router, prefix=settings.API_PREFIX)
+app.include_router(webhooks.router, prefix=settings.API_PREFIX)
 
 @app.get("/api/health")
 def health_check():

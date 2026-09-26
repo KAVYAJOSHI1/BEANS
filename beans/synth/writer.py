@@ -7,6 +7,8 @@ Files in output_dir:
   labels.csv                        txid, address, typology, cluster_id             (legacy format)
   seeds.csv                         address, threat_type, incident_name, confidence, source
                                     (addresses of ~30% of illicit entities; the rest stay hidden)
+  known_entities.csv                address, entity_name, entity_type, country, in_jurisdiction, source
+                                    (partial exchange / mining-pool attribution, used by the action rules)
   manifest.json
 Ground truth is for training and evaluation only. It is never used as a model input.
 """
@@ -102,6 +104,23 @@ class SyntheticDatasetWriter:
             w.writerow(["address", "threat_type", "incident_name", "confidence", "source"])
             w.writerows(seeds)
 
+        # ---- known attribution (intel, not ground truth): the investigator's list of exchange and mining-pool
+        # addresses. Partial on purpose (~80% of exchange deposit addresses), like a real attribution feed.
+        vasps = [("Synthetic Indian VASP A", "IN", 1), ("Synthetic Indian VASP B", "IN", 1),
+                 ("Synthetic Offshore VASP C", "SC", 0)]
+        known_rows = []
+        for ex, (name, country, in_jur) in zip(sim.exchanges, vasps):
+            for a in ex.addresses:
+                if a in used and (a in (ex.hot, ex.cold) or rng.random() < 0.8):
+                    known_rows.append([a, name, "VASP", country, in_jur, "SYNTHETIC_ATTRIBUTION"])
+        for i, m in enumerate(sim.miners):
+            known_rows += [[a, f"Synthetic Mining Pool {i + 1}", "MINING_POOL", "XX", 0, "SYNTHETIC_ATTRIBUTION"]
+                           for a in m.addresses if a in used]
+        with open(output_dir / "known_entities.csv", "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["address", "entity_name", "entity_type", "country", "in_jurisdiction", "source"])
+            w.writerows(known_rows)
+
         n_ill_addr = sum(1 for a in used if sim.entities[sim.owner[a]].illicit)
         manifest = {
             "generator": "beans-sim-v2", "dataset_name": output_dir.name, "seed": seed,
@@ -111,7 +130,7 @@ class SyntheticDatasetWriter:
             "illicit_transactions": sum(1 for t in sim.txs if t["illicit"]),
             "entities": dict(Counter(e.typology for e in sim.entities.values())),
             "tx_classes": dict(Counter(t["tx_class"] for t in sim.txs)),
-            "seed_wallets": len(seeds), "known_illicit_entities": len(known), "illicit_entities": len(illicit_ents),
+            "seed_wallets": len(seeds), "known_entity_addresses": len(known_rows), "known_illicit_entities": len(known), "illicit_entities": len(illicit_ents),
             "csv_sha256": hashlib.sha256((output_dir / "transactions.csv").read_bytes()).hexdigest(),
         }
         (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))

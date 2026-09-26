@@ -23,6 +23,7 @@ def alert_out(row: Dict[str, Any]) -> Dict[str, Any]:
         "shap_top_features": row.get("shap_top_features") or [],
         "engine_scores": row.get("engine_scores") or {},
         "evidence": row.get("evidence") or {},
+        "recommended_action": row.get("recommended_action") or {},
         "status": row.get("status") or "OPEN",
         "assigned_to": row.get("assigned_to") or "Unassigned",
         "created_at": row.get("created_at"),
@@ -35,6 +36,7 @@ def list_alerts(
     severity: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     alert_type: Optional[str] = Query(None, alias="type"),
+    action: Optional[str] = Query(None, description="recommended action, e.g. IMMEDIATE_FREEZE_DRAFT"),
     q: Optional[str] = Query(None, description="search entity id, alert type, txid or IP"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -49,6 +51,9 @@ def list_alerts(
     if alert_type and alert_type != "ALL":
         where.append("alert_type = ?")
         params.append(alert_type)
+    if action and action != "ALL":
+        where.append("json_extract_string(recommended_action, '$.action') = ?")
+        params.append(action)
     if q:
         where.append("(entity_id ILIKE ? OR alert_type ILIKE ? OR CAST(evidence AS VARCHAR) ILIKE ?)")
         params.extend([f"%{q}%"] * 3)

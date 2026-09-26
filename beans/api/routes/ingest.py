@@ -15,7 +15,7 @@ router = APIRouter(prefix="/ingest", tags=["Ingestion & Pipeline"])
 
 ALLOWED = {".csv", ".json", ".ndjson", ".jsonl", ".xml"}
 INBOX = settings.DATA_DIR / "inbox"
-DATA_TABLES = ["transactions", "net_observations", "wallet_profiles", "alerts", "feedback", "seeds"]
+DATA_TABLES = ["transactions", "net_observations", "wallet_profiles", "alerts", "feedback", "seeds", "known_entities"]
 
 
 def _ingest(path: Path, source: str, mapping: Path = None) -> Dict[str, Any]:

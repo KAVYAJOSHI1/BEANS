@@ -11,7 +11,7 @@ from typing import Any, Iterable, Optional
 
 from beans.store.duck import DuckStore
 
-JSON_COLUMNS = {"shap_top_features", "engine_scores", "evidence", "details"}
+JSON_COLUMNS = {"shap_top_features", "engine_scores", "evidence", "details", "recommended_action"}
 
 _API_DDL = """
 CREATE TABLE IF NOT EXISTS ingest_log (
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS ingest_log (
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 """
-_ddl_done = False
+_ddl_done: set = set()   # database paths that already have the API tables
 
 
 def _clean(v: Any) -> Any:
@@ -38,12 +38,12 @@ def _clean(v: Any) -> Any:
 
 @contextmanager
 def connection():
-    global _ddl_done
-    conn = DuckStore().get_connection()
+    store = DuckStore()
+    conn = store.get_connection()
     try:
-        if not _ddl_done:
+        if store.db_path not in _ddl_done:
             conn.execute(_API_DDL)
-            _ddl_done = True
+            _ddl_done.add(store.db_path)
         yield conn
     finally:
         conn.close()

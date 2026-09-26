@@ -140,7 +140,41 @@ class DuckStore:
             notes VARCHAR,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+
+        -- attribution intel: addresses known to belong to exchanges (VASPs) / mining pools. Used by the action
+        -- rules (beans/decision), never as a model feature.
+        CREATE TABLE IF NOT EXISTS known_entities (
+            address VARCHAR PRIMARY KEY,
+            entity_name VARCHAR,
+            entity_type VARCHAR,         -- VASP | MINING_POOL | MERCHANT | OTHER
+            country VARCHAR,
+            in_jurisdiction BOOLEAN,     -- operates in India / registered with FIU-IND → Section 94 BNSS applies
+            source VARCHAR
+        );
+
+        CREATE TABLE IF NOT EXISTS webhooks (
+            id INTEGER PRIMARY KEY,
+            name VARCHAR,
+            url VARCHAR,
+            fmt VARCHAR,                 -- json | splunk_hec | elastic | stix
+            min_severity VARCHAR DEFAULT 'CRITICAL',
+            token VARCHAR,
+            enabled BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS webhook_log (
+            webhook_id INTEGER,
+            alert_id VARCHAR,
+            status VARCHAR,              -- SENT | FAILED | TEST
+            http_status INTEGER,
+            attempts INTEGER,
+            error VARCHAR,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
         """)
+        # migrations for databases created by earlier versions
+        conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")
         conn.close()
 
     def insert_records(self, records: List[CanonicalRecord]):
@@ -188,6 +222,24 @@ class DuckStore:
         conn.execute(f"DELETE FROM {table}")
         conn.execute(f"INSERT INTO {table} SELECT * FROM read_csv_auto(?, all_varchar=true)", [str(path)])
         conn.close()
+
+    def load_known_entities(self, path: Path) -> int:
+        """Add/replace attribution rows (address, entity_name[, entity_type, country, in_jurisdiction, source])."""
+        import csv as _csv
+        with open(path, newline="") as fh:
+            cols = {c.strip().lower() for c in (next(_csv.reader(fh), []) or [])}
+        if not {"address", "entity_name"} <= cols:
+            raise ValueError("known-entities CSV needs at least the columns: address, entity_name")
+        col = lambda name, default: name if name in cols else default
+        conn = self.get_connection()
+        before = conn.execute("SELECT COUNT(*) FROM known_entities").fetchone()[0]
+        conn.execute(f"""INSERT OR REPLACE INTO known_entities
+            SELECT trim(address), entity_name, upper({col("entity_type", "'VASP'")}), upper({col("country", "'XX'")}),
+                   COALESCE(TRY_CAST({col("in_jurisdiction", "NULL")} AS BOOLEAN), false), {col("source", "'INTEL_FILE'")}
+            FROM read_csv_auto(?, all_varchar=true) WHERE address IS NOT NULL""", [str(path)])
+        n = conn.execute("SELECT COUNT(*) FROM known_entities").fetchone()[0] - before
+        conn.close()
+        return n
 
     def get_all_transactions(self) -> List[Dict[str, Any]]:
         conn = self.get_connection()
