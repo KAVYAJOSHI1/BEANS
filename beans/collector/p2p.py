@@ -281,6 +281,7 @@ class Collector:
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self._obs: List[Tuple[Tx, float, str, int]] = []
         self._opened = time.time()
+        self._halt = None   # threading.Event set by halt(); lets another thread stop run() cleanly
 
     def remember(self, tx: Tx):
         self.outputs[tx.txid] = [(a, v) for a, v, _ in tx.outputs]
@@ -421,6 +422,13 @@ class Collector:
             self.stats["peers"] -= 1
             writer.close()
 
+    def halt(self) -> None:
+        """Ask run() (possibly in another thread) to stop; it flushes the pending rows and writes a final status."""
+        import threading
+        if self._halt is None:
+            self._halt = threading.Event()
+        self._halt.set()
+
     def write_status(self, started: float, running: bool = True) -> None:
         """`collector.status` in the output folder, read by the dashboard's Live Monitor (the .status suffix keeps
         `beans watch` from treating it as data)."""
@@ -437,7 +445,8 @@ class Collector:
         tasks = [asyncio.create_task(self.peer(h, p, stop)) for h, p in peers[:self.max_peers]]
         start = time.time()
         try:
-            while any(not t.done() for t in tasks) and (seconds is None or time.time() - start < seconds):
+            while any(not t.done() for t in tasks) and (seconds is None or time.time() - start < seconds) \
+                    and not (self._halt and self._halt.is_set()):
                 await asyncio.sleep(5)
                 self.write_status(start)
                 log(f"peers {self.stats['peers']} · announcements {self.stats['inv']} · transactions {self.stats['tx']} · "

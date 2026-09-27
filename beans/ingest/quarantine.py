@@ -1,6 +1,6 @@
 import csv
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 from beans.config import settings
 
@@ -21,7 +21,7 @@ class QuarantineLogger:
                 writer.writerow(["quarantine_timestamp", "source_file", "error_reason", "raw_payload"])
             
             writer.writerow([
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),   # same format as before
                 source_file,
                 error_reason,
                 str(row_data)[:1000]

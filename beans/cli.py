@@ -2,6 +2,7 @@ import typer
 import uvicorn
 from pathlib import Path
 from rich.console import Console
+from rich.markup import escape
 
 from beans.config import settings
 from beans.synth.writer import SyntheticDatasetWriter
@@ -58,6 +59,7 @@ def ofac_seeds(
     file: str = typer.Option(None, "--file", "-f", help="Official OFAC sdn.xml (default: data/intel/ofac_sdn.xml)"),
     download: bool = typer.Option(False, "--download", help="Fetch the current sdn.xml from treasury.gov first (needs internet)"),
     rescore: bool = typer.Option(True, "--rescore/--no-rescore", help="Re-run the engines so the new seeds propagate"),
+    load: bool = typer.Option(True, "--load/--no-load", help="--no-load: only download (e.g. for `beans live`)"),
 ):
     """Load the Bitcoin addresses on the US Treasury OFAC SDN sanctions list as seeds (real, citable seeds)."""
     from beans.enrich import ofac
@@ -69,6 +71,10 @@ def ofac_seeds(
     if not path.exists():
         raise typer.BadParameter(f"{path} not found: pass --download, or --file with the official sdn.xml")
     parsed = ofac.parse(path)
+    if not load:
+        console.print(f"{len({e['address'] for e in parsed['entries']})} sanctioned addresses in {path} "
+                      f"(list of {parsed['publish_date']}); not loaded into {settings.DB_PATH}")
+        return
     conn = DuckStore().get_connection()
     n = ofac.load_seeds(conn, parsed)
     seen = conn.execute("""SELECT COUNT(DISTINCT s.address) FROM seeds s WHERE s.threat_type = 'SANCTIONED' AND s.address IN (
@@ -84,45 +90,23 @@ def ofac_seeds(
 def watch(
     folder: str = typer.Argument("data/inbox", help="Folder to watch for new CSV/JSON/XML files"),
     interval: float = typer.Option(10.0, "--interval", "-i", help="Seconds between scans"),
+    score_every: float = typer.Option(60.0, "--score-every", help="Score at most this often (s); files are loaded meanwhile"),
     mapping: str = typer.Option(None, "--mapping", "-m", help="YAML column mapping applied to every file"),
-    once: bool = typer.Option(False, "--once", help="Process what is there now and exit"),
+    once: bool = typer.Option(False, "--once", help="Process what is there now, score once and exit"),
 ):
-    """Monitoring mode: ingest + score every new file dropped into a folder (moved to processed/ afterwards)."""
-    import shutil
-    import time
-    inbox, done = Path(folder), Path(folder) / "processed"
-    inbox.mkdir(parents=True, exist_ok=True)
-    done.mkdir(exist_ok=True)
-    console.print(f"[bold green]Watching {inbox} every {interval:.0f}s (Ctrl+C to stop)…[/bold green]")
-    import json
-    import os
-    state = {"pid": os.getpid(), "folder": str(inbox), "interval_s": interval, "started_at": time.time(),
-             "files_done": 0, "files_failed": 0, "last_file": None, "last_alerts": None, "last_error": None}
+    """Monitoring mode: load every new file dropped into a folder and score in batches (files → processed/).
 
-    def status():   # watch.status: read by the dashboard's Live Monitor
-        state["updated_at"] = time.time()
-        (inbox / "watch.status.part").write_text(json.dumps(state))
-        os.replace(inbox / "watch.status.part", inbox / "watch.status")
-    while True:
-        status()
-        files = sorted(f for f in inbox.iterdir() if f.is_file() and f.suffix.lower() in {".csv", ".json", ".ndjson", ".jsonl", ".xml"})
-        for f in files:
-            console.print(f"→ {f.name}")
-            try:
-                res = ForensicPipeline(mapping=Path(mapping) if mapping else None).run_file_ingestion(f, "WATCH")
-                console.print(f"  {res['records_ingested']} rows, {res['rows_quarantined']} quarantined, "
-                              f"{res['pipeline_stats'].get('alerts_generated')} alerts")
-                state.update(files_done=state["files_done"] + 1, last_file=f.name, last_error=None,
-                             last_rows=res["records_ingested"], last_alerts=res["pipeline_stats"].get("alerts_generated"))
-            except Exception as e:  # keep watching; the file stays for inspection
-                console.print(f"  [red]failed: {e}[/red]")
-                state.update(files_failed=state["files_failed"] + 1, last_error=f"{f.name}: {e}"[:300])
-                status()
-                continue
-            shutil.move(str(f), done / f"{time.strftime('%Y%m%d_%H%M%S')}_{f.name}")
-        if once:
-            break
-        time.sleep(interval)
+    With the dashboard running, prefer `beans serve --watch FOLDER`: a separate watch process locks the database while it
+    scores and the dashboard returns errors meanwhile."""
+    from beans.ingest.worker import IngestWorker
+    w = IngestWorker(Path(folder), interval=interval, score_every=score_every,
+                     mapping=Path(mapping) if mapping else None, log=lambda m: console.print(escape(m)))
+    try:
+        w.run(once=once)
+    except KeyboardInterrupt:
+        w.stop()
+        w.state["running"] = False
+        w.write_status()
 
 
 @app.command()
@@ -267,11 +251,126 @@ def user_list():
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host address"),
-    port: int = typer.Option(8000, "--port", "-p", help="Port number")
+    port: int = typer.Option(8000, "--port", "-p", help="Port number"),
+    watch_folder: str = typer.Option(None, "--watch", "-w", help="Also ingest files dropped into this folder (in-process)"),
+    interval: float = typer.Option(5.0, "--interval", help="--watch: seconds between scans"),
+    score_every: float = typer.Option(60.0, "--score-every", help="--watch: score at most this often (s)"),
 ):
-    """Start the BEANS FastAPI forensic backend server."""
+    """Start the BEANS API + dashboard; with --watch, also the continuous ingest worker in the same process."""
+    worker = _start_worker(Path(watch_folder), interval, score_every) if watch_folder else None
     console.print(f"[bold green]Starting BEANS server on http://{host}:{port}...[/bold green]")
-    uvicorn.run("beans.api.main:app", host=host, port=port, reload=False)
+    try:
+        uvicorn.run("beans.api.main:app", host=host, port=port, reload=False)
+    finally:
+        if worker:
+            worker.stop()
+
+
+def _start_worker(folder: Path, interval: float, score_every: float):
+    """The ingest worker runs as a thread of the server process: the dashboard stays responsive while it scores."""
+    from beans.ingest.worker import IngestWorker
+    settings.LIVE_INBOX = folder            # the Live Monitor page reads this folder's status files
+    w = IngestWorker(folder, interval=interval, score_every=score_every,
+                     log=lambda m: console.print(f"[dim]\\[ingest][/dim] {escape(m)}"))
+    w.start()
+    return w
+
+
+@app.command()
+def live(
+    peer: list[str] = typer.Option(None, "--peer", help="host:port of a Bitcoin node (repeatable)"),
+    dns_seed: bool = typer.Option(True, "--dns-seed/--no-dns-seed", help="Ask the public DNS seeds for peers"),
+    rpc: str = typer.Option(None, "--rpc", help="Resolve confirmed inputs from your Bitcoin Core node: http://user:pass@host:8332"),
+    esplora: str = typer.Option(None, "--esplora", help="… or from an Esplora API"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h"),
+    port: int = typer.Option(8000, "--port", "-p"),
+    db: str = typer.Option("data/live.duckdb", "--db", help="Live database (kept apart from the demo data)"),
+    models: str = typer.Option("data/live_models", "--models", help="Model folder for live scoring (copied from models/ once)"),
+    inbox: str = typer.Option("data/live_inbox", "--inbox", help="Folder the collector writes and the worker reads"),
+    rotate: int = typer.Option(60, "--rotate", help="Seconds per collector file"),
+    score_every: float = typer.Option(60.0, "--score-every", help="Score at most this often (s)"),
+    max_peers: int = typer.Option(8, "--max-peers"),
+    ofac: bool = typer.Option(True, "--ofac/--no-ofac", help="Load data/intel/ofac_sdn.xml as seeds if present"),
+    minutes: float = typer.Option(None, "--minutes", help="Stop collecting after this long (the dashboard keeps running)"),
+):
+    """Live connected mode in one command: P2P collector + in-process ingest worker + dashboard (needs internet).
+
+    Live data goes to its own database and model folder, never into the demo data."""
+    import os
+    import shutil
+    import sys
+    models_dir, inbox_dir = Path(models), Path(inbox)
+    models_dir.mkdir(parents=True, exist_ok=True)
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    if not (models_dir / "fusion.joblib").exists():
+        for f in settings.MODELS_DIR.iterdir():
+            if f.is_file():
+                shutil.copy2(f, models_dir / f.name)
+        console.print(f"Copied the trained models to {models_dir} (live scoring never overwrites models/)")
+    env = {**os.environ, "DB_PATH": str(Path(db).resolve()), "MODELS_DIR": str(models_dir.resolve()),
+           "LIVE_INBOX": str(inbox_dir.resolve())}
+    args = [sys.executable, "-m", "beans.cli", "live-run", "--host", host, "--port", str(port), "--rotate", str(rotate),
+            "--score-every", str(score_every), "--max-peers", str(max_peers), "--dns-seed" if dns_seed else "--no-dns-seed",
+            "--ofac" if ofac else "--no-ofac"]
+    for p in peer or []:
+        args += ["--peer", p]
+    for k, v in (("--rpc", rpc), ("--esplora", esplora), ("--minutes", minutes)):
+        if v is not None:
+            args += [k, str(v)]
+    os.execve(sys.executable, args, env)   # restart with the live paths set before any module reads them
+
+
+@app.command("live-run", hidden=True)
+def live_run(
+    peer: list[str] = typer.Option(None, "--peer"), dns_seed: bool = typer.Option(True, "--dns-seed/--no-dns-seed"),
+    rpc: str = typer.Option(None, "--rpc"), esplora: str = typer.Option(None, "--esplora"),
+    host: str = typer.Option("127.0.0.1", "--host"), port: int = typer.Option(8000, "--port"),
+    rotate: int = typer.Option(60, "--rotate"), score_every: float = typer.Option(60.0, "--score-every"),
+    max_peers: int = typer.Option(8, "--max-peers"), ofac: bool = typer.Option(True, "--ofac/--no-ofac"),
+    minutes: float = typer.Option(None, "--minutes"),
+):
+    import asyncio
+    import threading
+    from beans.collector.p2p import Collector, dns_seed_peers
+    from beans.collector.resolve import from_args
+    from beans.store.duck import DuckStore
+    inbox = settings.LIVE_INBOX
+    console.print(f"[bold green]BEANS live[/bold green] · database {settings.DB_PATH} · inbox {inbox}")
+    sdn = settings.INTEL_DIR / "ofac_sdn.xml"
+    if ofac and sdn.exists():
+        from beans.enrich import ofac as ofac_mod
+        conn = DuckStore().get_connection()
+        try:
+            if not conn.execute("SELECT COUNT(*) FROM seeds WHERE threat_type = 'SANCTIONED'").fetchone()[0]:
+                n = ofac_mod.load_seeds(conn, ofac_mod.parse(sdn))
+                console.print(f"Loaded {n} OFAC-sanctioned addresses as seeds")
+        finally:
+            conn.close()
+    elif ofac:
+        console.print("[yellow]No data/intel/ofac_sdn.xml: run `beans ofac-seeds --download` once for real seeds[/yellow]")
+    peers = [(h.rsplit(":", 1)[0], int(h.rsplit(":", 1)[1]) if ":" in h else 8333) for h in (peer or [])]
+    if dns_seed:
+        peers += dns_seed_peers(max_peers)
+    if not peers:
+        raise typer.BadParameter("no peers: check the internet connection, or give --peer host:port")
+    collector = Collector(inbox, rotate_s=rotate, max_peers=max_peers, resolver=from_args(rpc, esplora))
+    ticks = {"n": 0}
+
+    def clog(m):   # the collector reports every 5 s; print one line a minute
+        ticks["n"] += 1
+        if ticks["n"] % 12 == 1:
+            console.print(f"[dim]\\[collector][/dim] {escape(m)}")
+    ct = threading.Thread(target=lambda: asyncio.run(collector.run(peers, None if minutes is None else minutes * 60, log=clog)),
+                          name="beans-collector", daemon=True)
+    ct.start()
+    worker = _start_worker(inbox, 5.0, score_every)
+    console.print(f"[bold green]Dashboard: http://{host}:{port}/#live[/bold green] (Ctrl+C stops everything)")
+    try:
+        uvicorn.run("beans.api.main:app", host=host, port=port, reload=False)
+    finally:
+        collector.halt()
+        worker.stop()
+        ct.join(timeout=15)
 
 @app.command()
 def demo(

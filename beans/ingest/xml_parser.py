@@ -33,8 +33,9 @@ class StreamingXMLParser:
                         QuarantineLogger.log_bad_row(ET.tostring(elem, encoding="unicode"), f"XML Parse Error: {str(e)}", str(file_path))
                     finally:
                         elem.clear() # Free memory
-        except Exception as e:
+        except Exception as e:   # corrupt or truncated file: logged, then refused (rows before the break are already read)
             QuarantineLogger.log_bad_row(f"XML file format fatal error: {str(e)}", "INVALID_XML_STRUCTURE", str(file_path))
+            raise ValueError(f"invalid XML file (corrupt or truncated): {e}") from e
 
         return total, valid
 

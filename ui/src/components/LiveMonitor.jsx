@@ -61,9 +61,10 @@ export default function LiveMonitor({ onSelectAlert, onDataChanged }) {
       {!c && !w && (
         <section className={`${card} text-xs space-y-2`}>
           <div className="font-bold text-slate-900 flex items-center gap-2 text-sm"><Terminal className="w-4 h-4 text-blue-600" /> Start live monitoring</div>
-          <p className="text-slate-500">Neither the collector nor the watcher has reported from <span className="font-mono">{s.folder}</span>. Run them in two terminals:</p>
-          <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 overflow-x-auto">{`beans collect --dns-seed --out ${s.folder}      # live mainnet (needs internet)
-beans watch ${s.folder}                          # ingest + score every new file`}</pre>
+          <p className="text-slate-500">Neither the collector nor the ingest worker has reported from <span className="font-mono">{s.folder}</span>. Start the server with <span className="font-mono">--watch</span> and the collector:</p>
+          <pre className="bg-slate-900 text-slate-100 rounded-lg p-3 overflow-x-auto">{`beans serve --watch ${s.folder}                  # dashboard + ingest worker (one process)
+beans collect --dns-seed --out ${s.folder}      # live mainnet (needs internet)
+# or, in one command: beans live`}</pre>
         </section>
       )}
 
@@ -95,17 +96,22 @@ beans watch ${s.folder}                          # ingest + score every new file
 
         <section className={`${card} space-y-4`}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2"><FolderInput className="w-4 h-4 text-blue-600" /> Watch folder</h2>
-            {w ? <State alive={w.alive} label={w.alive ? 'Watching' : 'No heartbeat'} /> : <State label="Not running" stopped />}
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2"><FolderInput className="w-4 h-4 text-blue-600" /> Ingest worker</h2>
+            {w ? <State alive={w.alive} stopped={w.running === false}
+              label={w.running === false ? 'Stopped' : !w.alive ? 'No heartbeat' : w.scoring ? 'Scoring…' : 'Watching'} />
+              : <State label="Not running" stopped />}
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Stat label="Files scored" value={w?.files_done} />
             <Stat label="Waiting" value={s.files_waiting.length} />
             <Stat label="Failed" value={w?.files_failed} />
+            {w?.scoring_runs != null && <Stat label="Scoring runs" value={w.scoring_runs} />}
+            {w?.unscored_rows != null && <Stat label="Rows awaiting scoring" value={w.unscored_rows?.toLocaleString()} />}
+            {w?.last_score_s != null && <Stat label="Last scoring" value={`${w.last_score_s} s`} />}
           </div>
           {w && (
             <div className="text-[11px] text-slate-500 space-y-1">
-              <div>Heartbeat {ago(w.age_s)} · every {w.interval_s} s · <span className="font-mono">{s.folder}</span></div>
+              <div>Heartbeat {ago(w.age_s)} · scans every {w.interval_s} s{w.score_every_s ? `, scores at most every ${w.score_every_s} s` : ''}{w.mode === 'in-process' ? ' · runs inside the server' : ' · separate process: the dashboard may error while it scores'} · <span className="font-mono">{s.folder}</span></div>
               {w.last_file && <div>Last: <span className="font-mono">{w.last_file}</span> · {w.last_rows?.toLocaleString()} rows · {w.last_alerts} alerts after scoring</div>}
               {w.last_error && <div className="text-red-600">Error: {w.last_error}</div>}
             </div>

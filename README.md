@@ -33,7 +33,8 @@ make demo           # synthetic data → ingest → 5 ML engines → alerts → 
 ```bash
 .venv/bin/python -m beans.cli ingest their_export.csv --mapping their.yaml # unfamiliar column names (docs/DATA_FORMATS.md)
 .venv/bin/python -m beans.cli ingest day1.csv day2.csv … --no-score        # bulk load (chunked), then: beans score
-.venv/bin/python -m beans.cli watch data/inbox                             # monitoring mode: score every new file
+.venv/bin/python -m beans.cli serve --watch data/inbox                     # monitoring mode: dashboard + ingest worker
+.venv/bin/python -m beans.cli live                                         # live mainnet in one command (needs network)
 .venv/bin/python -m beans.cli collect --dns-seed --out data/inbox           # OPTIONAL live P2P collector (needs network)
 .venv/bin/python -m beans.cli collect --dns-seed --rpc http://user:pass@127.0.0.1:8332   # … + input amounts from your own node
 .venv/bin/python scripts/mempool_sniffer.py --dns-seed --out data/inbox     # same collector, standalone (no ML deps)
@@ -55,13 +56,27 @@ transaction. Input *amounts* need the parent transaction: coins from chains seen
 confirmed coins need `--rpc` (your own Bitcoin Core node, `gettxout`, pruned is fine) or `--esplora`. A resolver that is
 slow or unreachable is given up on within a minute, and collection continues.
 
-Score live captures in their own database so they never mix with the labelled demo data:
+**One command (live connected mode):**
 
 ```bash
-DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans ingest data/live/*.csv
-DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans ofac-seeds          # real seeds: OFAC-sanctioned addresses
-DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans serve --port 8001
+beans ofac-seeds --download --no-load        # once: fetch the OFAC list (loaded as seeds by `beans live`)
+beans live                                   # collector + ingest worker + dashboard → http://127.0.0.1:8000/#live
 ```
+
+`beans live` keeps live data in its own database (`data/live.duckdb`) and model copy (`data/live_models/`), loads new
+files every 5 s and scores in batches at most every 60 s (`--score-every`); Ctrl+C stops everything cleanly.
+
+**Air-gapped analysis server:** files arrive in a folder (for example from a DMZ sensor running
+`scripts/mempool_sniffer.py` behind a data diode) and one process serves the dashboard and ingests them:
+
+```bash
+beans serve --host 0.0.0.0 --watch /srv/beans/inbox --score-every 300
+```
+
+Run the ingest worker inside the server like this rather than as a separate `beans watch` process: DuckDB lets one
+process write the database, so a separate watcher makes the dashboard fail while it scores (measured: every request
+failed for 37 s; in process, 45 of 45 succeeded during a 42 s scoring run). Corrupt or truncated JSON/XML files are
+refused and moved to `failed/`. The full deployment plan is in [`BEANS_DEPLOYMENT_STRATEGY.md`](BEANS_DEPLOYMENT_STRATEGY.md).
 
 What to expect: 20 minutes of mainnet (12,436 transactions, 4,720 wallets, 27 Sep 2026) produced **no alerts**. The
 highest fused probability was 0.39 (threshold 0.40), and none of the 532 sanctioned addresses moved. That is the

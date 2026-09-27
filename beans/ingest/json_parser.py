@@ -43,8 +43,9 @@ class StreamingJSONParser:
                             valid += 1
                             self.valid = valid
                             yield rec
-                except Exception as e:
+                except Exception as e:   # corrupt or truncated file: logged, then refused as a whole
                     QuarantineLogger.log_bad_row(f"Entire JSON parse error: {str(e)}", "INVALID_JSON_FILE", str(file_path))
+                    raise ValueError(f"invalid JSON file (corrupt or truncated): {e}") from e
             else:
                 # NDJSON line-by-line format
                 for line in f:
