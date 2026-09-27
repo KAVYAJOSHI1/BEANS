@@ -4,7 +4,7 @@ BEANS = $(PY) -m beans.cli
 NPM  ?= npm
 N_TX ?= 5000
 
-.PHONY: help install venv synth ingest pipeline serve demo test build-ui clean-db validate-elliptic
+.PHONY: help install venv synth ingest pipeline serve demo test build-ui clean-db validate-elliptic ci
 
 help:
 	@echo "make install    create .venv and install Python deps"
@@ -14,6 +14,7 @@ help:
 	@echo "make serve      API + dashboard on http://127.0.0.1:8000"
 	@echo "make demo       pipeline + serve (one command)"
 	@echo "make test       run tests"
+	@echo "make ci         the GitHub CI checks, locally: tests, UI lint + build, ui/dist up to date"
 	@echo "make build-ui   rebuild ui/dist (needs Node >= 20.19)"
 	@echo "make validate-elliptic   external validation on the real Elliptic dataset (downloads once)"
 	@echo "make docker-offline-test   build image and run it with --network none"
@@ -23,7 +24,7 @@ venv:
 	python3 -m venv .venv && .venv/bin/pip install -U pip
 
 install: venv
-	.venv/bin/pip install -r requirements.txt
+	.venv/bin/pip install -r requirements.txt -c constraints.txt
 
 synth:
 	$(BEANS) synth --n-tx $(N_TX) --out data/synth/demo
@@ -44,6 +45,12 @@ demo: pipeline serve
 test:
 	$(PY) -m pytest -q
 
+ci: test   # same checks as .github/workflows/ci.yml (the Docker job: make docker-offline-test)
+	cd ui && $(NPM) ci --no-audit --no-fund && $(NPM) run lint && $(NPM) run build
+	@if [ -n "$$(git status --porcelain -- ui/dist)" ]; then \
+		echo "ui/dist changed: commit the rebuilt ui/dist"; git status --porcelain -- ui/dist; exit 1; fi
+	@echo "CI checks passed"
+
 validate-elliptic:
 	$(BEANS) validate-elliptic --download --doc docs/VALIDATION_ELLIPTIC.md
 
@@ -59,7 +66,7 @@ docker-offline-test: docker   # proves the whole product runs with networking di
 	docker rm -f beans-offline >/dev/null 2>&1 || true
 	docker run -d --network none --name beans-offline -e N_TX=1000 beans:dev
 	@echo "waiting for pipeline + server..."; for i in $$(seq 1 60); do docker logs beans-offline 2>&1 | grep -q "Uvicorn running" && break; sleep 5; done
-	docker exec beans-offline python -c "import urllib.request as u; [print(p, u.urlopen('http://127.0.0.1:8000'+p).status) for p in ['/', '/api/health', '/api/alerts', '/api/graph/topology', '/api/geomap/origins']]"
+	docker exec beans-offline python -c "import urllib.request as u; [print(p, u.urlopen('http://127.0.0.1:8000'+p).status) for p in ['/', '/api/health', '/api/alerts', '/api/graph/topology', '/api/geomap/origins', '/api/live/status', '/api/review/queue', '/api/search?q=bc', '/api/audit/verify']]"
 
 bundle:
 	scripts/build_offline_bundle.sh --docker
