@@ -26,7 +26,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 MAGIC = bytes.fromhex("f9beb4d9")          # mainnet
 PROTOCOL_VERSION = 70016
@@ -270,12 +270,15 @@ class Collector:
     txs: Dict[str, Tx] = field(default_factory=dict)
     requested: Dict[str, float] = field(default_factory=dict)
     pending_obs: Dict[str, list] = field(default_factory=dict)
+    resolver: Optional[Callable[[List[Tuple[str, int]]], Dict[Tuple[str, int], Tuple[str, int]]]] = None
+    prevouts: "OrderedDict[Tuple[str, int], Tuple[str, int]]" = field(default_factory=OrderedDict)
     stats: Dict[str, int] = field(default_factory=lambda: {"peers": 0, "inv": 0, "tx": 0, "rows": 0, "files": 0,
-                                                          "txid_mismatch": 0})
+                                                          "txid_mismatch": 0, "resolved_prevouts": 0,
+                                                          "resolver_errors": 0})
 
     def __post_init__(self):
         self.out_dir.mkdir(parents=True, exist_ok=True)
-        self._rows: List[list] = []
+        self._obs: List[Tuple[Tx, float, str, int]] = []
         self._opened = time.time()
 
     def remember(self, tx: Tx):
@@ -285,15 +288,29 @@ class Collector:
             old, _ = self.outputs.popitem(last=False)
             self.txs.pop(old, None)
 
+    def prevout(self, prev: str, vout: int) -> Optional[Tuple[str, int]]:
+        """(address, value in sat) of a spent output: from a transaction seen live, or from the resolver's cache."""
+        parent = self.outputs.get(prev)
+        if parent and vout < len(parent) and parent[vout][0]:
+            return parent[vout]
+        return self.prevouts.get((prev, vout))
+
     def row(self, tx: Tx, ts: float, ip: str, port: int) -> list:
-        in_addr, in_amt, unresolved = [], [], 0
-        for prev, vout, *_ in tx.inputs:
-            parent = self.outputs.get(prev)
-            if parent and vout < len(parent) and parent[vout][0]:
-                in_addr.append(parent[vout][0])
-                in_amt.append(parent[vout][1] / 1e8)
+        """Inputs with a known amount come first (paired with input_amounts); inputs whose amount is unknown but whose
+        address can be read from the signature data follow, so the amount list is shorter and those amounts load as
+        NULL. Common-input clustering still sees the address; the fee stays empty."""
+        in_addr, in_amt, addr_only, unresolved = [], [], [], 0
+        for prev, vout, script_sig, witness, _ in tx.inputs:
+            known = self.prevout(prev, vout)
+            if known:
+                in_addr.append(known[0])
+                in_amt.append(known[1] / 1e8)
             else:
                 unresolved += 1
+                a = input_address(script_sig, witness)
+                if a:
+                    addr_only.append(a)
+        in_addr += addr_only
         outs = [(a, v) for a, v, _ in tx.outputs if a]
         fee = "" if unresolved else round(sum(in_amt) - sum(v for _, v in outs) / 1e8, 8)
         stype = next((t for _, _, t in tx.outputs if t != "UNKNOWN"), "UNKNOWN")
@@ -309,10 +326,8 @@ class Collector:
             return
         if not tx.outputs or not any(a for a, _, _ in tx.outputs):
             return
-        self._rows.append(self.row(tx, ts, ip, port))
+        self._obs.append((tx, ts, ip, port))
         self.stats["rows"] += 1
-        if time.time() - self._opened >= self.rotate_s:
-            self.flush()
 
     def on_tx(self, raw: bytes):
         tx = parse_tx(raw)
@@ -323,18 +338,42 @@ class Collector:
         for ts, ip, port in self.pending_obs.pop(tx.txid, []):
             self.observe(tx.txid, ts, ip, port)
 
+    def resolve(self, obs: list) -> None:
+        """Ask the optional resolver (own node / Esplora) for the parents the P2P stream could not supply."""
+        if not self.resolver:
+            return
+        want = list(dict.fromkeys((prev, vout) for tx, *_ in obs for prev, vout, *_ in tx.inputs
+                                  if self.prevout(prev, vout) is None))
+        if not want:
+            return
+        try:
+            found = self.resolver(want)
+        except Exception:   # a resolver outage must never stop collection; rows keep unresolved inputs
+            self.stats["resolver_errors"] += 1
+            return
+        for k, v in found.items():
+            if v and v[0]:
+                self.prevouts[k] = v
+                self.stats["resolved_prevouts"] += 1
+        while len(self.prevouts) > self.seen_limit:
+            self.prevouts.popitem(last=False)
+
     def flush(self) -> Optional[Path]:
+        """Write the observations so far to a new CSV. Safe to run in a worker thread: it takes the pending list in
+        one swap, so peers keep appending to a fresh one while the resolver and the file write run."""
         self._opened = time.time()
-        if not self._rows:
+        obs, self._obs = self._obs, []
+        if not obs:
             return None
+        self.resolve(obs)
+        rows = [self.row(tx, ts, ip, port) for tx, ts, ip, port in obs]
         name = self.out_dir / f"mempool_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
         tmp = name.with_suffix(".part")
         with open(tmp, "w", newline="") as fh:
             w = csv.writer(fh)
             w.writerow(COLS)
-            w.writerows(self._rows)
+            w.writerows(rows)
         os.replace(tmp, name)          # atomic: `beans watch` never sees a half-written file
-        self._rows = []
         self.stats["files"] += 1
         return name
 
@@ -391,7 +430,8 @@ class Collector:
                 log(f"peers {self.stats['peers']} · announcements {self.stats['inv']} · transactions {self.stats['tx']} · "
                     f"rows {self.stats['rows']} · files {self.stats['files']}")
                 if time.time() - self._opened >= self.rotate_s:
-                    self.flush()
+                    self._opened = time.time()
+                    await asyncio.get_running_loop().run_in_executor(None, self.flush)   # resolver may block
         finally:
             stop.set()
             for t in tasks:
@@ -399,12 +439,19 @@ class Collector:
             self.flush()
 
 
-def dns_seed_peers(n: int = 8) -> List[Tuple[str, int]]:
-    found = []
-    for seed in DNS_SEEDS:
-        try:
-            found += [(a[4][0], 8333) for a in socket.getaddrinfo(seed, 8333, proto=socket.IPPROTO_TCP)]
-        except OSError:
-            continue
+def dns_seed_peers(n: int = 8, timeout_s: float = 8.0, ipv6: bool = False) -> List[Tuple[str, int]]:
+    """Peers from the public DNS seeds, asked in parallel: a dead seed costs at most `timeout_s`, not a hang.
+    IPv4 only by default (many hosts have no IPv6 route and every IPv6 peer would just time out)."""
+    from concurrent.futures import ThreadPoolExecutor, wait
+    family = socket.AF_UNSPEC if ipv6 else socket.AF_INET
+
+    def resolve(seed):
+        return [(a[4][0], 8333) for a in socket.getaddrinfo(seed, 8333, family, proto=socket.IPPROTO_TCP)]
+
+    pool = ThreadPoolExecutor(len(DNS_SEEDS))
+    futures = [pool.submit(resolve, s) for s in DNS_SEEDS]
+    done, _ = wait(futures, timeout=timeout_s)
+    pool.shutdown(wait=False, cancel_futures=True)
+    found = [p for f in done if f.exception() is None for p in f.result()]
     random.shuffle(found)
     return list(dict.fromkeys(found))[:n]

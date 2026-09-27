@@ -5,7 +5,9 @@ checks and JSON serialisation. Everything here goes through `fetchall()` so rout
 """
 import datetime
 import decimal
+import hashlib
 import json
+import threading
 from contextlib import contextmanager
 from typing import Any, Iterable, Optional
 
@@ -88,13 +90,50 @@ def table_exists(name: str) -> bool:
     return bool(scalar("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?", [name]))
 
 
+_audit_lock = threading.Lock()
+AUDIT_GENESIS = "0" * 64
+
+
+def _audit_hash(prev: str, row_id: int, created_at: str, action: str, investigator: str, entity_type: str,
+                entity_id: str, details: str) -> str:
+    """SHA-256 over the previous row's hash and this row's fields: editing or deleting any row breaks the chain."""
+    msg = json.dumps([prev, row_id, created_at, action, investigator, entity_type, entity_id, details],
+                     separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(msg.encode()).hexdigest()
+
+
 def audit(action: str, entity_type: str, entity_id: str, details: Optional[dict] = None,
           investigator: Optional[str] = None) -> None:
     if investigator is None:   # the logged-in user ("local" in single-user mode)
         from beans.api.auth import current_user
         investigator = current_user()["username"]
-    execute(
-        "INSERT INTO audit_log (id, action, investigator, entity_type, entity_id, details) "
-        "VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM audit_log), ?, ?, ?, ?, ?)",
-        [action, investigator, entity_type, entity_id, json.dumps(details or {})],
-    )
+    details_json = json.dumps(details or {}, sort_keys=True, default=str)
+    created = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None, microsecond=0)
+    with _audit_lock, connection() as conn:
+        last = conn.execute("SELECT id, row_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
+        row_id = (last[0] if last else 0) + 1
+        prev = (last[1] if last and last[1] else AUDIT_GENESIS)
+        h = _audit_hash(prev, row_id, created.isoformat(sep=" "), action, investigator, entity_type,
+                        str(entity_id), details_json)
+        conn.execute("INSERT INTO audit_log (id, action, investigator, entity_type, entity_id, details, created_at, "
+                     "prev_hash, row_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     [row_id, action, investigator, entity_type, str(entity_id), details_json, created, prev, h])
+
+
+def verify_audit_chain() -> dict:
+    """Recomputes every row's hash. Rows written before the chain existed (no row_hash) are counted, not checked."""
+    rows = query("SELECT id, created_at, action, investigator, entity_type, entity_id, CAST(details AS VARCHAR) AS d, "
+                 "prev_hash, row_hash FROM audit_log ORDER BY id")
+    prev, checked, legacy = None, 0, 0
+    for r in rows:
+        if not r["row_hash"]:
+            legacy += 1
+            continue
+        expected_prev = prev if prev is not None else r["prev_hash"]   # the first chained row links to what came before
+        h = _audit_hash(r["prev_hash"], r["id"], r["created_at"], r["action"], r["investigator"], r["entity_type"],
+                        r["entity_id"], r["d"])
+        if r["prev_hash"] != expected_prev or h != r["row_hash"]:
+            return {"intact": False, "rows": len(rows), "checked": checked, "legacy_unchained": legacy,
+                    "first_bad_id": r["id"], "reason": "row edited" if h != r["row_hash"] else "row missing before this one"}
+        prev, checked = r["row_hash"], checked + 1
+    return {"intact": True, "rows": len(rows), "checked": checked, "legacy_unchained": legacy, "head": prev}

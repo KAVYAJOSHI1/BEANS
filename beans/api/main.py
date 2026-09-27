@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from typing import Optional
+
+from fastapi import Depends, FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -80,9 +82,21 @@ def public_config():
     }
 
 
-@app.get("/api/audit")
-def audit_log(limit: int = 200):
-    return db.query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", [limit])
+@app.get("/api/audit", dependencies=[Depends(auth.require("SUPERVISOR"))])
+def audit_log(limit: int = Query(200, le=5000), investigator: Optional[str] = None, action: Optional[str] = None):
+    where, params = [], []
+    if investigator:
+        where.append("investigator = ?"); params.append(investigator)
+    if action:
+        where.append("action = ?"); params.append(action.upper())
+    sql = "SELECT * FROM audit_log" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id DESC LIMIT ?"
+    return db.query(sql, params + [limit])
+
+
+@app.get("/api/audit/verify", dependencies=[Depends(auth.require("SUPERVISOR"))])
+def audit_verify():
+    """Recomputes the audit trail's hash chain: any edited or deleted row shows up as broken."""
+    return db.verify_audit_chain()
 
 # Mount static frontend if ui/dist exists
 frontend_dist = settings.BASE_DIR / "ui" / "dist"

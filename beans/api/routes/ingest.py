@@ -3,9 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from beans.api import db
+from beans.api import auth, db
 from beans.api.rescore import rescore_all
 from beans.config import settings
 from beans.ingest.pipeline import ForensicPipeline
@@ -46,7 +46,7 @@ async def upload_file(file: UploadFile = File(...), mapping: UploadFile = File(N
         raise HTTPException(422, str(e)) from e
 
 
-@router.post("/synth-demo")
+@router.post("/synth-demo", dependencies=[Depends(auth.require("ADMIN"))])   # wipes the dataset
 def generate_synth_demo(n_tx: int = 1000, reset: bool = True) -> Dict[str, Any]:
     """Generate a labelled synthetic dataset and run the full pipeline on it."""
     if reset:

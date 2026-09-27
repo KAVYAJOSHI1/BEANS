@@ -1,9 +1,9 @@
 import json
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-from beans.api import db
+from beans.api import auth, db
 from beans.config import settings
 
 router = APIRouter(prefix="/modelcard", tags=["Model Card"])
@@ -39,7 +39,7 @@ def get_model_card() -> Dict[str, Any]:
     }
 
 
-@router.post("/evaluate")
+@router.post("/evaluate", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def run_evaluation() -> Dict[str, Any]:
     """Re-run the whole ML pipeline (train + out-of-fold evaluation) on the current database."""
     from beans.api.rescore import rescore_all

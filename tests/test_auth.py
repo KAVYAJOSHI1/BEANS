@@ -99,3 +99,43 @@ def test_four_eyes_approval_of_legal_drafts(app_db):
     assert rej["status"] == "REJECTED"
     assert "REJECTED by sup2: wrong FIR" in sup.get(f"/api/legal-requests/{mine['id']}?fmt=html").text
     assert {x["status"] for x in sup.get("/api/legal-requests").json()} == {"APPROVED", "REJECTED"}
+
+
+def test_rbac_gates_and_audit_chain(app_db):
+    vic, ana, sup, admin = (_login(app_db, u) for u in ("vic", "ana", "sup", "admin"))
+    # the audit trail is for supervisors; refused calls are themselves audited
+    assert vic.get("/api/audit").status_code == 403 and ana.get("/api/audit").status_code == 403
+    assert vic.post("/api/cases", json={"case_name": "x"}).status_code == 403
+    denied = sup.get("/api/audit?action=ACCESS_DENIED").json()
+    assert {r["investigator"] for r in denied} >= {"vic", "ana"}
+    assert all(r["action"] == "ACCESS_DENIED" for r in denied)
+    # dataset wipe is ADMIN; removing a seed or re-running the evaluation is SUPERVISOR
+    assert sup.post("/api/ingest/synth-demo?n_tx=10").status_code == 403
+    assert ana.delete("/api/seeds/some-address").status_code == 403
+    assert sup.delete("/api/seeds/some-address").status_code == 200
+    assert ana.post("/api/modelcard/evaluate").status_code == 403
+    # the chain is intact, and editing any row breaks it
+    v = sup.get("/api/audit/verify").json()
+    assert v["intact"] and v["checked"] > 5
+    from beans.api import db
+    victim = db.scalar("SELECT MIN(id) FROM audit_log WHERE row_hash IS NOT NULL")
+    original = db.scalar("SELECT investigator FROM audit_log WHERE id = ?", [victim])
+    db.execute("UPDATE audit_log SET investigator = 'someone-else' WHERE id = ?", [victim])
+    broken = sup.get("/api/audit/verify").json()
+    assert not broken["intact"] and broken["first_bad_id"] == victim and broken["reason"] == "row edited"
+    db.execute("UPDATE audit_log SET investigator = ? WHERE id = ?", [original, victim])   # undo: intact again
+    assert sup.get("/api/audit/verify").json()["intact"]
+
+
+def test_admin_password_reset(app_db):
+    admin = _login(app_db, "admin")
+    assert admin.post("/api/users", json={"username": "resetme", "password": PW, "role": "VIEWER"}).status_code == 200
+    user = _login(app_db, "resetme")
+    assert admin.patch("/api/users/resetme", json={"password": "short"}).status_code == 422
+    assert admin.patch("/api/users/resetme", json={"password": "a-brand-new-password"}).status_code == 200
+    assert user.get("/api/alerts").status_code == 401            # the reset ends open sessions
+    assert TestClient(app_db).post("/api/auth/login", json={"username": "resetme", "password": PW}).status_code == 401
+    _login_as = TestClient(app_db).post("/api/auth/login", json={"username": "resetme", "password": "a-brand-new-password"})
+    assert _login_as.status_code == 200
+    rows = [r for r in admin.get("/api/audit?action=USER_UPDATE").json() if r["entity_id"] == "resetme"]
+    assert rows and "a-brand-new-password" not in str(rows[0]["details"])

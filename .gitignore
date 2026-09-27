@@ -11,6 +11,9 @@ data/synth/*
 !data/synth/.gitkeep
 !data/synth/tiny/
 data/inbox/
+# live P2P captures hold real peer IPs: never committed
+data/live*/
+data/intel/ofac_sdn.xml
 wheelhouse/
 dist/
 !ui/dist/

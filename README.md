@@ -33,6 +33,9 @@ make demo           # synthetic data → ingest → 5 ML engines → alerts → 
 .venv/bin/python -m beans.cli ingest day1.csv day2.csv … --no-score        # bulk load (chunked), then: beans score
 .venv/bin/python -m beans.cli watch data/inbox                             # monitoring mode: score every new file
 .venv/bin/python -m beans.cli collect --dns-seed --out data/inbox           # OPTIONAL live P2P collector (needs network)
+.venv/bin/python -m beans.cli collect --dns-seed --rpc http://user:pass@127.0.0.1:8332   # … + input amounts from your own node
+.venv/bin/python scripts/mempool_sniffer.py --dns-seed --out data/inbox     # same collector, standalone (no ML deps)
+.venv/bin/python -m beans.cli ofac-seeds --download                        # US Treasury OFAC SDN Bitcoin addresses as seeds
 .venv/bin/python -m beans.cli export --neo4j out/ --stix alerts.json       # graph + STIX 2.1 indicators
 .venv/bin/python -m beans.cli synth --n-tx 5000 --out data/synth/demo      # labelled synthetic dataset (CSV/JSON/XML)
 .venv/bin/python -m beans.cli validate-elliptic --download                 # external validation on real Bitcoin data
@@ -42,6 +45,29 @@ make demo           # synthetic data → ingest → 5 ML engines → alerts → 
 .venv/bin/python -m beans.cli serve --port 8000                            # API (/api, docs at /docs) + dashboard
 ```
 
+## Live data
+
+`beans collect` records live mainnet transactions and the peer that announced each one. Input addresses are read from
+the signature data (P2WPKH / P2PKH / P2SH-P2WPKH / P2WSH), so common-input clustering works on nearly every
+transaction. Input *amounts* need the parent transaction: coins from chains seen live are resolved automatically, and
+confirmed coins need `--rpc` (your own Bitcoin Core node, `gettxout`, pruned is fine) or `--esplora`. A resolver that is
+slow or unreachable is given up on within a minute, and collection continues.
+
+Score live captures in their own database so they never mix with the labelled demo data:
+
+```bash
+DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans ingest data/live/*.csv
+DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans ofac-seeds          # real seeds: OFAC-sanctioned addresses
+DB_PATH=data/live.duckdb MODELS_DIR=data/live_models beans serve --port 8001
+```
+
+What to expect: 20 minutes of mainnet (12,436 transactions, 4,720 wallets, 27 Sep 2026) produced **no alerts**. The
+highest fused probability was 0.39 (threshold 0.40), and none of the 532 sanctioned addresses moved. That is the
+correct result for ordinary traffic with no seeds in it. The live "first relay" IP is the collector's peer (a handful
+of relaying nodes), not the sender; many connected peers over hours are needed before first-spy attribution means
+anything. The models are trained on synthetic data; real alerts need seeds from a case, or the analyst verdicts
+that `beans score` learns from.
+
 ## Users and approvals
 
 With no users, BEANS runs in single-user mode (no login), which is what `make demo` uses. Creating the first user with
@@ -50,7 +76,19 @@ With no users, BEANS runs in single-user mode (no login), which is what `make de
 **ADMIN** (users). Section 94 and freeze drafts are filed as *pending* and must be approved by a supervisor other than
 the drafter (four-eyes) before an "approved for issue" copy exists. Every action is written to the audit trail under
 the user's name. Passwords: salted PBKDF2-SHA256; sessions: HttpOnly cookie, 12 h; 5 wrong passwords lock an account
-for 5 minutes.
+for 5 minutes. An administrator can reset a password (the user's open sessions end).
+
+| Action | Minimum role |
+|---|---|
+| Read alerts, graph, cases, model card | VIEWER |
+| Triage, cases, watchlist, seeds (add), ingest files, legal drafts | ANALYST |
+| Approve / reject legal drafts (four-eyes), webhooks, attribution list, remove seeds, re-run model evaluation, **read the audit trail** | SUPERVISOR |
+| Users and passwords, regenerate the demo dataset (wipes data) | ADMIN |
+
+**Tamper-evident audit trail.** Every audit entry stores the SHA-256 of the entry before it, so editing or deleting a
+row breaks the chain. The **Audit Trail** page (supervisors) filters by user and action and verifies the chain
+(`GET /api/audit/verify`). Refused requests are recorded too (`ACCESS_DENIED`). The chain proves that nothing *inside*
+it was changed. To also detect entries cut off the end, write the chain head shown on that page into the case diary.
 
 ## Evaluation
 
@@ -58,24 +96,25 @@ Measured on the synthetic demo dataset (4,032 transactions, 13,542 wallets, 6.6 
 
 | | |
 |---|---|
-| Fused risk PR-AUC (random = 0.066) | **0.961**; without network-layer features 0.914 |
-| Illicit entities alerted | **100 %** (30 of 30) with 144 alerts (4.8 per entity); 90 % of alerts are illicit, top 10: 100 % |
+| Fused risk PR-AUC (random = 0.066) | **0.977**; without network-layer features 0.921 |
+| Illicit entities alerted | **100 %** (30 of 30) with 141 alerts (4.7 per entity); 94 % of alerts are illicit, top 10: 100 % |
 | Typology correct (grouped CV / on alerts) | 100 % / 100 % with the typology corpus (86 % / 91 % without); see the caveat below |
 | Clustering: never mixes two actors / keeps an actor together | **1.00** / 0.79 |
 | Seed propagation: hidden wallets of seeded actors reached | 77 % (legitimate wallets reached: 8 %) |
 | E3 transaction-shape classifier macro-F1 | 0.993 |
-| Calibration error (ECE) | 0.006 |
+| Calibration error (ECE) | 0.004 |
 | End-to-end run (ingest + 5 engines + training) | 14 s on a laptop · **980,803 rows loaded and scored in 286 s, 5.3 GB peak** ([1M benchmark](docs/BENCHMARK_1M.md), [small-scale](docs/BENCHMARK.md)) |
 
 **Across 6 independently generated datasets** (`scripts/evaluate_seeds.py --seeds 42 7 123 2024 99 555`), mean:
 
-| | start | + context features, clustering, E4 fixes | + E5 GNN (now) |
-|---|---|---|---|
-| PR-AUC / recall at P ≥ 0.5 | 0.940 / 0.844 | 0.954 / 0.905 | **0.966 / 0.952** |
-| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | 0.831 / 0.834 | 0.845 / 0.883; **0.997 / 0.988 with the corpus** |
-| E1 completeness (homogeneity) | 0.580 (0.999) | 0.744 (1.000) | 0.744 (1.000) |
-| E4 reach inside seeded actors / legitimate reached | 0.533 / 0.169 | 0.861 / 0.097 | 0.861 / 0.097 |
-| Illicit entities alerted (alerts per entity) | 0.968 (9.9) | 0.962 (5.8) | **0.984 (6.0)** |
+| | start | + context features, clustering, E4 fixes | + E5 GNN | + repeated calibration (now) |
+|---|---|---|---|---|
+| PR-AUC / recall at P ≥ 0.5 | 0.940 / 0.844 | 0.954 / 0.905 | 0.967 / 0.935 | **0.981 / 0.951** |
+| Alert precision / precision at P ≥ 0.5 | | | 0.891 / 0.960 | **0.927 / 0.989** |
+| Typology accuracy (grouped CV) / on alerts | 0.773 / 0.798 | 0.831 / 0.834 | 0.845 / 0.883; **0.997 / 0.988 with the corpus** | 0.997 / 0.988 with the corpus |
+| E1 completeness (homogeneity) | 0.580 (0.999) | 0.744 (1.000) | 0.744 (1.000) | 0.744 (1.000) |
+| E4 reach inside seeded actors / legitimate reached | 0.533 / 0.169 | 0.861 / 0.097 | 0.861 / 0.097 | 0.861 / 0.097 |
+| Illicit entities alerted (alerts per entity) | 0.968 (9.9) | 0.962 (5.8) | 0.984 (5.8) | **0.984 (5.7)** |
 
 **Typology corpus caveat.** `beans typology-corpus` adds the illicit wallets of 8 extra synthetic datasets (253 criminal
 operations, seeds 1001-1008, never the evaluation seeds) to the typology model's training side. A label-shuffling control
@@ -83,8 +122,12 @@ drops accuracy to 0.48-0.61, so the gain is real, but near-perfect accuracy main
 separable once enough operations are seen. Expect less on real cases; the corpus is the mechanism for adding
 confirmed real cases over time.
 
-Alert *precision* is lower (0.94 → 0.86) only because each criminal now takes ~6 alerts instead of ~10: the same
-handful of false alerts weighs more in a list half as long.
+**Repeated calibration.** Each cross-validation fold used to calibrate on one 25 % slice of its training actors, only a
+handful of criminal operations, so the isotonic curve had coarse steps. A step holding one illicit and one licit wallet
+scores exactly 0.5, and across two datasets 12 of the 15 alerts at exactly 0.5 were innocent wallets. Each fold now fits
+three fit/calibration splits and averages them (`CAL_REPEATS` in `beans/score/fuse.py`). Alert precision rose on
+every one of the 6 datasets (mean 0.891 → 0.927) with no criminal operation lost; training takes ~10 s longer. The
+Elliptic benchmark below calibrates on a held-out time window instead, so this change is not measured there.
 
 **On real data (Elliptic, 203k real Bitcoin transactions):** BEANS's detector recipe reaches illicit F1 0.799 on the
 standard temporal split, equal to the strongest published baseline (random forest 0.788; GCN 0.628), with calibration

@@ -238,6 +238,9 @@ class DuckStore:
         conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")
         for col, typ in (("tx_version", "INTEGER"), ("locktime", "BIGINT"), ("rbf", "BOOLEAN")):
             conn.execute(f"ALTER TABLE transactions ADD COLUMN IF NOT EXISTS {col} {typ}")
+        # tamper-evident audit trail: every row carries the hash of the previous one (beans/api/db.py: audit)
+        for col in ("prev_hash", "row_hash"):
+            conn.execute(f"ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS {col} VARCHAR")
         conn.close()
 
     def insert_records(self, records: List[CanonicalRecord]):

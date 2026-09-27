@@ -57,3 +57,106 @@ def test_message_framing_and_rows(tmp_path):
     f = c.flush()
     text = f.read_text().splitlines()
     assert text[0].split(",")[:6] == p2p.COLS[:6] and len(text) == 2 and "5.6.7.8" in text[1]
+
+
+def test_address_only_inputs_and_resolver(tmp_path):
+    seg, pub = _tx(True)                      # spends aa..aa:1, a coin the collector never saw
+    t = p2p.parse_tx(seg)
+    spender = p2p.segwit_address(0, p2p.hash160(pub))
+    c = p2p.Collector(tmp_path)
+    row = dict(zip(p2p.COLS, c.row(t, 1_790_000_000, "1.2.3.4", 8333)))
+    # amount unknown, but the address is read from the witness → clustering can still use it
+    assert row["input_addresses"] == spender and row["input_amounts"] == "" and row["unresolved_inputs"] == 1
+
+    calls = []
+    def resolver(outpoints):
+        calls.append(list(outpoints))
+        return {("aa" * 32, 1): (spender, 80_000)}
+    c = p2p.Collector(tmp_path / "r", resolver=resolver)
+    c.remember(t)
+    c.observe(t.txid, 1_790_000_000, "1.2.3.4", 8333)
+    text = c.flush().read_text().splitlines()
+    r = dict(zip(p2p.COLS, text[1].split(",")))
+    assert calls == [[("aa" * 32, 1)]] and c.stats["resolved_prevouts"] == 1
+    assert r["input_amounts"] == "0.00080000" and r["unresolved_inputs"] == "0" and float(r["fee"]) == 0.0003
+
+    def broken(_):
+        raise OSError("node down")
+    c = p2p.Collector(tmp_path / "b", resolver=broken)       # an outage never stops collection
+    c.remember(t)
+    c.observe(t.txid, 1_790_000_000, "1.2.3.4", 8333)
+    assert c.flush() is not None and c.stats["resolver_errors"] == 1
+
+
+def _serve(handler_body):
+    import http.server
+    import json
+    import threading
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def _reply(self, obj):
+            data = json.dumps(obj).encode()
+            self.send_response(200 if obj is not None else 404)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            self._reply(handler_body("GET", self.path, None, self.headers))
+
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            self._reply(handler_body("POST", self.path, body, self.headers))
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+def test_resolvers_against_local_servers():
+    from beans.collector.resolve import BitcoindResolver, EsploraResolver, from_args
+    A = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+
+    def esplora(method, path, body, headers):
+        if path == "/api/tx/" + "11" * 32:
+            return {"vout": [{"scriptpubkey_address": "x", "value": 1}, {"scriptpubkey_address": A, "value": 123_456}]}
+        return None
+    srv = _serve(esplora)
+    r = EsploraResolver(f"http://127.0.0.1:{srv.server_port}/api/")
+    assert r([("11" * 32, 1), ("22" * 32, 0), ("11" * 32, 9)]) == {("11" * 32, 1): (A, 123_456)}
+    srv.shutdown()
+
+    seen = {}
+    def bitcoind(method, path, body, headers):
+        seen["auth"] = headers.get("Authorization")
+        return [{"id": q["id"], "error": None,
+                 "result": {"value": 0.0005, "scriptPubKey": {"address": A}} if q["params"][1] == 0 else None}
+                for q in body]
+    srv = _serve(bitcoind)
+    r = BitcoindResolver(f"http://user:p%40ss@127.0.0.1:{srv.server_port}")
+    assert r([("33" * 32, 0), ("33" * 32, 1)]) == {("33" * 32, 0): (A, 50_000)}
+    import base64
+    assert seen["auth"] == "Basic " + base64.b64encode(b"user:p@ss").decode()
+    srv.shutdown()
+    assert from_args(None, None) is None
+    import pytest
+    with pytest.raises(ValueError):
+        from_args("http://a", "http://b")
+
+
+def test_esplora_gives_up_when_every_lookup_fails():
+    import time
+    from beans.collector.resolve import EsploraResolver
+    hits = []
+    def always_404(method, path, body, headers):
+        hits.append(path)
+        return None
+    srv = _serve(always_404)
+    r = EsploraResolver(f"http://127.0.0.1:{srv.server_port}", workers=2, give_up_after=6)
+    t0 = time.monotonic()
+    assert r([(f"{i:064x}", 0) for i in range(500)]) == {}
+    assert time.monotonic() - t0 < 10 and len(hits) < 100      # stopped early, did not walk all 500
+    srv.shutdown()

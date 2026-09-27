@@ -53,8 +53,9 @@ def trail_svg(trace: dict, max_hops: int = 12, width: int = 700) -> str:
     return "".join(parts)
 
 
-def path_svg(path: List[str], width: int = 700) -> str:
-    """Seed → … → flagged wallet, left to right, wrapping every 5 nodes."""
+def path_svg(path: List[str], width: int = 700, title: str = "Path from the known illicit seed to this wallet",
+             tags: Optional[List[str]] = None) -> str:
+    """Seed → … → flagged wallet, left to right, wrapping every 5 nodes. `tags` labels each node (default seed/hop/flagged)."""
     if not path or len(path) < 2:
         return ""
     per_row, step, row_h = 5, 138, 58
@@ -62,14 +63,14 @@ def path_svg(path: List[str], width: int = 700) -> str:
     h = 26 + rows * row_h
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{h}" viewBox="0 0 {width} {h}" '
              f'font-family="DejaVu Sans, sans-serif" font-size="9">',
-             f'<text x="0" y="14" fill="{INK}" font-weight="bold" font-size="11">Path from the known illicit seed to this wallet</text>']
+             f'<text x="0" y="14" fill="{INK}" font-weight="bold" font-size="11">{html.escape(title)}</text>']
     for i, a in enumerate(path):
         r_, c = divmod(i, per_row)
         x, y = 20 + c * step, 40 + r_ * row_h
         color = RED if i == 0 else (AMBER if i == len(path) - 1 else INDIGO)
         parts.append(f'<circle cx="{x}" cy="{y}" r="8" fill="{color}"/>')
-        tag = "seed" if i == 0 else ("flagged" if i == len(path) - 1 else f"hop {i}")
-        parts.append(f'<text x="{x}" y="{y + 20}" fill="{MUTED}">{tag}: {_short(a, 8)}</text>')
+        tag = tags[i] if tags else ("seed" if i == 0 else ("flagged" if i == len(path) - 1 else f"hop {i}"))
+        parts.append(f'<text x="{x}" y="{y + 20}" fill="{MUTED}">{html.escape(tag)}: {_short(a, 8)}</text>')
         if i < len(path) - 1 and c < per_row - 1:
             parts.append(f'<line x1="{x + 10}" y1="{y}" x2="{x + step - 12}" y2="{y}" stroke="{EDGE}" stroke-width="1.5"/>')
     parts.append("</svg>")

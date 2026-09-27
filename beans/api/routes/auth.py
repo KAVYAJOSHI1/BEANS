@@ -81,6 +81,12 @@ def update_user(username: str, payload: Dict[str, Any]):
         raise HTTPException(404, f"user {username} not found")
     if username == auth.current_user()["username"] and (payload.get("active") is False or payload.get("role")):
         raise HTTPException(409, "you cannot deactivate yourself or change your own role")
+    if payload.get("password"):   # administrator reset: the user's open sessions end
+        if len(str(payload["password"])) < 10:
+            raise HTTPException(422, "password must be at least 10 characters")
+        db.execute("UPDATE users SET password_hash = ? WHERE username = ?", [auth.hash_password(str(payload["password"])), username])
+        db.execute("DELETE FROM sessions WHERE username = ?", [username])
+        payload = {**payload, "password": "***"}   # never into the audit trail
     if "active" in payload:
         db.execute("UPDATE users SET active = ? WHERE username = ?", [bool(payload["active"]), username])
         if not payload["active"]:

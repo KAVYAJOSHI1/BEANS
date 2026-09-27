@@ -130,6 +130,8 @@ def test_legal_drafts_and_referral(client):
     assert "SECTION 94" in doc["html"] and "123/2026" in doc["html"] and "[__________]" in doc["html"]
     assert "fir_no" not in doc["missing_fields"] and "offences" in doc["missing_fields"]
     assert len(doc["evidence_sha256"]) == 64 and doc["annex"]["deposits"]
+    dep = doc["annex"]["deposits"][0]   # money-trail diagram: flagged wallet → txs → exchange deposit
+    assert "<svg" in doc["html"] and "Money trail" in doc["html"] and f"deposit: {dep['deposit_address'][:8]}" in doc["html"]
     assert client.post(f"/api/alerts/{exposed['alert_id']}/legal/freeze?fmt=html").text.startswith("<!doctype html>")
     assert client.post(f"/api/alerts/{exposed['alert_id']}/legal/bogus").status_code == 422
     unexposed = next((a for a in alerts if not a["recommended_action"].get("vasp_exposure")), None)

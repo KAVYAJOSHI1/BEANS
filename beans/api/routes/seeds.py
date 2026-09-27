@@ -2,9 +2,9 @@ import csv
 import io
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from beans.api import db
+from beans.api import auth, db
 from beans.api.rescore import rescore_all
 
 router = APIRouter(prefix="/seeds", tags=["Seed Wallets"])
@@ -53,7 +53,7 @@ async def upload_seeds(file: UploadFile = File(...), rescore: bool = True):
     return result
 
 
-@router.delete("/{address}")
+@router.delete("/{address}", dependencies=[Depends(auth.require("SUPERVISOR"))])
 def delete_seed(address: str):
     db.execute("DELETE FROM seeds WHERE address = ?", [address])
     db.audit("SEED_DELETE", "WALLET", address)

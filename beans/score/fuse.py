@@ -29,6 +29,9 @@ warnings.filterwarnings("ignore", message=".*does not have valid feature names.*
 TYPOLOGY_EXCLUDE_PREFIXES = ("fund_", "spend_to_consolidated", "is_consolidated")
 
 
+CAL_REPEATS = 3   # fit/calibration splits per cross-validation fold (see _oof)
+
+
 def _lgbm(pos_weight: float):
     return LGBMClassifier(n_estimators=250, learning_rate=0.05, num_leaves=15, min_child_samples=10,
                           subsample=0.9, subsample_freq=1, colsample_bytree=0.8, scale_pos_weight=pos_weight,
@@ -40,18 +43,23 @@ def _oof(X: pd.DataFrame, y: np.ndarray, groups: np.ndarray, n_splits: int = 5, 
     pw = max(1.0, (y == 0).sum() / max((y == 1).sum(), 1))
     oof = np.zeros(len(X))
     for tr, te in StratifiedGroupKFold(n_splits=n_splits, shuffle=True, random_state=42).split(X, y, groups):
-        fit_i, cal_i = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=1).split(tr, groups=groups[tr]))
-        fit_i, cal_i = tr[fit_i], tr[cal_i]
-        clf = _lgbm(pw).fit(X.iloc[fit_i], y[fit_i], sample_weight=None if weights is None else weights[fit_i])
-        iso = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1)
-        if len(set(y[cal_i])) > 1:
-            iso.fit(clf.predict_proba(X.iloc[cal_i])[:, 1], y[cal_i])
-        else:
-            iso = None
-        raw = clf.predict_proba(X.iloc[te])[:, 1]
-        oof[te] = iso.predict(raw) if iso is not None else raw
-        if members is not None:
-            members.append((clf, iso))
+        # CAL_REPEATS different fit/calibration splits, averaged: one 25 % calibration slice holds only a handful of
+        # illicit entities, so its isotonic curve has coarse steps (a step of one illicit + one licit wallet is
+        # exactly 0.5, and those plateaus were mostly false alerts). Averaging uses every training entity for calibration.
+        preds = []
+        for fit_i, cal_i in GroupShuffleSplit(n_splits=CAL_REPEATS, test_size=0.25, random_state=1).split(tr, groups=groups[tr]):
+            fit_i, cal_i = tr[fit_i], tr[cal_i]
+            clf = _lgbm(pw).fit(X.iloc[fit_i], y[fit_i], sample_weight=None if weights is None else weights[fit_i])
+            iso = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1)
+            if len(set(y[cal_i])) > 1:
+                iso.fit(clf.predict_proba(X.iloc[cal_i])[:, 1], y[cal_i])
+            else:
+                iso = None
+            raw = clf.predict_proba(X.iloc[te])[:, 1]
+            preds.append(iso.predict(raw) if iso is not None else raw)
+            if members is not None:
+                members.append((clf, iso))
+        oof[te] = np.mean(preds, axis=0)
     return oof
 
 

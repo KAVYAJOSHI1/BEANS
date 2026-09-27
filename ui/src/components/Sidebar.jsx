@@ -1,8 +1,9 @@
 import React from 'react';
 import {
-  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio, Stamp,
+  Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio, Stamp, ScrollText,
 } from 'lucide-react';
 import coffeeBean from '../coffee-bean.svg';
+import { hasRole, useSession } from '../session';
 
 export const NAV_GROUPS = [
   { title: 'Monitor', items: [
@@ -20,6 +21,7 @@ export const NAV_GROUPS = [
     { id: 'cases', label: 'Cases & Evidence', icon: Briefcase, badge: 'cases' },
     { id: 'approvals', label: 'Legal Approvals', icon: Stamp, badge: 'approvals' },
     { id: 'modelcard', label: 'Model Card', icon: Cpu },
+    { id: 'audit', label: 'Audit Trail', icon: ScrollText, minRole: 'SUPERVISOR' },
   ] },
   { title: 'Data', items: [
     { id: 'ingest', label: 'Ingest & Seeds', icon: UploadCloud },
@@ -32,6 +34,7 @@ export const PAGE_TITLES = Object.fromEntries(
 );
 
 export default function Sidebar({ activeTab, setActiveTab, counts = {} }) {
+  const { user } = useSession();
   return (
     <aside className="w-60 shrink-0 bg-slate-900 text-slate-300 flex flex-col h-screen sticky top-0">
       <div className="px-5 py-5 flex items-center gap-3 border-b border-slate-800">
@@ -49,7 +52,7 @@ export default function Sidebar({ activeTab, setActiveTab, counts = {} }) {
           <div key={group.title}>
             <div className="px-2 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{group.title}</div>
             <div className="space-y-0.5">
-              {group.items.map(({ id, label, icon: Icon, badge, urgent }) => {
+              {group.items.filter((i) => !i.minRole || hasRole(user, i.minRole)).map(({ id, label, icon: Icon, badge, urgent }) => {
                 const active = activeTab === id;
                 const n = badge ? counts[badge] : null;
                 return (

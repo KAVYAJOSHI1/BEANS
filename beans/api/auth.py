@@ -143,9 +143,20 @@ async def middleware(request: Request, call_next):
     if enabled and user is None:
         return JSONResponse({"detail": "login required"}, status_code=401)
     if user and request.method not in ("GET", "HEAD", "OPTIONS") and not has_role(user, "ANALYST"):
+        _audit_denied(user, request, 403)
         return JSONResponse({"detail": "read-only account (VIEWER)"}, status_code=403)
     tok = _current.set(user)
     try:
-        return await call_next(request)
+        response = await call_next(request)
+        if user and response.status_code == 403:
+            _audit_denied(user, request, 403)
+        return response
     finally:
         _current.reset(tok)
+
+
+def _audit_denied(user: dict, request: Request, status: int) -> None:
+    """Refused requests go into the audit trail too: probing for rights you don't have is worth knowing about."""
+    from beans.api import db
+    db.audit("ACCESS_DENIED", "API", f"{request.method} {request.url.path}", {"status": status, "role": user["role"]},
+             investigator=user["username"])

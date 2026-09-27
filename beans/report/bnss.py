@@ -127,6 +127,7 @@ TEXT = {
         "annex_line": "Flagged wallet {wallet} · alert {alert} · {atype} · risk {risk}/100 ({sev})",
         "cols": ["#", "Deposit address", "Transaction ID", "BTC", "Time (UTC)", "Hops"],
         "rule": "Directive rule:", "why": "Why the wallet was flagged:",
+        "fig": "Money trail: flagged wallet → transactions → deposit at {vasp}", "fig_tags": ("flagged", "tx", "deposit"),
         "seal": "Annex SHA-256: {digest}<br>{stamp}<br>Generated {gen}, offline. Recompute the hash of the annex JSON to verify integrity.",
         "review": "",
     },
@@ -168,6 +169,7 @@ TEXT = {
         "annex_line": "चिह्नित वॉलेट {wallet} · अलर्ट {alert} · {atype} · जोखिम {risk}/100 ({sev})",
         "cols": ["क्र.", "जमा पता", "ट्रांज़ैक्शन आईडी", "BTC", "समय (UTC)", "हॉप"],
         "rule": "निर्देश नियम:", "why": "वॉलेट को चिह्नित करने के कारण (अंग्रेज़ी में):",
+        "fig": "Money trail / धन का मार्ग: flagged wallet → transactions → deposit at {vasp}", "fig_tags": ("flagged", "tx", "deposit"),
         "seal": "अनुलग्नक SHA-256: {digest}<br>{stamp}<br>{gen} को ऑफ़लाइन तैयार। सत्यनिष्ठा जाँचने हेतु अनुलग्नक JSON का हैश पुनः गणना करें।",
         "review": "हिंदी पाठ मशीन-सहायित प्रारूप है: जारी करने से पूर्व विधिक समीक्षा आवश्यक। "
                   "(Hindi text: legal review by a native speaker required before issue.)",
@@ -207,6 +209,7 @@ def _html(kind: str, a: Dict[str, Any], io: Dict[str, Any], digest: str, ts: Dic
                   f"TSA CA {_esc(ts.get('tsa_ca_sha256_fingerprint'))}" if ts.get("status") == "stamped"
                   else f"RFC 3161: not available ({_esc(ts.get('reason'))})")
     heads = "".join(f"<th>{c}</th>" for c in T["cols"])
+    figure = _trail_figure(a, T)
     review = f'<div class=draft style="border-color:#1d4ed8;color:#1d4ed8">{T["review"]}</div>' if T["review"] else ""
     return f"""<!doctype html><html lang={lang}><head><meta charset=utf-8><title>{html.escape(title)}</title><style>{_CSS}</style></head><body>
     <div class=draft>{T['draft'].format(blank=BLANK)}</div>{review}
@@ -220,10 +223,24 @@ def _html(kind: str, a: Dict[str, Any], io: Dict[str, Any], digest: str, ts: Dic
     <p>{T['annex_line'].format(wallet=f"<span class=mono>{_esc(a['flagged_wallet'])}</span>", alert=_esc(a['alert_id']),
                                atype=_esc(a['alert_type']), risk=_esc(a['risk_score']), sev=_esc(a['severity']))}</p>
     <table><tr>{heads}</tr>{dep_rows}</table>
+    {figure}
     <p><b>{T['rule']}</b> {_esc(a['directive'].get('rule'))}</p>
     <p><b>{T['why']}</b></p><ul>{''.join(f'<li>{_esc(r)}</li>' for r in a['reasons'])}</ul>
     <div class=seal>{T['seal'].format(digest=f"<span class=mono>{digest}</span>", stamp=stamp_line, gen=_esc(a['generated_at']))}</div>
     </body></html>"""
+
+
+def _trail_figure(a: Dict[str, Any], T: Dict[str, Any]) -> str:
+    """The first deposit's route as a diagram: flagged wallet → each spending transaction → exchange deposit address."""
+    from beans.report.diagram import path_svg
+    d = a["deposits"][0]
+    txids = list(d.get("path") or [])
+    if not txids:
+        return ""
+    flagged, tx, dep = T["fig_tags"]
+    svg = path_svg([a["flagged_wallet"], *txids, d["deposit_address"]], title=T["fig"].format(vasp=a["vasp"]),
+                   tags=[flagged] + [f"{tx} {i}" for i in range(1, len(txids) + 1)] + [dep])
+    return f'<div class=fig style="margin:8px 0;page-break-inside:avoid">{svg}</div>'
 
 
 def with_status(doc_html: str, req: dict, auth: bool = True) -> str:

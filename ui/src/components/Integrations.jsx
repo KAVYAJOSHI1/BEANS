@@ -286,6 +286,11 @@ function Users() {
               <input type="checkbox" checked={u.active}
                 onChange={(e) => call(`/users/${u.username}`, { method: 'PATCH', body: JSON.stringify({ active: e.target.checked }) }, 'Updated')} /> active
             </label>
+            <button type="button" className="px-2 py-0.5 rounded border border-slate-200 text-slate-600 hover:bg-slate-50"
+              onClick={() => {
+                const pw = window.prompt(`New password for ${u.username} (at least 10 characters). Their open sessions end.`);
+                if (pw) call(`/users/${u.username}`, { method: 'PATCH', body: JSON.stringify({ password: pw }) }, `Password reset for ${u.username}`);
+              }}>Reset password</button>
           </div>
         ))}
       </div>

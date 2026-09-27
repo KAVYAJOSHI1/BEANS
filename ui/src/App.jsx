@@ -18,6 +18,7 @@ const IngestStudio = lazy(() => import('./components/IngestStudio'));
 const Integrations = lazy(() => import('./components/Integrations'));
 const Watchlist = lazy(() => import('./components/Watchlist'));
 const Approvals = lazy(() => import('./components/Approvals'));
+const AuditTrail = lazy(() => import('./components/AuditTrail'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -391,6 +392,8 @@ export default function App() {
         )}
 
         {activeTab === 'integrations' && <Integrations onDataChanged={fetchAllData} />}
+
+        {activeTab === 'audit' && <AuditTrail />}
 
         {activeTab === 'approvals' && (
           <Approvals onChanged={() => fetch(`${API_BASE}/legal-requests?status=PENDING_APPROVAL`).then((r) => r.json())

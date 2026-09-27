@@ -53,6 +53,33 @@ def score():
     console.print(ForensicPipeline().execute_ml_pipeline())
 
 
+@app.command("ofac-seeds")
+def ofac_seeds(
+    file: str = typer.Option(None, "--file", "-f", help="Official OFAC sdn.xml (default: data/intel/ofac_sdn.xml)"),
+    download: bool = typer.Option(False, "--download", help="Fetch the current sdn.xml from treasury.gov first (needs internet)"),
+    rescore: bool = typer.Option(True, "--rescore/--no-rescore", help="Re-run the engines so the new seeds propagate"),
+):
+    """Load the Bitcoin addresses on the US Treasury OFAC SDN sanctions list as seeds (real, citable seeds)."""
+    from beans.enrich import ofac
+    from beans.store.duck import DuckStore
+    path = Path(file) if file else ofac.DEFAULT_FILE
+    if download:
+        ofac.download(path)
+        console.print(f"Downloaded {path}")
+    if not path.exists():
+        raise typer.BadParameter(f"{path} not found: pass --download, or --file with the official sdn.xml")
+    parsed = ofac.parse(path)
+    conn = DuckStore().get_connection()
+    n = ofac.load_seeds(conn, parsed)
+    seen = conn.execute("""SELECT COUNT(DISTINCT s.address) FROM seeds s WHERE s.threat_type = 'SANCTIONED' AND s.address IN (
+                             SELECT unnest(input_addresses) FROM transactions UNION SELECT unnest(output_addresses) FROM transactions)""").fetchone()[0]
+    conn.close()
+    console.print(f"[bold green]{n} sanctioned Bitcoin addresses loaded as seeds[/bold green] (list of {parsed['publish_date']}, "
+                  f"sha256 {parsed['sha256'][:16]}…); {seen} appear in the loaded transactions")
+    if rescore:
+        console.print(ForensicPipeline().execute_ml_pipeline())
+
+
 @app.command()
 def watch(
     folder: str = typer.Argument("data/inbox", help="Folder to watch for new CSV/JSON/XML files"),
@@ -160,6 +187,8 @@ def collect(
     minutes: float = typer.Option(None, "--minutes", help="Stop after this long (default: run until Ctrl+C)"),
     rotate: int = typer.Option(300, "--rotate", help="Seconds per output file"),
     max_peers: int = typer.Option(8, "--max-peers"),
+    rpc: str = typer.Option(None, "--rpc", help="Resolve confirmed inputs from your Bitcoin Core node: http://user:pass@host:8332"),
+    esplora: str = typer.Option(None, "--esplora", help="… or from an Esplora API (self-hosted electrs, or https://mempool.space/api)"),
 ):
     """OPTIONAL live collector (needs network): records transaction announcements per peer into BEANS CSVs.
 
@@ -172,7 +201,8 @@ def collect(
         peers += dns_seed_peers(max_peers)
     if not peers:
         raise typer.BadParameter("give --peer host:port and/or --dns-seed")
-    c = Collector(Path(out), rotate_s=rotate, max_peers=max_peers)
+    from beans.collector.resolve import from_args
+    c = Collector(Path(out), rotate_s=rotate, max_peers=max_peers, resolver=from_args(rpc, esplora))
     console.print(f"[bold green]Collecting from {min(len(peers), max_peers)} peer(s) into {out}…[/bold green]")
     try:
         asyncio.run(c.run(peers, None if minutes is None else minutes * 60, log=lambda m: console.print(m)))
