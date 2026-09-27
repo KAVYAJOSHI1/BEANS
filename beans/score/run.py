@@ -7,8 +7,10 @@ by the last training run are applied instead.
 import hashlib
 import json
 import math
+import sys
 import time
 from datetime import datetime, timezone
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -38,16 +40,18 @@ def _severity(risk: float) -> str:
             else "MEDIUM" if risk >= settings.RISK_MEDIUM_MIN else "LOW")
 
 
-def _peak_gb() -> float:
+def _peak_gb() -> Optional[float]:
+    """Peak resident memory of this process so far, in GB (None when the platform does not report a peak)."""
     try:
         import resource
-        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024, 2)   # Linux: KiB
-    except (ImportError, AttributeError):
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return round(peak / (1024 ** 3 if sys.platform == "darwin" else 1024 ** 2), 2)   # macOS: bytes, Linux: KiB
+    except ImportError:                                                                  # Windows: no `resource`
         try:
-            import psutil
-            return round(psutil.Process().memory_info().rss / (1024 * 1024 * 1024), 2)
-        except Exception:
-            return 0.0
+            import psutil   # optional; peak_wset is the Windows peak working set
+            return round(psutil.Process().memory_info().peak_wset / 1024 ** 3, 2)
+        except (ImportError, AttributeError):
+            return None
 
 
 def run_ml(store) -> dict:

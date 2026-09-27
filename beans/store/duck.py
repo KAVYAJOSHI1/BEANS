@@ -33,12 +33,13 @@ class DuckStore:
             _SCHEMA_READY.add((self.db_path, _inode(self.db_path)))
 
     def get_connection(self):
+        """Retries briefly (~2 s in all) while another process holds the file lock; any other error raises at once."""
         import time
         for attempt in range(10):
             try:
                 return duckdb.connect(self.db_path)
-            except (duckdb.IOException, Exception) as e:
-                if attempt == 9:
+            except duckdb.IOException as e:
+                if attempt == 9 or "lock" not in str(e).lower():   # e.g. a missing folder: no point waiting
                     raise
                 time.sleep(0.05 * (attempt + 1))
 
