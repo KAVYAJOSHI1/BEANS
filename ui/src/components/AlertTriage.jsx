@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, X, Sparkles, ArrowRight } from 'lucide-react';
 import { ACTION_META, ActionBadge, ActionCard, DocModal } from './ActionPanel';
+import NarrativePanel from './NarrativePanel';
 
 export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCloseDrawer, onUpdateStatus, onInspectEntity, onOpenGraph, onOpenTimeline, cases, onAddToCase, onCreateCase, watched = [], onWatch }) {
   const [severityFilter, setSeverityFilter] = useState('ALL');
@@ -224,6 +225,8 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
 
           <ActionCard alert={selectedAlert} onUpdateStatus={onUpdateStatus} onOpenDoc={setDoc}
             isWatched={watched.includes(selectedAlert.entity_id)} onWatch={onWatch} />
+
+          <NarrativePanel alertId={selectedAlert.alert_id} />
 
           {/* Counterfactual: what would change the verdict */}
           {selectedAlert.evidence?.counterfactual && (() => {

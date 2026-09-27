@@ -59,10 +59,10 @@ Status key: ✅ done · 🟡 partial (exists, needs finishing) · ❌ missing. T
 | S2 | Geo map + impossible-travel arcs | ✅ offline world map, arcs computed from data | Offline world GeoJSON; wire to API | 18:30 |
 | S3/S4 | Cases + evidence pack PDF/JSON with SHA-256 | ✅ PDF/JSON/MD, source hashes, audit trail | End to end from the UI; include SHAP, reasons, evidence, input hash | 19:30 |
 | S8 | Seed upload → live re-propagation | ✅ CSV upload, rescore keeps analyst verdicts | UI upload + progress + refreshed alerts | 20:00 |
-| M14 | Technical write-up (§12) + README | ❌ | 6–8 pages; metrics from Dhairya's model card; screenshots; export PDF | 22:00 |
+| M14 | Technical write-up (§12) + README | ✅ docs/TECHNICAL_WRITEUP.md + docs/BEANS_Technical_Report.pdf (v1.1) | 6–8 pages; metrics from Dhairya's model card; screenshots; export PDF | 22:00 |
 | — | Demo rehearsal (§14) with Wi-Fi off | ❌ | Twice | 22:30 |
 | C6 | Login with analyst/supervisor roles | ✅ VIEWER/ANALYST/SUPERVISOR/ADMIN, four-eyes approval of legal drafts, audit by username | Only if everything else is done | after 20:30 |
-| C3 | Local LLM narrative report | ❌ | Skip unless there's spare time (large offline model) | optional |
+| C3 | Local LLM narrative report | ✅ v1.1: fact-checked case summary via local Ollama (template fallback) | Skip unless there's spare time (large offline model) | optional |
 
 **Integration:** after every merge into `penultimate`, run the smoke test below. **23:00:** `penultimate → main`, tag `v1.0`.
 

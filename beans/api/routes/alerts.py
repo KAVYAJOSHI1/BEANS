@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response
@@ -120,3 +121,45 @@ def update_alert_status(alert_id: str, payload: Dict[str, Any]):
     db.audit("ALERT_STATUS", "ALERT", alert_id,
              {"from": row["status"], "to": new_status, "assigned_to": assigned_to, "notes": notes})
     return {"status": "success", "alert_id": alert_id, "new_status": new_status}
+
+
+# ------------------------------------------------------------------------------------------------ case narrative
+_NARRATIVE_DDL = """CREATE TABLE IF NOT EXISTS narratives (
+    alert_id VARCHAR PRIMARY KEY, facts_sha256 VARCHAR, engine VARCHAR, payload JSON, created_by VARCHAR,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"""
+
+
+def _current_alert(alert_id: str) -> Dict[str, Any]:
+    row = db.one("SELECT * FROM alerts WHERE alert_id = ?", [alert_id])
+    if not row:
+        raise HTTPException(404, f"alert {alert_id} not found")
+    return alert_out(row, case_links([alert_id]))
+
+
+@router.get("/{alert_id}/narrative")
+def get_narrative(alert_id: str) -> Dict[str, Any]:
+    """The stored narrative, if one was written for the alert's current facts ({"cached": false} otherwise)."""
+    from beans.explain import narrative
+    alert = _current_alert(alert_id)
+    db.execute(_NARRATIVE_DDL)
+    row = db.one("SELECT payload, facts_sha256, created_by FROM narratives WHERE alert_id = ?", [alert_id])
+    current = narrative.generate(alert, engine="template")["facts_sha256"]
+    if not row or row["facts_sha256"] != current:
+        return {"alert_id": alert_id, "cached": False, "stale": bool(row)}
+    return {**row["payload"], "cached": True, "created_by": row["created_by"]}
+
+
+@router.post("/{alert_id}/narrative")
+def write_narrative(alert_id: str, engine: str = Query("auto", pattern="^(auto|template)$")) -> Dict[str, Any]:
+    """Write (or rewrite) the narrative with the local model, falling back to the template. Takes ~15-40 s on a CPU."""
+    from beans.api.auth import current_user
+    from beans.explain import narrative
+    alert = _current_alert(alert_id)
+    result = narrative.generate(alert, engine=engine)
+    db.execute(_NARRATIVE_DDL)
+    user = current_user()["username"]
+    db.execute("INSERT OR REPLACE INTO narratives (alert_id, facts_sha256, engine, payload, created_by) VALUES (?, ?, ?, ?, ?)",
+               [alert_id, result["facts_sha256"], result["engine"], json.dumps(result), user])
+    db.audit("NARRATIVE", "ALERT", alert_id, {"engine": result["engine"], "sentences": len(result["sentences"]),
+                                              "dropped": result["dropped_sentences"], "facts_sha256": result["facts_sha256"]})
+    return {**result, "cached": True, "created_by": user}

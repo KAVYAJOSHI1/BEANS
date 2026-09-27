@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Activity, AlertTriangle, Network, Clock, Globe, UserCheck, Briefcase, Cpu, UploadCloud, Plug, Radio, Stamp, ScrollText,
+  Satellite, ListChecks,
 } from 'lucide-react';
 import coffeeBean from '../coffee-bean.svg';
 import { hasRole, useSession } from '../session';
@@ -10,6 +11,8 @@ export const NAV_GROUPS = [
     { id: 'overview', label: 'Overview', icon: Activity },
     { id: 'alerts', label: 'Alert Triage', icon: AlertTriangle, badge: 'alerts' },
     { id: 'watchlist', label: 'Watchlist', icon: Radio, badge: 'movements', urgent: true },
+    { id: 'live', label: 'Live Monitor', icon: Satellite },
+    { id: 'review', label: 'Review Queue', icon: ListChecks },
   ] },
   { title: 'Investigate', items: [
     { id: 'graph', label: 'Link Graph', icon: Network },

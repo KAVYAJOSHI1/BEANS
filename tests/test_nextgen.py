@@ -66,6 +66,24 @@ def test_offshore_exchange_gets_jurisdiction_note_and_no_section94():
     assert "DRAFT_SECTION_94_BNSS" not in ra["also_matched"]
 
 
+SWAP = {"entity_name": "SwapCo", "entity_type": "SWAP", "country": "SC", "in_jurisdiction": False}
+
+
+def test_swap_service_deposit_is_a_cross_chain_exit():
+    f = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 300, [("W", 0.5)], [("X", 0.49)]),
+                 ("t2", 320, [("X", 0.49)], [("SWP", 0.48)]), ("t9", 600, [("a", 1)], [("b", 1)])])
+    ra = _decide(f, "W", {"SWP": SWAP})
+    assert ra["action"] == "CROSS_CHAIN_EXIT"
+    assert ra["facts"]["service"] == "SwapCo" and ra["facts"]["hops"] == 2 and ra["facts"]["btc_to_services"] == 0.48
+    assert ra["vasp_exposure"] == [] and ra["cross_chain_exits"][0]["deposit_address"] == "SWP"
+    # an Indian exchange deposit still outranks it; a fast swap deposit is never a freeze draft (nothing to freeze)
+    both = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 5, [("W", 0.5)], [("SWP", 0.2), ("DEP", 0.29)])])
+    ra = _decide(both, "W", {"SWP": SWAP, "DEP": VASP_IN})
+    assert ra["action"] == "IMMEDIATE_FREEZE_DRAFT" and "CROSS_CHAIN_EXIT" in ra["also_matched"]
+    fast_swap = _frames([("t0", 0, [("src", 1.0)], [("W", 0.5)]), ("t1", 5, [("W", 0.5)], [("SWP", 0.49)])])
+    assert _decide(fast_swap, "W", {"SWP": SWAP})["action"] == "CROSS_CHAIN_EXIT"
+
+
 def test_layering_via_risky_infrastructure_is_a_referral():
     f = _frames([("t0", 0, [("src", 3.0)], [("W", 2.0)]), ("t1", 60, [("W", 2.0)], [("Y", 1.9)])])
     ra = _decide(f, "W", {}, recv_btc=2.0, sent_btc=2.0, share_risky_asn=1.0, max_p_peel=0.9)

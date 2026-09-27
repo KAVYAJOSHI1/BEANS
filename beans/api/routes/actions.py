@@ -142,7 +142,7 @@ def known_entities_summary():
 
 @router.post("/known-entities/upload", dependencies=[Depends(auth.require("SUPERVISOR"))])
 async def upload_known_entities(file: UploadFile = File(...), rescore: bool = True):
-    """CSV: address, entity_name[, entity_type (VASP|MINING_POOL|…), country, in_jurisdiction, source]."""
+    """CSV: address, entity_name[, entity_type (VASP|MINING_POOL|SWAP|BRIDGE), country, in_jurisdiction, source]."""
     with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
         tmp.write(await file.read())
     try:

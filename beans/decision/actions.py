@@ -5,7 +5,7 @@ Why rules and not a model: each directive can lead to a legal request, so the re
 model's contribution is quoted next to the rule as SHAP support, but the rule decides.
 
 Inputs are the scored wallet matrix, the transaction frames and the attribution list `known_entities`
-(exchange / mining-pool addresses). Ground-truth tables are never read here.
+(exchange / mining-pool / swap-service addresses). Ground-truth tables are never read here.
 
 Rules, in priority order (the first match is the directive; every match is listed). The numbers below are the
 defaults; they live in beans/config.py (ACTION_*) and can be overridden from the environment / .env:
@@ -13,6 +13,8 @@ defaults; they live in beans/config.py (ACTION_*) and can be overridden from the
   R1 IMMEDIATE_FREEZE_DRAFT funds traced (≤ 4 hops) to a known exchange ≤ 30 min after receipt or ≤ 30 min before
                             the latest data (money still likely on the exchange), risk ≥ 65
   R2 DRAFT_SECTION_94_BNSS  funds traced to an exchange that operates in India (any delay)
+  R2b CROSS_CHAIN_EXIT      funds traced (≤ 4 hops) to a known swap service / bridge (entity_type SWAP or BRIDGE):
+                            the Bitcoin trail ends there, so the next step is the service's records and the other chain
   R3 FIU_REFERRAL_PACK      ≥ 1 BTC moved (by the wallet's cluster), broadcast via Tor/VPN/bulletproof hosting, with a layering pattern
   R4 PASSIVE_TAINT_MONITOR  unspent balance, dormant ≥ 6 h, linked to a seed (taint or ≤ 4 hops)
   R5 REVIEW_LIKELY_BENIGN   funded by a known mining pool, no seed link, no risky infrastructure
@@ -33,6 +35,8 @@ LAYERING_MIN_BTC = settings.ACTION_LAYERING_MIN_BTC
 DORMANT_H = settings.ACTION_DORMANT_H
 SEED_LINK_HOPS = settings.ACTION_SEED_LINK_HOPS
 MIN_PEEL_CHAIN = settings.ACTION_MIN_PEEL_CHAIN
+CROSS_CHAIN_TYPES = {"SWAP", "BRIDGE"}          # known_entities.entity_type values where funds leave Bitcoin
+EXIT_TYPES = {"VASP"} | CROSS_CHAIN_TYPES
 NO_SEED_PATH = 20   # E4 writes hops = 20 (clipped) when no path to a seed exists
 
 ACTIONS: Dict[str, Dict[str, str]] = {
@@ -49,31 +53,39 @@ ACTIONS: Dict[str, Dict[str, str]] = {
         "legal_basis": "Section 94 BNSS 2023 (summons to produce documents or other things)",
         "priority": "2",
     },
+    "CROSS_CHAIN_EXIT": {
+        "title": "Funds left Bitcoin: request swap records, trace the other chain",
+        "rule": f"Funds traced (≤ {MAX_HOPS} hops) to a known swap service or bridge (e.g. BTC → XMR / ETH). A Bitcoin "
+                "freeze no longer reaches them",
+        "legal_basis": "Section 94 BNSS 2023 to the swap service (Letter of Request, Section 112 BNSS, if offshore) for "
+                       "the order: payout chain, payout address, IP, account; then trace on the destination chain",
+        "priority": "3",
+    },
     "FIU_REFERRAL_PACK": {
         "title": "Prepare FIU-IND intelligence referral pack",
         "rule": f"≥ {LAYERING_MIN_BTC:g} BTC moved, broadcast via Tor / VPN / bulletproof hosting, with a layering "
                 "pattern (peel chain, CoinJoin or fan-out)",
         "legal_basis": "PMLA 2002 intelligence sharing; the pack goes to the IO / FIU-IND liaison, not filed as an STR",
-        "priority": "3",
+        "priority": "4",
     },
     "PASSIVE_TAINT_MONITOR": {
         "title": "Put on passive taint watch",
         "rule": f"Unspent balance, dormant ≥ {DORMANT_H:.0f} h, linked to a seed wallet (taint > 0 or ≤ {SEED_LINK_HOPS} hops)",
         "legal_basis": "No legal step yet. Watch the funds and re-alert when they move",
-        "priority": "4",
+        "priority": "5",
     },
     "REVIEW_LIKELY_BENIGN": {
         "title": "Review as a likely false positive",
         "rule": "The wallet is a known exchange / mining-pool address, or is funded by a mining pool with no seed "
                 "link and no risky infrastructure",
         "legal_basis": "None. Confirm or reject; the verdict feeds model retraining",
-        "priority": "5",
+        "priority": "6",
     },
     "ANALYST_REVIEW": {
         "title": "Manual analyst review",
         "rule": "No directive rule matched. Read the reasons and evidence",
         "legal_basis": "None",
-        "priority": "6",
+        "priority": "7",
     },
 }
 
@@ -104,7 +116,8 @@ class _Flows:
         self.last_seen = pd.concat([f.tin[["address", "ts"]], f.tout[["address", "ts"]]]).groupby("address")["ts"].max()
 
     def trace_to_vasp(self, addr: str, known: Dict[str, dict]) -> List[dict]:
-        """Every known-exchange deposit reachable from `addr` (≤ MAX_HOPS spends, forward in time)."""
+        """Every deposit to a known exchange / swap service / bridge reachable from `addr` (≤ MAX_HOPS spends, forward
+        in time). Each hit carries the `entity_type`, so callers can tell exchanges from cross-chain exits."""
         hits, seen = [], set()
         q = deque()
         for ts, txid in self.spends.get(addr, [])[:25]:
@@ -118,9 +131,10 @@ class _Flows:
             seen.add(txid)
             for o, amt in self.outs.get(txid, []):
                 k = known.get(o)
-                if k and k["entity_type"] == "VASP":
+                if k and k["entity_type"] in EXIT_TYPES:
                     delay = None if start is None else (ts - start).total_seconds() / 60
-                    hits.append({"vasp": k["entity_name"], "in_jurisdiction": bool(k["in_jurisdiction"]),
+                    hits.append({"vasp": k["entity_name"], "entity_type": k["entity_type"],
+                                 "in_jurisdiction": bool(k["in_jurisdiction"]),
                                  "country": k["country"], "deposit_address": o, "txid": txid, "path": path,
                                  "hops": hop, "amount_btc": round(amt, 8), "deposit_ts": str(ts),
                                  "minutes_after_receipt": None if delay is None else round(delay, 1)})
@@ -148,7 +162,9 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
         matched.append(("REVIEW_LIKELY_BENIGN", {"known_entity": own["entity_name"], "entity_type": own["entity_type"],
                                                  "why": "the flagged address is on the attribution list"}))
 
-    hits = [] if own else flows.trace_to_vasp(addr, known)
+    reached = [] if own else flows.trace_to_vasp(addr, known)
+    hits = [h for h in reached if h["entity_type"] == "VASP"]
+    exits = [h for h in reached if h["entity_type"] in CROSS_CHAIN_TYPES]
     # freeze while the money is likely still on the exchange: it arrived fast after receipt (quick cash-out), or it
     # arrived within the window before the latest data (e.g. a dormant watched wallet that just woke up)
     fresh = []
@@ -170,6 +186,16 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
         h = min(indian, key=lambda x: x["hops"])
         matched.append(("DRAFT_SECTION_94_BNSS", {**h, "vasps_reached": sorted({x["vasp"] for x in indian}),
                                                   "deposits_found": len(indian)}))
+
+    if exits:
+        h = min(exits, key=lambda x: (x["hops"], x["deposit_ts"]))
+        matched.append(("CROSS_CHAIN_EXIT", {
+            "service": h["vasp"], "service_type": h["entity_type"], "country": h.get("country"),
+            "in_jurisdiction": h["in_jurisdiction"], "deposit_address": h["deposit_address"], "txid": h["txid"],
+            "amount_btc": h["amount_btc"], "deposit_ts": h["deposit_ts"], "hops": h["hops"],
+            "services_reached": sorted({x["vasp"] for x in exits}),
+            "btc_to_services": round(sum(x["amount_btc"] for x in exits), 8),
+            "check": f"deposit to {h['vasp']} ({h['entity_type'].lower()}) {h['hops']} hop(s) from the wallet"}))
 
     # value is measured over the whole CIOH cluster (one owner): launderers split funds over many small wallets
     moved = max(float(w.get("sent_btc", 0)), float(w.get("recv_btc", 0)), float(w.get("_cluster_sent_btc", 0)))
@@ -207,6 +233,7 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
     return {"action": action, "title": spec["title"], "rule": spec["rule"], "legal_basis": spec["legal_basis"],
             "facts": facts, "shap_support": _shap_support(alert),
             "vasp_exposure": sorted(hits, key=lambda h: (h["hops"], h["deposit_ts"]))[:25],
+            "cross_chain_exits": sorted(exits, key=lambda h: (h["hops"], h["deposit_ts"]))[:25],
             "also_matched": [m[0] for m in matched[1:] if m[0] != action]}
 
 

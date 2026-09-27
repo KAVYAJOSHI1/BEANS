@@ -40,6 +40,7 @@ class CaseReportGenerator:
                 "engine_scores": a["engine_scores"], "evidence": a["evidence"],
                 "recommended_action": {k: (a.get("recommended_action") or {}).get(k)
                                        for k in ("action", "title", "rule", "legal_basis", "facts")},
+                **({"case_summary": a["case_summary"]} if a.get("case_summary") else {}),
             } for a in alerts],
             "audit_trail": audit,
         }
@@ -88,6 +89,9 @@ class CaseReportGenerator:
             cf = (f.get("evidence") or {}).get("counterfactual")
             if cf:
                 md += ["", f"**What would change the verdict:** {cf['summary']}"]
+            cs = f.get("case_summary")
+            if cs:
+                md += ["", f"**Case summary** _(written by {cs['engine']}, each sentence checked against the cited facts)_: {cs['text']}"]
             md += ["", "**Evidence:**",
                    f"- Transaction: `{e.get('txid', 'n/a')}`",
                    f"- First-relaying IP: `{e.get('first_spy_ip') or 'unknown'}` (confidence {e.get('first_spy_confidence', 'n/a')})",
@@ -125,6 +129,7 @@ class CaseReportGenerator:
                <i>({esc((f.get('recommended_action') or {}).get('rule') or 'no rule')})</i></p>
             <b>Why flagged</b><ul>{reasons}</ul>
             {f'<p><b>What would change the verdict:</b> {esc(e["counterfactual"]["summary"])}</p>' if e.get("counterfactual") else ''}
+            {f'<p><b>Case summary</b> <i>(written by {esc(f["case_summary"]["engine"])}, each sentence checked against the cited facts)</i>: {esc(f["case_summary"]["text"])}</p>' if f.get("case_summary") else ''}
             {f'<b>Top feature contributions</b><table><tr><th>Feature</th><th>Value</th><th>Impact</th></tr>{shap}</table>' if shap else ''}
             <b>Evidence</b><ul><li>Transaction <span class=mono>{esc(e.get('txid', 'n/a'))}</span></li>
             <li>First-relaying IP <span class=mono>{esc(e.get('first_spy_ip') or 'unknown')}</span>

@@ -94,16 +94,30 @@ def watch(
     inbox.mkdir(parents=True, exist_ok=True)
     done.mkdir(exist_ok=True)
     console.print(f"[bold green]Watching {inbox} every {interval:.0f}s (Ctrl+C to stop)…[/bold green]")
+    import json
+    import os
+    state = {"pid": os.getpid(), "folder": str(inbox), "interval_s": interval, "started_at": time.time(),
+             "files_done": 0, "files_failed": 0, "last_file": None, "last_alerts": None, "last_error": None}
+
+    def status():   # watch.status: read by the dashboard's Live Monitor
+        state["updated_at"] = time.time()
+        (inbox / "watch.status.part").write_text(json.dumps(state))
+        os.replace(inbox / "watch.status.part", inbox / "watch.status")
     while True:
+        status()
         files = sorted(f for f in inbox.iterdir() if f.is_file() and f.suffix.lower() in {".csv", ".json", ".ndjson", ".jsonl", ".xml"})
         for f in files:
             console.print(f"→ {f.name}")
             try:
-                res = ForensicPipeline(mapping=Path(mapping) if mapping else None).run_file_ingestion(f)
+                res = ForensicPipeline(mapping=Path(mapping) if mapping else None).run_file_ingestion(f, "WATCH")
                 console.print(f"  {res['records_ingested']} rows, {res['rows_quarantined']} quarantined, "
                               f"{res['pipeline_stats'].get('alerts_generated')} alerts")
+                state.update(files_done=state["files_done"] + 1, last_file=f.name, last_error=None,
+                             last_rows=res["records_ingested"], last_alerts=res["pipeline_stats"].get("alerts_generated"))
             except Exception as e:  # keep watching; the file stays for inspection
                 console.print(f"  [red]failed: {e}[/red]")
+                state.update(files_failed=state["files_failed"] + 1, last_error=f"{f.name}: {e}"[:300])
+                status()
                 continue
             shutil.move(str(f), done / f"{time.strftime('%Y%m%d_%H%M%S')}_{f.name}")
         if once:
@@ -132,7 +146,7 @@ def known_entities(
     file_path: str = typer.Argument(..., help="CSV: address, entity_name[, entity_type, country, in_jurisdiction, source]"),
     rescore: bool = typer.Option(True, "--rescore/--no-rescore", help="Re-run scoring so action directives use the list"),
 ):
-    """Load an attribution list (exchange / mining-pool addresses) used by the action directive rules."""
+    """Load an attribution list (entity_type VASP / MINING_POOL / SWAP / BRIDGE) used by the action directive rules."""
     from beans.store.duck import DuckStore
     store = DuckStore()
     n = store.load_known_entities(Path(file_path))

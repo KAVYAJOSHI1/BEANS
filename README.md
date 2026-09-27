@@ -68,6 +68,26 @@ of relaying nodes), not the sender; many connected peers over hours are needed b
 anything. The models are trained on synthetic data; real alerts need seeds from a case, or the analyst verdicts
 that `beans score` learns from.
 
+The dashboard's **Live Monitor** page shows both processes: collector peers and throughput, the watch folder's
+progress, transactions stored per minute, newest alerts and ingested files. Both write a heartbeat (`collector.status`,
+`watch.status`) into the folder every few seconds; point the server at it with `LIVE_INBOX=data/inbox` (the default).
+
+## Investigator tools
+
+- **Review Queue:** open alerts ranked by how unsure the model is (probability near 0.5, low confidence), then wallets
+  that scored just under the alert threshold, where a missed criminal would hide. *Illicit* / *Legitimate* verdicts are
+  stored as training feedback; *Retrain now* re-scores with them.
+- **Case summary** (alert drawer): a local model writes a short paragraph from a numbered fact sheet of BEANS's own
+  findings, citing the facts after every sentence. A sentence is removed if it cites a missing fact, uses a number not in
+  its facts, is mostly not about its facts, or speculates; if too little survives, the fact sheet itself is shown. The
+  model runs through [Ollama](https://ollama.com) on the same machine (`ollama pull llama3.2`); nothing leaves it.
+  `OLLAMA_MODEL=mistral NARRATIVE_TIMEOUT_S=300` writes better text but is slower on a CPU; `NARRATIVE_ENGINE=template`
+  disables the model. Stored summaries go into case evidence packs, labelled with the model that wrote them.
+- **Global search:** Ctrl+K (⌘K) finds wallets, transactions, IPs, alerts, entity clusters and cases by prefix.
+- **Cross-chain exits:** give swap services and bridges `entity_type` `SWAP` or `BRIDGE` in the attribution list
+  (`beans known-entities swaps.csv`). Funds traced to one get the `CROSS_CHAIN_EXIT` directive: a Bitcoin freeze no longer
+  reaches them, so the next step is the service's records and the destination chain. No list of real services is bundled.
+
 ## Users and approvals
 
 With no users, BEANS runs in single-user mode (no login), which is what `make demo` uses. Creating the first user with

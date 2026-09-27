@@ -19,8 +19,8 @@ We continue from Dhairya's code, which is already in this branch. Extend and fix
 | S6 | Model card with real metrics (§13) | ✅ done by Kavya/Claude (generator v2 + ML rewrite) | `evaluate`: per-engine metrics, recall of hidden 80% illicit, PR-AUC, P@50, ECE + reliability bins, **ablation with vs without network features**; also on a second-seed dataset | **20:00** |
 | S5 | Investigator feedback → retrain | ✅ verdicts override labels / extend saved training set and retrain | Confirmed/FP labels from the UI feed the next `train` run | 20:30 |
 | — | Leakage test | ✅ done by Kavya/Claude (tests/test_ml.py::test_no_label_leakage) | 20:30 |
-| C1 | GNN (GraphSAGE) + GNNExplainer | ❌ | Only after all of the above | after 20:30 |
-| C7 | Validate on public Elliptic dataset | ❌ | Needs a one-time download; optional | after 20:30 |
+| C1 | GNN (GraphSAGE) + GNNExplainer | 🟡 E5 is SIGN-style (CPU, no PyTorch); GNNExplainer not done | Only after all of the above | after 20:30 |
+| C7 | Validate on public Elliptic dataset | ✅ docs/VALIDATION_ELLIPTIC.md | Needs a one-time download; optional | after 20:30 |
 
 ---
 

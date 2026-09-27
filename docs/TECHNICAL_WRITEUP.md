@@ -91,13 +91,15 @@ All numbers are reproducible bit-for-bit: inputs are explicitly ordered and Ligh
 
 | Engine | Metric | Value | Reference |
 |---|---|---|---|
-| Fusion | PR-AUC, out-of-fold by entity | **0.955** | random ranking = 0.066 |
-| Fusion | Precision / recall of illicit wallets at P ≥ 0.5 | **0.983** / 0.901 | |
-| Fusion | Expected calibration error | **0.006** | |
-| **Ablation** | PR-AUC **without** network-layer features | 0.899 | with = 0.955 → the network ↔ chain correlation adds value |
-| Alert list | Illicit entities with ≥ 1 alert | **97 %** (29/30) | 132 alerts, 4.6 per entity |
-| Alert list | Alerts that are illicit | 89 % | top 10: 100 % |
-| Alert list | Typology on the alert is correct (illicit alerts) | 81 % | |
+| Fusion | PR-AUC, out-of-fold by entity | **0.977** | random ranking = 0.066 |
+| Fusion | Precision / recall of illicit wallets at P ≥ 0.5 | **0.993** / 0.953 | |
+| Fusion | Expected calibration error | **0.004** | |
+| **Ablation** | PR-AUC **without** network-layer features | 0.921 | with = 0.977 → the network ↔ chain correlation adds value |
+| Alert list | Illicit entities with ≥ 1 alert | **100 %** (30/30) | 141 alerts, 4.7 per entity |
+| Alert list | Alerts that are illicit | 94 % | top 10: 100 % |
+| Alert list | Typology on the alert is correct (illicit alerts) | 100 % | with the typology corpus |
+
+(v1.1 demo dataset. The stage-by-stage history below keeps the numbers each stage was measured with.)
 | E3 | Macro-F1, grouped CV | **0.993** | peel · CoinJoin · round-trip · fan-in/out all ≥ 0.97 |
 | E1 | Homogeneity (no cluster mixes two actors) | **1.00** | all wallets: 1.00 |
 | E1 | Completeness (an actor's wallets in one cluster) | **0.79** | 0.58 before the self-split heuristic and change-heuristic guards |
@@ -184,6 +186,15 @@ all change outputs; clustering and detection are unchanged. Wallet-level fingerp
 (0.952 → 0.922) and were dropped. On real data, where wallets pay full-precision amounts, fingerprints matter more;
 that cannot be shown with our generator, so no gain is claimed.
 
+**Repeated calibration (v1.1).** Each cross-validation fold used to calibrate on one 25 % slice of its training actors,
+only a handful of criminal operations, so the isotonic curve had coarse steps. A step holding one illicit and one licit
+wallet scores exactly 0.5; on two datasets 12 of the 15 alerts at exactly 0.5 were innocent wallets. Each fold now fits
+three fit/calibration splits and averages them (`CAL_REPEATS`, `beans/score/fuse.py`). Six-seed benchmark, v1.0 → v1.1:
+alert precision 0.891 → **0.927** (better on every seed), PR-AUC 0.967 → **0.981**, recall at P ≥ 0.5 0.935 → **0.951**,
+precision at P ≥ 0.5 0.960 → **0.989**, entities alerted unchanged (0.984). Training takes ~10 s longer. The Elliptic
+benchmark calibrates on a held-out time window, so this change is not measured there
+(`docs/results/benchmark_v1.1.json`).
+
 **What we tried and rejected.** Counterparty features (risk signals of the wallets a wallet trades with) and a larger
 LightGBM (500 trees, 31 leaves) were neutral (counterparty: PR-AUC 0.954 vs 0.953 over 6 seeds; larger model: 0.946 vs 0.946 over 3 seeds, 35 % slower),
 so they were dropped. Typology accuracy is limited by the number of criminal entities per dataset (one darknet market, three hack
@@ -197,12 +208,18 @@ crews), not by features: ransomware and hack laundering move money almost identi
 - **Analyst feedback loop:** *Confirm* / *False positive* verdicts override labels in the next training run. On unlabelled operational data they are added to the saved training set (weight 5) and the models retrain.
 - **Monitoring mode:** `beans watch <folder>` ingests and scores every new file dropped in.
 - **Exports:** Neo4j bulk-import CSVs and a STIX 2.1 bundle of wallet and first-relay-IP indicators.
+- **Live data (v1.1):** `beans collect` reads input addresses from signature data (transactions with no input address: 20.9 % → 2.5 %) and can resolve input amounts from your own node (`--rpc`, `gettxout`) or Esplora. `beans ofac-seeds` loads the 532 OFAC-sanctioned Bitcoin addresses as citable seeds. 20 minutes of mainnet (12,436 transactions) gave 0 alerts: the correct result for ordinary traffic without seeds. The **Live Monitor** page shows collector and watcher heartbeats, ingest rate and new alerts.
+- **Review queue (v1.1):** open alerts ranked by model uncertainty, plus wallets just under the alert threshold; verdicts are training feedback.
+- **Case summaries (v1.1):** a local model (Ollama) writes a paragraph from a numbered fact sheet; sentences with invented numbers, wrong citations, speculation or mostly uncited words are removed, and the fact sheet is shown if too little survives (`docs/results/narrative_trial.json`).
+- **Cross-chain exits (v1.1):** SWAP / BRIDGE attribution entries end a trace with a `CROSS_CHAIN_EXIT` directive.
+- **Audit and search (v1.1):** hash-chained, verifiable audit trail (supervisors); global search (Ctrl+K).
 
 ## 9. Limitations and responsible use
 
 - Trained and evaluated on **synthetic** data only. Real-world performance must be re-established on labelled operational data.
 - CIOH is broken by CoinJoin and PayJoin. BEANS excludes detected CoinJoins, but will miss undetected ones.
-- First-spy attribution is a probabilistic lead, not identification.
+- First-spy attribution is a probabilistic lead, not identification. On live data the first relay is the collector's peer.
+- Case summaries from a small local model can join true facts into a sequence the evidence does not state; they are a reading aid, the evidence pack is the record.
 - Outputs are **investigative leads for analyst review**, not determinations of guilt. Analyst verdicts and the audit log are part of the design.
 
 ## 10. How to run

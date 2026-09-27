@@ -1,4 +1,3 @@
-import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict
@@ -19,10 +18,7 @@ DATA_TABLES = ["transactions", "net_observations", "wallet_profiles", "alerts", 
 
 
 def _ingest(path: Path, source: str, mapping: Path = None) -> Dict[str, Any]:
-    result = ForensicPipeline(mapping=mapping).run_file_ingestion(path)   # scores the whole DB, not just this file
-    db.execute("INSERT INTO ingest_log (file, sha256, size_bytes, records, source) VALUES (?, ?, ?, ?, ?)",
-               [path.name, hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size,
-                result.get("records_ingested", 0), source])
+    result = ForensicPipeline(mapping=mapping).run_file_ingestion(path, source)   # scores the whole DB; logs the file
     db.audit("INGEST", "FILE", path.name, {"records": result.get("records_ingested"), "source": source})
     return result
 

@@ -4,6 +4,7 @@ import TopBar from './components/TopBar';
 import { loadConfig, useConfig } from './risk';
 import { loadSession, useSession } from './session';
 import Login from './components/Login';
+import CommandPalette from './components/CommandPalette';
 
 // Tabs are code-split so the first paint doesn't wait on echarts/cytoscape/world-atlas.
 const OverviewDashboard = lazy(() => import('./components/OverviewDashboard'));
@@ -19,6 +20,8 @@ const Integrations = lazy(() => import('./components/Integrations'));
 const Watchlist = lazy(() => import('./components/Watchlist'));
 const Approvals = lazy(() => import('./components/Approvals'));
 const AuditTrail = lazy(() => import('./components/AuditTrail'));
+const LiveMonitor = lazy(() => import('./components/LiveMonitor'));
+const ReviewQueue = lazy(() => import('./components/ReviewQueue'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -54,6 +57,14 @@ export default function App() {
   const [watchEvents, setWatchEvents] = useState([]);
   const [watchlist, setWatchlist] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen(true); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // Keep the graph mounted after its first visit so switching tabs doesn't redo the layout.
   const [graphVisited, setGraphVisited] = useState(activeTab === 'graph');
@@ -142,6 +153,12 @@ export default function App() {
   const inspectEntity = async (address) => {
     await fetchEntity360(address);
     setActiveTab('entity');
+  };
+
+  const openAlert = async (alertId) => {
+    const known = alerts.find((a) => a.alert_id === alertId);
+    const a = known || await fetch(`${API_BASE}/alerts/${encodeURIComponent(alertId)}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (a) { setSelectedAlert(a); setActiveTab('alerts'); }
   };
 
   const openGraphFor = async (entity) => {
@@ -298,9 +315,11 @@ export default function App() {
         stats={stats}
         loading={loading}
         onRefresh={fetchAllData}
-        onSearchWallet={inspectEntity}
-        onSearchGraph={openGraphFor}
+        onOpenSearch={() => setSearchOpen(true)}
       />
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)}
+        onOpenWallet={inspectEntity} onOpenGraph={openGraphFor} onOpenAlert={openAlert}
+        onOpenCase={() => setActiveTab('cases')} />
 
       <main className="flex-1 w-full max-w-[1500px] mx-auto px-6 py-6">
         <Suspense fallback={<div className="py-24 text-center text-sm text-slate-400">Loading…</div>}>
@@ -394,6 +413,12 @@ export default function App() {
         {activeTab === 'integrations' && <Integrations onDataChanged={fetchAllData} />}
 
         {activeTab === 'audit' && <AuditTrail />}
+
+        {activeTab === 'live' && <LiveMonitor onSelectAlert={openAlert} onDataChanged={fetchAllData} />}
+
+        {activeTab === 'review' && (
+          <ReviewQueue onSelectAlert={openAlert} onInspectEntity={inspectEntity} onDataChanged={fetchAllData} />
+        )}
 
         {activeTab === 'approvals' && (
           <Approvals onChanged={() => fetch(`${API_BASE}/legal-requests?status=PENDING_APPROVAL`).then((r) => r.json())

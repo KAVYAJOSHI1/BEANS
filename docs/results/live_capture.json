@@ -1,0 +1,15 @@
+{
+ "captured": "2026-09-27, two mainnet captures (12 + 8 min), beans collect --dns-seed",
+ "transactions": 12436,
+ "relay_observations": 43761,
+ "wallets": 4720,
+ "relaying_peers": 13,
+ "alerts": 0,
+ "max_fused_probability": 0.394,
+ "ofac_seeds": 532,
+ "ofac_seeds_seen": 0,
+ "no_input_address_share_before": 0.2095,
+ "no_input_address_share_after": 0.0251,
+ "tx_before": 9050,
+ "tx_after": 3386
+}

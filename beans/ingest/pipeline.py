@@ -21,8 +21,9 @@ class ForensicPipeline:
         self.mapper = ColumnMapper(mapping)
         self.enricher = OfflineGeoIPEnricher()
 
-    def run_file_ingestion(self, file_path: Path) -> Dict[str, Any]:
-        """Parses file (CSV/JSON/XML), enriches, stores, and runs full ML pipeline"""
+    def run_file_ingestion(self, file_path: Path, source: str = "CLI") -> Dict[str, Any]:
+        """Parses file (CSV/JSON/XML), enriches, stores, and runs full ML pipeline. Every file is recorded in
+        `ingest_log` with its SHA-256 (the source list of case evidence packs), whichever way it came in."""
         p = Path(file_path)
         suffix = p.suffix.lower()
 
@@ -52,6 +53,7 @@ class ForensicPipeline:
                 self.store.insert_records(batch)
                 batch = []
         self.store.insert_records(batch)
+        self.log_file(p, n, source)
         sidecars = self.load_sidecars(p.parent)
         pipeline_stats = self.execute_ml_pipeline()
         return {
@@ -62,6 +64,21 @@ class ForensicPipeline:
             "sidecars_loaded": sidecars,
             "pipeline_stats": pipeline_stats
         }
+
+    def log_file(self, p: Path, records: int, source: str) -> None:
+        import hashlib
+        h = hashlib.sha256()
+        with open(p, "rb") as fh:
+            for block in iter(lambda: fh.read(1 << 20), b""):
+                h.update(block)
+        conn = self.store.get_connection()
+        try:
+            conn.execute("""CREATE TABLE IF NOT EXISTS ingest_log (file VARCHAR, sha256 VARCHAR, size_bytes BIGINT,
+                            records BIGINT, source VARCHAR, ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
+            conn.execute("INSERT INTO ingest_log (file, sha256, size_bytes, records, source) VALUES (?, ?, ?, ?, ?)",
+                         [p.name, h.hexdigest(), p.stat().st_size, records, source])
+        finally:
+            conn.close()
 
     def load_sidecars(self, folder: Path) -> List[str]:
         """Seed list and (synthetic) ground truth shipped next to the input file."""

@@ -1,0 +1,59 @@
+{
+ "note": "3 demo alerts (rows 0, 15, 30 of the alert list), CPU laptop, Ollama, temperature 0",
+ "runs": [
+  {
+   "model": "llama3.2 (3B)",
+   "alert": "PEEL_CHAIN",
+   "seconds": 32,
+   "kept": 3,
+   "dropped": 1,
+   "outcome": "model text"
+  },
+  {
+   "model": "llama3.2 (3B)",
+   "alert": "DARKNET_MARKET",
+   "seconds": 28,
+   "kept": 2,
+   "dropped": 2,
+   "outcome": "model text"
+  },
+  {
+   "model": "llama3.2 (3B)",
+   "alert": "ROUND_TRIP",
+   "seconds": 31,
+   "kept": 0,
+   "dropped": 4,
+   "outcome": "fact-check failed, template"
+  },
+  {
+   "model": "mistral (7B)",
+   "alert": "PEEL_CHAIN",
+   "seconds": 120,
+   "kept": 0,
+   "dropped": 0,
+   "outcome": "timeout, template"
+  },
+  {
+   "model": "mistral (7B)",
+   "alert": "DARKNET_MARKET",
+   "seconds": 120,
+   "kept": 0,
+   "dropped": 0,
+   "outcome": "timeout, template"
+  },
+  {
+   "model": "mistral (7B)",
+   "alert": "ROUND_TRIP",
+   "seconds": 90,
+   "kept": 6,
+   "dropped": 0,
+   "outcome": "model text"
+  }
+ ],
+ "checker_regression": {
+  "sentences": 7,
+  "correct_kept": 4,
+  "bad_dropped": 3,
+  "bad_kept": 0
+ }
+}

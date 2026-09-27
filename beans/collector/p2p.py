@@ -17,6 +17,7 @@ Limits, stated rather than papered over:
 import asyncio
 import csv
 import hashlib
+import json
 import os
 import random
 import socket
@@ -420,6 +421,17 @@ class Collector:
             self.stats["peers"] -= 1
             writer.close()
 
+    def write_status(self, started: float, running: bool = True) -> None:
+        """`collector.status` in the output folder, read by the dashboard's Live Monitor (the .status suffix keeps
+        `beans watch` from treating it as data)."""
+        state = {"running": running, "pid": os.getpid(), "started_at": started, "updated_at": time.time(),
+                 "out_dir": str(self.out_dir), "rotate_s": self.rotate_s, "max_peers": self.max_peers,
+                 "resolver": type(self.resolver).__name__ if self.resolver else None, "pending_rows": len(self._obs),
+                 **self.stats}
+        tmp = self.out_dir / "collector.status.part"
+        tmp.write_text(json.dumps(state))
+        os.replace(tmp, self.out_dir / "collector.status")
+
     async def run(self, peers: List[Tuple[str, int]], seconds: Optional[float] = None, log=print):
         stop = asyncio.Event()
         tasks = [asyncio.create_task(self.peer(h, p, stop)) for h, p in peers[:self.max_peers]]
@@ -427,6 +439,7 @@ class Collector:
         try:
             while any(not t.done() for t in tasks) and (seconds is None or time.time() - start < seconds):
                 await asyncio.sleep(5)
+                self.write_status(start)
                 log(f"peers {self.stats['peers']} · announcements {self.stats['inv']} · transactions {self.stats['tx']} · "
                     f"rows {self.stats['rows']} · files {self.stats['files']}")
                 if time.time() - self._opened >= self.rotate_s:
@@ -437,6 +450,7 @@ class Collector:
             for t in tasks:
                 t.cancel()
             self.flush()
+            self.write_status(start, running=False)
 
 
 def dns_seed_peers(n: int = 8, timeout_s: float = 8.0, ipv6: bool = False) -> List[Tuple[str, int]]:

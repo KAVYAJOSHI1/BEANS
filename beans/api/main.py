@@ -9,6 +9,7 @@ import logging
 from beans.api import db
 from beans.config import settings
 from beans.api.routes import stats, alerts, entities, graph, timeline, geomap, cases, seeds, ingest, modelcard, actions, webhooks, watchlist
+from beans.api.routes import live, review, search
 from beans.api.routes import auth as auth_routes
 from beans.api import auth
 
@@ -46,6 +47,9 @@ app.include_router(actions.router, prefix=settings.API_PREFIX)
 app.include_router(webhooks.router, prefix=settings.API_PREFIX)
 app.include_router(watchlist.router, prefix=settings.API_PREFIX)
 app.include_router(auth_routes.router, prefix=settings.API_PREFIX)
+app.include_router(live.router, prefix=settings.API_PREFIX)
+app.include_router(review.router, prefix=settings.API_PREFIX)
+app.include_router(search.router, prefix=settings.API_PREFIX)
 
 @app.get("/api/health")
 def health_check():

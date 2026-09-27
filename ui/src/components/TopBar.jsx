@@ -1,26 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Search, RefreshCw, Moon, Sun, LogOut, UserRound } from 'lucide-react';
 import { logout, useSession } from '../session';
 import { toggleTheme, useTheme } from '../theme';
 import { PAGE_TITLES } from './Sidebar';
 
-const TXID = /^[0-9a-fA-F]{64}$/;
-const IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]+:[0-9a-fA-F:]*$/;
+const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchWallet, onSearchGraph }) {
-  const [q, setQ] = useState('');
+export default function TopBar({ activeTab, stats, loading, onRefresh, onOpenSearch }) {
   const page = PAGE_TITLES[activeTab] || { label: '', group: '' };
   const k = stats?.kpis;
   const theme = useTheme();
   const { user, authEnabled } = useSession();
-
-  const submit = (e) => {
-    e.preventDefault();
-    const v = q.trim();
-    if (!v) return;
-    if (TXID.test(v) || IP.test(v)) onSearchGraph(v); // transactions and IPs open in the link graph
-    else onSearchWallet(v);                          // anything else is treated as a wallet address
-  };
 
   return (
     <header className="h-16 glass border-b border-slate-200 flex items-center gap-6 px-6 sticky top-0 z-40">
@@ -29,15 +19,12 @@ export default function TopBar({ activeTab, stats, loading, onRefresh, onSearchW
         <h1 className="text-base font-bold text-slate-900 leading-tight">{page.label}</h1>
       </div>
 
-      <form onSubmit={submit} className="flex-1 max-w-xl relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search wallet address, transaction ID or IP…"
-          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono placeholder:font-sans"
-        />
-      </form>
+      <button type="button" onClick={() => onOpenSearch('')}
+        className="flex-1 max-w-xl flex items-center gap-2 pl-3 pr-2 py-2 text-sm rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-slate-400 text-left">
+        <Search className="w-4 h-4" />
+        <span className="flex-1">Search wallet, transaction, IP, alert, cluster or case…</span>
+        <kbd className="text-[10px] border border-slate-200 rounded px-1.5 py-0.5 bg-white">{MAC ? '⌘' : 'Ctrl'} K</kbd>
+      </button>
 
       <div className="ml-auto flex items-center gap-4 text-xs text-slate-500">
         {k && (

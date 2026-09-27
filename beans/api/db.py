@@ -13,7 +13,7 @@ from typing import Any, Iterable, Optional
 
 from beans.store.duck import DuckStore
 
-JSON_COLUMNS = {"shap_top_features", "engine_scores", "evidence", "details", "recommended_action", "destinations",
+JSON_COLUMNS = {"payload", "shap_top_features", "engine_scores", "evidence", "details", "recommended_action", "destinations",
                 "io", "annex", "timestamp_token"}
 
 _API_DDL = """

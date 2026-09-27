@@ -26,6 +26,15 @@ class BeansSettings(BaseSettings):
     RISK_HIGH_MIN: float = 65.0
     RISK_MEDIUM_MIN: float = 40.0
     
+    # Live monitor: the folder `beans collect --out` writes to and `beans watch` reads (status files live there too)
+    LIVE_INBOX: Optional[Path] = None      # default: DATA_DIR/inbox
+
+    # Case narratives (beans/explain/narrative.py): a local model via Ollama, or the deterministic template only
+    NARRATIVE_ENGINE: str = "auto"               # auto | template
+    OLLAMA_URL: str = "http://127.0.0.1:11434"   # local only: nothing leaves the machine
+    OLLAMA_MODEL: str = "llama3.2"
+    NARRATIVE_TIMEOUT_S: float = 120.0
+
     # Ingest
     INGEST_CHUNK_ROWS: int = 50_000       # rows parsed + stored per batch (memory stays flat for any file size)
 

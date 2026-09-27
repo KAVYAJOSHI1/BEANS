@@ -3,6 +3,9 @@
 Every number is read from a result file, never typed in:
   docs/results/benchmark_before.json   6-seed benchmark of the code before the accuracy work (scripts/evaluate_seeds.py)
   docs/results/benchmark_v1.0.json     6-seed benchmark of the tagged v1.0 code
+  docs/results/benchmark_v1.1.json     6-seed benchmark of v1.1 (repeated calibration)
+  docs/results/live_capture.json       live mainnet capture scored by BEANS
+  docs/results/narrative_trial.json    local-model case summaries vs the fact check
   docs/results/benchmark_1m.json       ~1M-row benchmark (scripts/benchmark_1m.py)
   models/training_report.json          demo dataset (make pipeline)
   models/elliptic_report.json          real-data validation (beans validate-elliptic)
@@ -71,7 +74,7 @@ def compare_chart(rows, width=640):
            f'<rect x="{label_w}" y="6" width="10" height="10" rx="2" fill="{BEFORE_C}"/>'
            f'<text x="{label_w + 14}" y="15" fill="#333">before</text>'
            f'<rect x="{label_w + 70}" y="6" width="10" height="10" rx="2" fill="{NOW_C}"/>'
-           f'<text x="{label_w + 84}" y="15" fill="#333">v1.0 (now)</text>']
+           f'<text x="{label_w + 84}" y="15" fill="#333">v1.1 (now)</text>']
     for t in (0, 0.25, 0.5, 0.75, 1.0):
         x = label_w + t * plot_w
         out.append(f'<line x1="{x:.1f}" y1="{top - 4}" x2="{x:.1f}" y2="{h - 10}" stroke="#e5e5e5" stroke-width="1"/>')
@@ -123,12 +126,14 @@ def pipeline_svg():
 
 # ---------------------------------------------------------------------------------------------------------- report
 def build():
-    before, now = load(RES / "benchmark_before.json"), load(RES / "benchmark_v1.0.json")
+    before, v10, now = load(RES / "benchmark_before.json"), load(RES / "benchmark_v1.0.json"), load(RES / "benchmark_v1.1.json")
+    live, trial = load(RES / "live_capture.json"), load(RES / "narrative_trial.json")
+    V = lambda k: mean(v10, k)[0]          # noqa: E731
     demo = load(ROOT / "models" / "training_report.json")
     ell = load(ROOT / "models" / "elliptic_report.json")
     big = load(RES / "benchmark_1m.json")
     fu, aq, e1, e4 = demo["fusion"], demo["alert_quality"], demo["e1"], demo["e4"]
-    tag = git("describe", "--tags", "--always") or "v1.0"
+    tag = "v1.1"
     commit = git("rev-parse", "--short", "HEAD")
     M = lambda k: mean(now, k)[0]          # noqa: E731
     B = lambda k: mean(before, k)[0]       # noqa: E731
@@ -136,14 +141,15 @@ def build():
     fn = iter(range(1, 100))
     st = {p.stem: (lambda d: (lambda k: d["summary"].get(k, {}).get("mean")))(load(p)) for p in sorted((RES / "stages").glob("*.json"))}
     names = {"1_context_features": "+ money-context features", "2_clustering_e4": "+ clustering fix, self-split, E4 fixes",
-             "3_gnn_e5": "+ E5 graph neural network", "4_typology_corpus": "+ typology corpus"}
+             "3_gnn_e5": "+ E5 graph neural network", "4_typology_corpus": "+ typology corpus (v1.0)",
+             "5_repeated_calibration": "+ repeated calibration"}
     stage_rows = f"<tr><td>start</td>" + "".join(f"<td class=n>{num(B(k))}</td>" for k in (
         "pr_auc", "recall_at_p50", "typology_accuracy", "e1_completeness_illicit", "e4_reached_seeded_entities", "entity_recall")) + "</tr>"
     for key, label in names.items():
         g = st[key]
         stage_rows += f"<tr><td>{e(label)}</td>" + "".join(f"<td class=n>{num(g(k))}</td>" for k in (
             "pr_auc", "recall_at_p50", "typology_accuracy", "e1_completeness_illicit", "e4_reached_seeded_entities", "entity_recall")) + "</tr>"
-    stage_rows += "<tr><td><b>v1.0 (release)</b></td>" + "".join(f"<td class=n><b>{num(M(k))}</b></td>" for k in (
+    stage_rows += "<tr><td><b>v1.1 (release)</b></td>" + "".join(f"<td class=n><b>{num(M(k))}</b></td>" for k in (
         "pr_auc", "recall_at_p50", "typology_accuracy", "e1_completeness_illicit", "e4_reached_seeded_entities", "entity_recall")) + "</tr>"
 
 
@@ -259,28 +265,33 @@ real-data validation on Elliptic (section 5), where BEANS matches the strongest 
 </table>
 
 <h2>3. Engines</h2>
-<table><tr><th>Engine</th><th>Method</th><th>Measured (v1.0, 6-dataset mean)</th></tr>
+<table><tr><th>Engine</th><th>Method</th><th>Measured (v1.1, 6-dataset mean)</th></tr>
 <tr><td>E1 entity clustering</td><td>Common-input ownership (CoinJoins excluded) · change heuristics with guards (never a later-swept deposit address, never the tiny peel payment, never spent by different wallet software) · peel-chain change · self-split rule (≥ 7 near-identical fresh parts from a non-hub owner)</td><td>homogeneity {num(M('e1_homogeneity_illicit'))} · completeness {num(M('e1_completeness_illicit'))} (was {num(B('e1_completeness_illicit'))})</td></tr>
 <tr><td>E2 anomaly</td><td>Isolation Forest on behaviour + network features</td><td>used as a fusion input</td></tr>
 <tr><td>E3 transaction shape</td><td>LightGBM on 31 structural features: peel, CoinJoin, fan-out, fan-in, round trip</td><td>macro-F1 {num(M('e3_macro_f1'))}</td></tr>
 <tr><td>E4 seed propagation</td><td>Personalised PageRank (both directions), decayed haircut taint with exchanges as taint sinks, hop distances incl. direction-agnostic (reaches a seed's siblings)</td><td>{pct(M('e4_reached_seeded_entities'), 0)} of hidden wallets of seeded actors reached; {pct(M('e4_legit_reached'), 1)} of legitimate wallets (was {pct(B('e4_legit_reached'), 1)})</td></tr>
 <tr><td>E5 graph neural network</td><td>SIGN-style: 15 wallet signals averaged over 1- and 2-hop neighbours along and against the money flow, service hubs cut out; fusion is the readout; CPU-only, no deep-learning framework</td><td>when added: PR-AUC {num(st['2_clustering_e4']('pr_auc'))} → {num(st['3_gnn_e5']('pr_auc'))}, recall {num(st['2_clustering_e4']('recall_at_p50'))} → {num(st['3_gnn_e5']('recall_at_p50'))}</td></tr>
-<tr><td>Fusion</td><td>LightGBM, isotonic calibration, out-of-fold by entity; money-context features (funding shape, structuring just below round amounts, deposit-like destinations); typology model with a reference corpus of 253 extra operations, pooled per cluster</td><td>PR-AUC {num(M('pr_auc'))} · ECE {num(M('ece'), 4)}</td></tr>
+<tr><td>Fusion</td><td>LightGBM, isotonic calibration repeated over 3 fit/calibration splits per fold and averaged, out-of-fold by entity; money-context features (funding shape, structuring just below round amounts, deposit-like destinations); typology model with a reference corpus of 253 extra operations, pooled per cluster</td><td>PR-AUC {num(M('pr_auc'))} · ECE {num(M('ece'), 4)}</td></tr>
 <tr><td>Explanations</td><td>SHAP reasons in plain English; counterfactuals ("without Tor/VPN relaying the risk would fall from 100 to 17"), flagging single-signal vs corroborated alerts</td><td>on every alert (Figure 4)</td></tr>
 </table>
 
 <h2 class=pb>4. Accuracy on synthetic data</h2>
 <p><b>Protocol.</b> <code>scripts/evaluate_seeds.py --seeds 42 7 123 2024 99 555</code> generates six independent datasets
 (~4,000 transactions, ~13,500 wallets, ~30 criminal entities each, only ~30 % of entities revealed as seeds) and runs the
-full pipeline on each in its own database. "Before" is the code at the start of the accuracy work; "v1.0" is the tagged
-release. Metrics are out-of-fold and grouped by entity.</p>
+full pipeline on each in its own database. "Before" is the code at the start of the accuracy work; "v1.1" is this
+release (v1.0 plus repeated calibration). Metrics are out-of-fold and grouped by entity.</p>
 {compare_chart(chart_rows)}
-<p style="font-size:8.5pt;color:#555"><b>Figure {next(fn)}.</b> Before vs v1.0, mean of six datasets (values on each bar; the table below
+<p style="font-size:8.5pt;color:#555"><b>Figure {next(fn)}.</b> Before vs v1.1, mean of six datasets (values on each bar; the table below
 has the spread).</p>
-<table><tr><th>Metric (mean of 6 datasets)</th><th class=n>Before</th><th class=n>v1.0 (± std)</th><th></th></tr>{''.join(trows)}</table>
-<p class=note>Alert <i>precision</i> is lower than before because each criminal now takes ~{num(M('alerts_per_entity'), 1)} alerts instead of
-~{num(B('alerts_per_entity'), 1)} (whole operations are one cluster): the same handful of false alerts weighs more in a list less
-than half as long, while more criminal entities are covered.</p>
+<table><tr><th>Metric (mean of 6 datasets)</th><th class=n>Before</th><th class=n>v1.1 (± std)</th><th></th></tr>{''.join(trows)}</table>
+<p class=note><b>Repeated calibration (v1.1).</b> In v1.0 each fold calibrated on one 25 % slice of its training actors, only a
+handful of criminal operations, so the isotonic curve had coarse steps: a step holding one illicit and one licit wallet scores
+exactly 0.5, and on two datasets 12 of the 15 alerts at exactly 0.5 were innocent. Averaging three fit/calibration splits per fold
+raised alert precision from {num(V('alert_precision'))} (v1.0) to <b>{num(M('alert_precision'))}</b>, better on every one of the six datasets,
+PR-AUC from {num(V('pr_auc'))} to {num(M('pr_auc'))}, with criminal entities alerted unchanged ({num(V('entity_recall'))} → {num(M('entity_recall'))}). The Elliptic
+benchmark (section 5) calibrates on a held-out time window, so this change is not measured there.
+Alert precision is still below the start ({num(B('alert_precision'))}) because each criminal now takes ~{num(M('alerts_per_entity'), 1)} alerts instead of
+~{num(B('alerts_per_entity'), 1)}: the same few false alerts weigh more in a list half as long.</p>
 
 <h3>What changed, stage by stage (each a full 6-dataset run, <code>docs/results/stages/</code>)</h3>
 <table><tr><th>Stage</th><th class=n>PR-AUC</th><th class=n>Recall</th><th class=n>Typology</th><th class=n>E1 compl.</th><th class=n>E4 seeded</th><th class=n>Entities</th></tr>
@@ -375,13 +386,53 @@ Exchange deposits come from an attribution list (<code>known_entities</code>), w
 <li><b>Optional live collector</b> (<code>beans collect</code>): a separate tool that records transaction announcements per peer into BEANS CSVs; checked live (1,030 rows in 90 s, every txid matched the announced id).</li>
 </ul>
 
-<h2>10. Limitations</h2>
+<h2 class=pb>10. Added in v1.1</h2>
+<h3>Live data, with real seeds</h3>
+<p><code>beans collect</code> recorded {live['transactions']:,} live mainnet transactions ({live['relay_observations']:,} relay observations from
+{live['relaying_peers']} peers, {live['wallets']:,} wallets). Input addresses are now read from the signature data, so the share of
+transactions with no input address fell from {pct(live['no_input_address_share_before'])} to <b>{pct(live['no_input_address_share_after'])}</b> and
+common-input clustering works on live data; input amounts of confirmed coins come from an optional resolver (own Bitcoin Core node
+via <code>gettxout</code>, or Esplora) that gives up within a minute when unreachable. <code>beans ofac-seeds</code> loads the
+{live['ofac_seeds']} Bitcoin addresses on the US Treasury OFAC SDN list as citable seeds (publish date and file hash recorded).
+Result on this capture: <b>{live['alerts']} alerts</b>, highest fused probability {live['max_fused_probability']} (threshold {settings.ALERT_MIN_PROBABILITY}), and
+{live['ofac_seeds_seen']} sanctioned addresses moved. That is the correct outcome for ordinary traffic: models trained on synthetic data do not
+accuse anyone without seeds or analyst verdicts.</p>
+{fig('15_live_monitor', 'Live Monitor: collector and watch-folder heartbeats, transactions stored per minute, newest alerts and ingested files (live mainnet data).', next(fn))}
+<h3>Review queue (active learning)</h3>
+<p>Open alerts the model is least sure about (probability near 0.5, low confidence) and wallets just under the alert threshold,
+where a missed criminal would hide. Each verdict is training feedback; "Retrain now" re-scores with it.</p>
+{fig('16_review_queue', 'Review queue: uncertainty bar, reason for review, one-click verdicts.', next(fn))}
+<h3>Case summaries from a local model, fact-checked</h3>
+<p>BEANS builds a numbered fact sheet from its own findings; a local model (Ollama, nothing leaves the machine) writes a short
+paragraph citing fact ids after every sentence. A sentence is kept only if its facts exist, every number in it appears in them, most
+of its words come from them and it does not speculate; otherwise it is removed, and if too little survives the fact sheet itself is
+shown. On a regression sample the check kept all {trial['checker_regression']['correct_kept']} correct sentences and removed all
+{trial['checker_regression']['bad_dropped']} faulty ones (invented number, wrong citation, speculation). Trial on three alerts:</p>
+<table><tr><th>Model</th><th>Alert</th><th class=n>Seconds</th><th class=n>Kept</th><th class=n>Removed</th><th>Outcome</th></tr>
+{''.join(f"<tr><td>{e(r['model'])}</td><td>{e(r['alert'])}</td><td class=n>{r['seconds']}</td><td class=n>{r['kept']}</td><td class=n>{r['dropped']}</td><td>{e(r['outcome'])}</td></tr>" for r in trial['runs'])}</table>
+<p>The 3B model is fast enough but its text can still join two true facts into a sequence the evidence does not state; the 7B model
+writes better but needs a longer timeout on a CPU. The summary is labelled as a reading aid; the evidence pack stays the record.</p>
+<h3>Also new</h3>
+<ul>
+<li><b>Tamper-evident audit trail</b>: every entry carries the SHA-256 of the previous one; the Audit Trail page (supervisors) verifies the
+chain; refused requests are recorded; tighter roles for data-wiping, seed removal and model re-evaluation.</li>
+<li><b>Cross-chain exits</b>: attribution entries of type SWAP / BRIDGE end the trace with a <code>CROSS_CHAIN_EXIT</code> directive
+(request the service's records, trace the other chain), because a Bitcoin freeze no longer reaches the funds.</li>
+<li><b>Global search</b> (Ctrl+K) over wallets, transactions, IPs, alerts, clusters and cases; money-trail diagram in Section 94 / freeze
+drafts; every ingest path (upload, <code>beans ingest</code>, <code>beans watch</code>) now records the file hash for case packs.</li>
+</ul>
+{fig('17_audit_trail', 'Audit trail with hash-chain verification.', next(fn))}
+
+<h2>11. Limitations</h2>
 <ul>
 <li>Synthetic numbers are optimistic; Elliptic validates the modelling approach only (no addresses, amounts or IPs).</li>
 <li>Typology near 100 % reflects separable synthetic typologies; expect less on real cases.</li>
 <li>Freeze and Section 94 directives on real data depend on a real exchange attribution list.</li>
 <li>Legal templates need review by a lawyer; the Hindi text by a native legal reviewer (the Hindi document says so).</li>
-<li>The live collector can only resolve inputs from transactions it has already seen (12 of 311 after 90 s); a full node's export gives complete inputs.</li>
+<li>Without a resolver, the live collector knows input amounts only for coins created by transactions it saw; addresses are read from signatures. The live "first relay" IP is the collector's peer, not the sender.</li>
+<li>Case summaries from a small local model can link true facts wrongly; the fact check removes invented numbers, wrong citations and speculation, not every wrong connection.</li>
+<li>Cross-chain exits need a swap / bridge attribution list; no list of real services is bundled.</li>
+<li>The 1M-row figures predate the memory optimisations in v1.1 and were not re-measured.</li>
 <li>The local TSA proves "no later than" by this machine's clock and key; it carries less weight than an accredited public TSA.</li>
 </ul>
 
@@ -393,7 +444,7 @@ Exchange deposits come from an attribution list (<code>known_entities</code>), w
 <tr><td>Real-data validation</td><td><code>beans validate-elliptic --download --doc docs/VALIDATION_ELLIPTIC.md</code></td></tr>
 <tr><td>1M-row benchmark</td><td><code>.venv/bin/python scripts/benchmark_1m.py --files 10</code></td></tr>
 <tr><td>This report</td><td><code>.venv/bin/python scripts/build_report.py</code></td></tr>
-<tr><td>Tests</td><td><code>make test</code> (62 tests)</td></tr>
+<tr><td>Tests</td><td><code>make test</code></td></tr>
 </table>
 <p style="font-size:8.5pt;color:#555">IP geolocation by DB-IP (CC BY 4.0). Elliptic dataset: Weber et al., "Anti-Money Laundering in Bitcoin",
 KDD 2019 workshop (arXiv:1908.02591). SIGN: Frasca et al. 2020. All data shown in screenshots is synthetic.</p>

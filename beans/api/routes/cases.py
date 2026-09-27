@@ -77,6 +77,15 @@ def export_case(case_id: int, fmt: str = Query("json", pattern="^(json|md|pdf|ht
                      [str(case_id), [a["alert_id"] for a in case["alerts"]]])
     from beans.api.routes.timeline import follow_the_money
     traces = {a["entity_id"]: follow_the_money(a["entity_id"], 20) for a in case["alerts"][:25]} if fmt in ("pdf", "html") else {}
+    if case["alerts"] and db.table_exists("narratives"):   # stored case summaries (never generated during an export)
+        stored = {r["alert_id"]: r["payload"] for r in db.query(
+            "SELECT alert_id, payload FROM narratives WHERE list_contains(?, alert_id)", [[a["alert_id"] for a in case["alerts"]]])}
+        for a in case["alerts"]:
+            n = stored.get(a["alert_id"])
+            if n:
+                a["case_summary"] = {"engine": n["engine"], "generated_at": n["generated_at"], "facts_sha256": n["facts_sha256"],
+                                     "text": " ".join(f"{s['text']} [{', '.join(f'F{i}' for i in s['facts'])}]" for s in n["sentences"]),
+                                     "facts": n["facts"]}
     pack = CaseReportGenerator.build(case, case["alerts"], sources, audit, traces)
     db.audit("CASE_EXPORT", "CASE", str(case_id), {"format": fmt, "evidence_sha256": pack["evidence_sha256"],
                                                    "timestamp_serial": (pack.get("timestamp") or {}).get("serial")})

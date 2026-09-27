@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Gavel, Snowflake, FileText, Eye, ShieldCheck, HelpCircle, Download, X, Stamp, Loader2, ScrollText } from 'lucide-react';
+import { Gavel, Snowflake, FileText, Eye, ShieldCheck, HelpCircle, Download, X, Stamp, Loader2, ScrollText, Shuffle } from 'lucide-react';
 
 const API_BASE = '/api';
 
 export const ACTION_META = {
   IMMEDIATE_FREEZE_DRAFT: { short: 'Freeze draft', icon: Snowflake, cls: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
   DRAFT_SECTION_94_BNSS: { short: '§94 BNSS', icon: Gavel, cls: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  CROSS_CHAIN_EXIT: { short: 'Left Bitcoin', icon: Shuffle, cls: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200', dot: 'bg-fuchsia-500' },
   FIU_REFERRAL_PACK: { short: 'FIU referral', icon: FileText, cls: 'bg-violet-50 text-violet-700 border-violet-100', dot: 'bg-violet-500' },
   PASSIVE_TAINT_MONITOR: { short: 'Taint watch', icon: Eye, cls: 'bg-sky-50 text-sky-700 border-sky-100', dot: 'bg-sky-500' },
   REVIEW_LIKELY_BENIGN: { short: 'Likely benign', icon: ShieldCheck, cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
@@ -34,6 +35,8 @@ const FACT_LABELS = {
   layering: 'Layering', offshore_vasps: 'Offshore exchanges', measured_over: 'Measured over', unspent_btc: 'Unspent (BTC)',
   dormant_h: 'Dormant (h)', taint: 'Taint', hops_to_nearest_seed: 'Hops to seed', known_entity: 'Known entity',
   entity_type: 'Entity type', why: 'Why', funded_by: 'Funded by', risk: 'Risk',
+  service: 'Swap service / bridge', service_type: 'Service type', services_reached: 'Services reached',
+  btc_to_services: 'BTC sent to services',
 };
 const HIDDEN = new Set(['path', 'in_jurisdiction']);
 
