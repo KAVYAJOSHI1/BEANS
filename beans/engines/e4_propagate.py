@@ -22,8 +22,11 @@ def graph(frames) -> nx.DiGraph:
     e = e[e["address_s"] != e["address_d"]]
     e["w"] = e["amount_s"] / e["txid"].map(tot_in).clip(lower=1e-12) * e["amount_d"]
     agg = e.groupby(["address_s", "address_d"])["w"].sum().reset_index()
+    del e, tot_in
     G = nx.DiGraph()
     G.add_weighted_edges_from(agg.itertuples(index=False, name=None))
+    del agg
+    import gc; gc.collect()
     return G
 
 

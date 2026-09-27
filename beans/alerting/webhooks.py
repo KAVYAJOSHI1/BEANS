@@ -141,26 +141,22 @@ def dispatch_pending(store, only: Optional[int] = None) -> List[Dict[str, Any]]:
         conn = store.get_connection()
         try:
             jobs = [(h, pending(conn, h)) for h in _hooks(conn, only)]
-        finally:
-            conn.close()
-        results = []
-        for hook, alerts in jobs:
-            if not alerts:
-                results.append({"webhook_id": hook["id"], "sent": 0})
-                continue
-            ok, status, attempts, err = _post(build_request(hook, alerts))
-            conn = store.get_connection()
-            try:
+            results = []
+            for hook, alerts in jobs:
+                if not alerts:
+                    results.append({"webhook_id": hook["id"], "sent": 0})
+                    continue
+                ok, status, attempts, err = _post(build_request(hook, alerts))
                 conn.executemany("INSERT INTO webhook_log (webhook_id, alert_id, status, http_status, attempts, error) "
                                  "VALUES (?, ?, ?, ?, ?, ?)",
                                  [[hook["id"], a["alert_id"], "SENT" if ok else "FAILED", status, attempts, err] for a in alerts])
-            finally:
-                conn.close()
-            if not ok:
-                log.warning("webhook %s (%s) failed: %s", hook["name"], hook["url"], err)
-            results.append({"webhook_id": hook["id"], "sent": len(alerts) if ok else 0, "ok": ok, "http_status": status,
-                            "error": err})
-        return results
+                if not ok:
+                    log.warning("webhook %s (%s) failed: %s", hook["name"], hook["url"], err)
+                results.append({"webhook_id": hook["id"], "sent": len(alerts) if ok else 0, "ok": ok, "http_status": status,
+                                "error": err})
+            return results
+        finally:
+            conn.close()
 
 
 def dispatch_in_background(store) -> threading.Thread:

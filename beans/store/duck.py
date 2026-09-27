@@ -33,7 +33,14 @@ class DuckStore:
             _SCHEMA_READY.add((self.db_path, _inode(self.db_path)))
 
     def get_connection(self):
-        return duckdb.connect(self.db_path)
+        import time
+        for attempt in range(10):
+            try:
+                return duckdb.connect(self.db_path)
+            except (duckdb.IOException, Exception) as e:
+                if attempt == 9:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def init_schema(self):
         conn = self.get_connection()

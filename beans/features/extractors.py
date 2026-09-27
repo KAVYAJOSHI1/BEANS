@@ -179,15 +179,19 @@ def wallet_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
     W["reused"] = (W["n_recv"] > 1).astype(float)
 
     # shape of the transactions the wallet takes part in
-    as_in = f.tin[["txid", "address"]].drop_duplicates().join(X_tx, on="txid")
-    as_out = f.tout[["txid", "address"]].drop_duplicates().join(X_tx, on="txid")
+    as_in = f.tin[["txid", "address"]].drop_duplicates().join(X_tx[["n_out"]], on="txid")
+    as_out = f.tout[["txid", "address"]].drop_duplicates().join(X_tx[["n_in", "n_out", "min_respend_min"]], on="txid")
     W["spend_max_n_out"] = as_in.groupby("address")["n_out"].max().reindex(W.index).fillna(0)
     W["fund_max_n_in"] = as_out.groupby("address")["n_in"].max().reindex(W.index).fillna(0)
     W["fund_n_out"] = as_out.groupby("address")["n_out"].max().reindex(W.index).fillna(0)
-    both = pd.concat([as_in, as_out])
-    for c in ("peel_chain_len", "equal_output_share", "returns_to_input", "dust_outputs", "peel_shape"):
+    both_cols = ["peel_chain_len", "equal_output_share", "returns_to_input", "dust_outputs", "peel_shape"]
+    in_both = f.tin[["txid", "address"]].drop_duplicates().join(X_tx[both_cols], on="txid")
+    out_both = f.tout[["txid", "address"]].drop_duplicates().join(X_tx[both_cols], on="txid")
+    both = pd.concat([in_both, out_both])
+    for c in both_cols:
         W[f"max_{c}"] = both.groupby("address")[c].max().reindex(W.index).fillna(0)
     W["min_respend_min"] = as_out.groupby("address")["min_respend_min"].min().reindex(W.index).fillna(1e5)
+    del as_in, as_out, in_both, out_both, both
 
     # network: who broadcast this wallet's spends
     net = f.tin[["txid", "address", "ts"]].drop_duplicates(["txid", "address"]).merge(f.spy, on="txid", how="left")
@@ -200,10 +204,12 @@ def wallet_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
     vel = multi.groupby("address")[["ts", "spy_country"]].apply(_velocity) if len(multi) else pd.Series(dtype=float)
     W["max_geo_velocity_kmh"] = vel.reindex(W.index).fillna(0).clip(upper=20000)
     W["mean_spy_confidence"] = 1 - np.exp(-net.groupby("address")["spy_delta"].mean().reindex(W.index).fillna(0.3) / settings.FIRST_SPY_TAU_SEC)
+    del net, multi
     W = W.join(context_features(f, X_tx), how="left")
     ctx = ["fund_out_cv", "fund_below_round", "fund_in_hub", "fund_parent_max_n_in", "fund_parent_in_hub",
            "fund_log_n_funders", "spend_to_consolidated", "is_consolidated"]
     W[ctx] = W[ctx].fillna(0)
+    import gc; gc.collect()
     return W.drop(columns=["first_recv", "last_recv", "first_spend", "last_spend"])
 
 
@@ -259,8 +265,9 @@ def context_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
     tx["parent_in_hub"] = par.groupby("txid")["in_hub"].max().reindex(tx.index).fillna(0)
     tx["n_funders"] = f.tin.groupby("txid")["address"].nunique().reindex(tx.index).fillna(0)
 
-    as_out = f.tout[["txid", "address"]].drop_duplicates().join(tx, on="txid")
-    as_in = f.tin[["txid", "address"]].drop_duplicates().join(tx, on="txid")
+    fo_cols = ["out_cv", "below_round_share", "in_hub", "parent_max_n_in", "parent_in_hub", "n_funders"]
+    as_out = f.tout[["txid", "address"]].drop_duplicates().join(tx[fo_cols], on="txid")
+    as_in = f.tin[["txid", "address"]].drop_duplicates().join(tx[["out_consolidated_share"]], on="txid")
     fo, fi = as_out.groupby("address"), as_in.groupby("address")
     C = pd.DataFrame({
         "fund_out_cv": fo["out_cv"].mean(),
@@ -272,6 +279,7 @@ def context_features(f: Frames, X_tx: pd.DataFrame) -> pd.DataFrame:
         "spend_to_consolidated": fi["out_consolidated_share"].mean(),
     })
     C["is_consolidated"] = C.index.isin(swept).astype(float)
+    del degree, tx, tin, swept, created_by, par, as_out, as_in
     return C
 
 

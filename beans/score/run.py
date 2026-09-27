@@ -39,8 +39,15 @@ def _severity(risk: float) -> str:
 
 
 def _peak_gb() -> float:
-    import resource
-    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024, 2)   # Linux: KiB
+    try:
+        import resource
+        return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024, 2)   # Linux: KiB
+    except (ImportError, AttributeError):
+        try:
+            import psutil
+            return round(psutil.Process().memory_info().rss / (1024 * 1024 * 1024), 2)
+        except Exception:
+            return 0.0
 
 
 def run_ml(store) -> dict:
@@ -88,6 +95,8 @@ def _run(conn, t0) -> dict:
     pj = memb.join(probs[P_COLS], on="txid")
     for c in P_COLS:
         W[f"max_{c}"] = pj.groupby("address")[c].max().reindex(W.index).fillna(0)
+    del memb, pj
+    import gc; gc.collect()
     W["cluster_id"] = clusters.reindex(W.index).fillna("SOLO")
     cg = W.groupby("cluster_id")
     W["log_cluster_size"] = np.log1p(cg["n_recv"].transform("size"))
