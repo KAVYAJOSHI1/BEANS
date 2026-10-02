@@ -118,6 +118,15 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   covers 47 % (nominal 50 %) and 72 % (nominal 80 %); median error 5.1 h vs 5.9 h for one global median; destination
   top-1 0.39 vs 0.33 chance, i.e. no real skill, because the synthetic actors pick exchanges at random. Expect the
   destination part to help only where real actors reuse exchanges. `E7_FORECAST=false` turns it off.
+- **Same-operator leads (E8):** E1 only joins addresses that sign together, so an operator who rotates wallets leaves
+  unlinked clusters (completeness ~0.74). E8 fingerprints each cluster by habits that survive rotation: first-seen IPs
+  (rare IPs weigh more than shared relays), wallet software, script type, hour-of-day rhythm and fee rate, and ranks
+  other clusters by similarity (`evidence.operator_candidates`, shown in the alert drawer with the shared IPs and
+  per-signal scores). It is a lead, never a merge, and it does not feed the fusion model. On 3 synthetic datasets the
+  right sibling cluster is in the top 5 for 100 % of operators, but that is mostly shared IPs: synthetic operators
+  broadcast from their own addresses. **Without network identity** (behaviour only, the number to expect on real
+  data where the first relay is not the sender) it is 30-41 % at top 5 against 3-5 % for random ranking, and 13-30 %
+  at top 1 (23-33 operators per dataset, so wide error bars). `E8_OPERATOR=false` turns it off.
 - **Global search:** Ctrl+K (⌘K) finds wallets, transactions, IPs, alerts, entity clusters and cases by prefix.
 - **Cross-chain exits:** give swap services and bridges `entity_type` `SWAP` or `BRIDGE` in the attribution list
   (`beans known-entities swaps.csv`). Funds traced to one get the `CROSS_CHAIN_EXIT` directive: a Bitcoin freeze no longer

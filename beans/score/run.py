@@ -18,7 +18,7 @@ import pyarrow as pa
 
 from beans.config import settings
 from beans.decision import actions as directives, forecast
-from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn, e6_mixer
+from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn, e6_mixer, e8_operator
 from beans.explain.reasons import reasons_from_shap
 from beans.explain.shap_explain import explain
 from beans.features.extractors import (WALLET_NETWORK_COLS, TX_NETWORK_COLS, load_frames, tx_features,
@@ -190,6 +190,7 @@ def _run(conn, t0) -> dict:
     if not global_imp and fuse.final_model() is not None:
         _, global_imp = explain(fuse.final_model(), Xw.sample(min(500, len(Xw)), random_state=1))
     alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map, mix_links)
+    e8_rep = _operator_leads(alerts, W, f, clusters, X_tx, conn, labels_addr) if settings.E8_OPERATOR else {}
     from beans.explain import counterfactual
     counterfactual.compute(alerts, Xw, shap_map, lambda X: fuse.predict(X)[0])
     timings["counterfactuals"] = round(time.time() - t0, 2); timings["mem_gb_counterfactuals"] = _peak_gb()
@@ -210,7 +211,7 @@ def _run(conn, t0) -> dict:
         "evaluated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "trained": trained,
         "transactions": int(len(X_tx)), "wallets": int(len(W)), "seeds": len(seeds),
         "seeds_in_graph": e4info.get("seeds_in_graph", 0), "alerts": len(alerts),
-        "e3": e3_rep, "e6": e6_rep, "e7": e7_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
+        "e3": e3_rep, "e6": e6_rep, "e7": e7_rep, "e8": e8_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
         "feature_count": len(feats), "network_features": network_cols + TX_NETWORK_COLS,
         "watchlist": {"new_movement_events": len(watch_events), "auto_watched": auto_watched},
     }
@@ -281,6 +282,27 @@ def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map, mix_links=None) -> 
             },
         })
     return alerts
+
+
+def _operator_leads(alerts, W, f, clusters, X_tx, conn, labels_addr) -> dict:
+    """E8: attach same-operator candidate clusters (with the riskiest wallet of each) to every alert's evidence."""
+    fp = e8_operator.build(f, clusters, X_tx, directives.load_known(conn))
+    queries = [a["evidence"]["cluster_id"] for a in alerts]
+    leads = e8_operator.candidates(fp, queries)
+    top_wallet = W.sort_values("p", ascending=False).groupby("cluster_id").head(1).set_index("cluster_id")
+    alerted = {a["evidence"]["cluster_id"] for a in alerts}
+    for a in alerts:
+        rows = leads.get(a["evidence"]["cluster_id"], [])
+        for r in rows:
+            tw = top_wallet.loc[r["cluster_id"]] if r["cluster_id"] in top_wallet.index else None
+            r["top_wallet"] = None if tw is None else tw.name
+            r["risk"] = None if tw is None else round(100 * float(tw["p"]), 1)
+            r["is_alerted"] = r["cluster_id"] in alerted
+        a["evidence"]["operator_candidates"] = rows
+    rep = {"fingerprinted_clusters": 0 if fp is None else len(fp.clusters), "queries": len(set(queries))}
+    if labels_addr is not None and len(labels_addr):
+        rep.update(e8_operator.evaluate(fp, queries, labels_addr, clusters))
+    return rep
 
 
 def _write(conn, W, probs, alerts, mix_links=None):

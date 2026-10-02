@@ -317,6 +317,83 @@ export default function AlertTriage({ alerts, onSelectAlert, selectedAlert, onCl
             </div>
           )}
 
+          {/* Forecast, mixer exposure and operator leads (E7, E6, E8) */}
+          {(() => {
+            const ev = selectedAlert.evidence || {};
+            const fc = ev.cashout_forecast;
+            const mixes = ev.mixer_traversal || [];
+            const ops = ev.operator_candidates || [];
+            const stateStyle = { IN_WINDOW: 'bg-rose-50 text-rose-700 border-rose-200', OVERDUE: 'bg-amber-50 text-amber-700 border-amber-200', EXPECTED_LATER: 'bg-slate-50 text-slate-600 border-slate-200' };
+            return (
+              <>
+                {fc && fc.delay_minutes && (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2" data-testid="cashout-forecast">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Cash-out forecast</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${stateStyle[fc.window?.state] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                        {fc.status === 'PENDING' ? (fc.window?.state || 'PENDING').replace('_', ' ') : fc.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-700">
+                      Typical delay from receipt to exchange deposit: {Math.round(fc.delay_minutes.p25)}–{Math.round(fc.delay_minutes.p75)} min
+                      (median {Math.round(fc.delay_minutes.p50)}, {fc.samples} observed cash-outs).
+                      {fc.window && <> Window: <span className="font-mono">{fc.window.from.slice(0, 16)}</span> to <span className="font-mono">{fc.window.to.slice(0, 16)}</span>.</>}
+                    </p>
+                    <div className="space-y-1">
+                      {(fc.destinations || []).map((d) => (
+                        <div key={d.vasp} className="text-xs flex justify-between">
+                          <span className="text-slate-600">{d.vasp}</span>
+                          <span className="font-mono text-slate-800">{Math.round(100 * d.probability)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                    {fc.observed && <p className="text-[10px] text-slate-400">Actual: {fc.observed.vasp} after {Math.round(fc.observed.delay_minutes)} min ({fc.observed.in_window ? 'inside' : 'outside'} the predicted window).</p>}
+                  </div>
+                )}
+
+                {mixes.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2" data-testid="mixer-traversal">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Mixer exposure</span>
+                    {mixes.slice(0, 3).map((m) => (
+                      <div key={m.txid + m.role} className="text-xs space-y-0.5">
+                        <div className="text-slate-700">
+                          {m.role === 'RECEIVED' ? 'Received from' : 'Sent into'} CoinJoin <span className="font-mono">{m.txid.slice(0, 12)}…</span>
+                          {m.anonymity_set ? <> (anonymity set {m.anonymity_set})</> : null}
+                          {m.inherited_taint != null && <> · inherited taint <b>{m.inherited_taint.toFixed(2)}</b></>}
+                        </div>
+                        {m.candidates.slice(0, 2).map((c) => (
+                          <div key={c.address} className="flex justify-between text-slate-500">
+                            <span className="font-mono">{c.address.slice(0, 12)}… ({c.kind.toLowerCase()})</span>
+                            <span className="font-mono">{Math.round(100 * c.probability)}% · taint {c.taint.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {ops.length > 0 && (
+                  <div className="rounded-xl border border-slate-200 p-4 space-y-2" data-testid="operator-candidates">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Possibly the same operator</span>
+                    {ops.slice(0, 3).map((o) => (
+                      <div key={o.cluster_id} className="text-xs">
+                        <div className="flex justify-between">
+                          <span className="font-mono text-slate-700">{(o.top_wallet || o.cluster_id).slice(0, 14)}…{o.is_alerted ? ' (also alerted)' : ''}</span>
+                          <span className="font-mono text-slate-800">score {o.score.toFixed(2)}{o.risk != null ? ` · risk ${o.risk}` : ''}</span>
+                        </div>
+                        <div className="text-slate-500">
+                          {o.shared_ips.length > 0 && <>shared IP {o.shared_ips[0]} · </>}
+                          {Object.entries(o.signals).filter(([k, v]) => k !== 'ip' && v >= 0.6).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(' · ') || 'weak behavioural match'}
+                        </div>
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-slate-400">A lead from habits and network identity, not proof: clusters are not merged.</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
           {/* Evidence */}
           <div>
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Evidence</span>
