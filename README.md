@@ -109,6 +109,15 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   synthetic datasets (seeds 42/7/123) PR-AUC rose 0.978 → 0.983 and alert precision 0.924 → 0.959; certain change links
   were 100 % correct (217 of 217 on seed 42). Equal outputs remain unlinkable from amounts, so no claim is made there.
   `E6_MIXER=false` turns it off.
+- **Cash-out forecast (E7):** for every alert, where and when the money will probably reach an exchange, from the
+  cash-outs already observed in the database: delay quantiles of alerts with the same typology (p25-p75 window counted
+  from the wallet's last receipt, shown as IN_WINDOW / OVERDUE / EXPECTED_LATER against the latest data) and
+  destination probabilities from the typology plus the actor's own earlier deposits. Wallets that still hold coins go
+  into the interdiction queue (`GET /api/forecast`, `evidence.cashout_forecast` on the alert), so the freeze request can
+  be prepared before the deposit. Backtest (leave-one-actor-out, seed 42, 114 observed cash-outs): the delay window
+  covers 47 % (nominal 50 %) and 72 % (nominal 80 %); median error 5.1 h vs 5.9 h for one global median; destination
+  top-1 0.39 vs 0.33 chance, i.e. no real skill, because the synthetic actors pick exchanges at random. Expect the
+  destination part to help only where real actors reuse exchanges. `E7_FORECAST=false` turns it off.
 - **Global search:** Ctrl+K (⌘K) finds wallets, transactions, IPs, alerts, entity clusters and cases by prefix.
 - **Cross-chain exits:** give swap services and bridges `entity_type` `SWAP` or `BRIDGE` in the attribution list
   (`beans known-entities swaps.csv`). Funds traced to one get the `CROSS_CHAIN_EXIT` directive: a Bitcoin freeze no longer

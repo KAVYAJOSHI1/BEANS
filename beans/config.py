@@ -41,6 +41,7 @@ class BeansSettings(BaseSettings):
     # Engines
     E5_GNN: bool = True                   # SIGN-style graph neural features (beans/engines/e5_gnn.py)
     E6_MIXER: bool = True                 # probabilistic taint traversal through CoinJoins (beans/engines/e6_mixer.py)
+    E7_FORECAST: bool = True              # cash-out forecast per alert: where and when (beans/decision/forecast.py)
     USE_TYPOLOGY_CORPUS: bool = True      # typology model also learns from the reference corpus …
     TYPOLOGY_CORPUS_PATH: Optional[Path] = None   # … at this path (default: MODELS_DIR/typology_corpus.parquet)
 

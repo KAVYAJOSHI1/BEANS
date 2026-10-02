@@ -17,7 +17,7 @@ import pandas as pd
 import pyarrow as pa
 
 from beans.config import settings
-from beans.decision import actions as directives
+from beans.decision import actions as directives, forecast
 from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn, e6_mixer
 from beans.explain.reasons import reasons_from_shap
 from beans.explain.shap_explain import explain
@@ -193,7 +193,9 @@ def _run(conn, t0) -> dict:
     from beans.explain import counterfactual
     counterfactual.compute(alerts, Xw, shap_map, lambda X: fuse.predict(X)[0])
     timings["counterfactuals"] = round(time.time() - t0, 2); timings["mem_gb_counterfactuals"] = _peak_gb()
-    directives.recommend(alerts, W, f, directives.load_known(conn))
+    known_entities = directives.load_known(conn)
+    directives.recommend(alerts, W, f, known_entities)
+    e7_rep = forecast.attach(alerts, W, f, known_entities) if settings.E7_FORECAST else {}
     timings["actions"] = round(time.time() - t0, 2); timings["mem_gb_actions"] = _peak_gb()
     _write(conn, W, probs, alerts, mix_links)
     # watchlist: movements of already-watched wallets, then start watching new taint-watch wallets
@@ -208,7 +210,7 @@ def _run(conn, t0) -> dict:
         "evaluated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "trained": trained,
         "transactions": int(len(X_tx)), "wallets": int(len(W)), "seeds": len(seeds),
         "seeds_in_graph": e4info.get("seeds_in_graph", 0), "alerts": len(alerts),
-        "e3": e3_rep, "e6": e6_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
+        "e3": e3_rep, "e6": e6_rep, "e7": e7_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
         "feature_count": len(feats), "network_features": network_cols + TX_NETWORK_COLS,
         "watchlist": {"new_movement_events": len(watch_events), "auto_watched": auto_watched},
     }
