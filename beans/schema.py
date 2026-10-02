@@ -40,6 +40,8 @@ class CanonicalRecord(BaseModel):
     tx_version: Optional[int] = Field(None, description="Transaction nVersion")
     locktime: Optional[int] = Field(None, ge=0, description="nLockTime (block height < 500,000,000, else Unix time)")
     rbf: Optional[bool] = Field(None, description="Signals BIP-125 replace-by-fee")
+    op_return: Optional[str] = Field(None, max_length=160, description="Printable OP_RETURN memo (e.g. a swap memo), if any")
+    confirmed: Optional[bool] = Field(None, description="False = seen in the mempool, not yet in a block; None = unknown (treated as confirmed)")
 
     @field_validator("txid")
     @classmethod

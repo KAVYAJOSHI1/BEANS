@@ -114,6 +114,10 @@ export function ActionCard({ alert, onUpdateStatus, onOpenDoc, isWatched = false
               <Snowflake className="w-3.5 h-3.5" /> Draft hold request (offshore)
             </button>
           )}
+          <button onClick={() => onOpenDoc({ kind: 'bsa63', alert })} title="Section 63 BSA 2023 certificate for the electronic records behind this alert"
+            className={`${btn} bg-slate-100 text-slate-800 hover:bg-slate-200`}>
+            <Stamp className="w-3.5 h-3.5" /> Section 63 BSA certificate
+          </button>
           <button onClick={() => onOpenDoc({ kind: 'referral', alert })}
             className={`${btn} ${ra.action === 'FIU_REFERRAL_PACK' ? 'bg-violet-600 text-white hover:bg-violet-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'}`}>
             <FileText className="w-3.5 h-3.5" /> Export referral pack
@@ -143,11 +147,17 @@ const IO_FIELDS = [
   ['io_rank', 'IO rank'], ['police_station', 'Police station'], ['district_state', 'District, State'],
   ['reply_days', 'Reply within (days)'], ['vasp_address_line', "Exchange's nodal-officer address"],
 ];
+const BSA_FIELDS = [
+  ['fir_no', 'FIR / case no.'], ['fir_date', 'FIR date'], ['police_station', 'Police station'], ['district_state', 'District, State'],
+  ['certifier_name', 'Certifier (person in charge): name'], ['certifier_designation', 'Certifier: designation'], ['organisation', 'Organisation / office'],
+  ['device_description', 'Device / system the records are on'], ['expert_name', 'Expert: name'], ['expert_designation', 'Expert: designation'],
+];
 const IO_KEY = 'beans-io-details';
 const loadIO = () => { try { return JSON.parse(localStorage.getItem(IO_KEY)) || {}; } catch { return {}; } };
 const saveIO = (v) => { try { localStorage.setItem(IO_KEY, JSON.stringify(v)); } catch { /* storage blocked */ } };
 
-const TITLES = { section94: 'Section 94 BNSS notice (draft)', freeze: 'Freeze / hold request (draft)', referral: 'FIU-IND referral pack' };
+const TITLES = { section94: 'Section 94 BNSS notice (draft)', freeze: 'Freeze / hold request (draft)', referral: 'FIU-IND referral pack',
+  bsa63: 'Section 63 BSA certificate (draft)' };
 
 const save = (blob, name) => {
   const url = URL.createObjectURL(blob);
@@ -161,6 +171,7 @@ const save = (blob, name) => {
 export function DocModal({ doc, onClose }) {
   const { kind, alert } = doc;
   const legal = kind !== 'referral';
+  const bsa = kind === 'bsa63';
   const [io, setIO] = useState(loadIO);
   const [lang, setLang] = useState('en');
   const [result, setResult] = useState(null);
@@ -171,6 +182,8 @@ export function DocModal({ doc, onClose }) {
   const call = (fmt) => {
     if (!legal) return fetch(`${API_BASE}/alerts/${alert.alert_id}/referral?fmt=${fmt}`);
     if (fmt !== 'json' && result?.request) return fetch(`${API_BASE}/legal-requests/${result.request.id}?fmt=${fmt}`);
+    if (bsa) return fetch(`${API_BASE}/alerts/${alert.alert_id}/bsa63?fmt=${fmt}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) });
     return fetch(`${API_BASE}/alerts/${alert.alert_id}/legal/${kind}?fmt=${fmt}&lang=${lang}`,
       { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) });
   };
@@ -229,17 +242,20 @@ export function DocModal({ doc, onClose }) {
           <div className="p-4 border-r border-slate-200 overflow-y-auto space-y-3 text-xs">
             {legal ? (
               <>
-                <p className="text-slate-500">BEANS fills in the blockchain facts. Fields left empty stay as visible blanks for the
-                  Investigating Officer. IO details are remembered in this browser only.</p>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-700">Language</span>
-                  {[['en', 'English'], ['hi', 'हिंदी']].map(([v, l]) => (
-                    <button key={v} onClick={() => setLang(v)}
-                      className={`px-2.5 py-1 rounded-md font-bold ${lang === v ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{l}</button>
-                  ))}
-                </div>
-                {lang === 'hi' && <p className="text-amber-700">Hindi drafts need a native legal reviewer before issue; the document says so.</p>}
-                {IO_FIELDS.map(([k, label]) => (
+                <p className="text-slate-500">{bsa
+                  ? 'The certificate lists the electronic records behind this alert with their SHA-256 hash values. BEANS cannot affirm who the certifier is or that the device was in regular use: those stay blank for the signatories (Part A: person in charge, Part B: expert). Have counsel check the form before first use.'
+                  : 'BEANS fills in the blockchain facts. Fields left empty stay as visible blanks for the Investigating Officer. IO details are remembered in this browser only.'}</p>
+                {!bsa && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700">Language</span>
+                    {[['en', 'English'], ['hi', 'हिंदी']].map(([v, l]) => (
+                      <button key={v} onClick={() => setLang(v)}
+                        className={`px-2.5 py-1 rounded-md font-bold ${lang === v ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'}`}>{l}</button>
+                    ))}
+                  </div>
+                )}
+                {!bsa && lang === 'hi' && <p className="text-amber-700">Hindi drafts need a native legal reviewer before issue; the document says so.</p>}
+                {(bsa ? BSA_FIELDS : IO_FIELDS).map(([k, label]) => (
                   <label key={k} className="block">
                     <span className="font-semibold text-slate-700">{label}</span>
                     <input value={io[k] || ''} onChange={(e) => setIO({ ...io, [k]: e.target.value })}
@@ -264,6 +280,7 @@ export function DocModal({ doc, onClose }) {
                   <div className="flex items-center gap-1.5 font-bold text-slate-800"><Stamp className="w-3.5 h-3.5 text-emerald-600" /> Evidence seal</div>
                   <div className="text-slate-500">SHA-256</div>
                   <div className="font-mono text-[10px] break-all text-slate-800">{result.evidence_sha256}</div>
+                  {result.verification_code && <div className="text-slate-600">Verification code <span className="font-mono font-bold">{result.verification_code}</span></div>}
                   {ts?.status === 'stamped' ? (
                     <div className="text-slate-600">RFC 3161 · {ts.gen_time} · serial {ts.serial}</div>
                   ) : (
@@ -277,7 +294,7 @@ export function DocModal({ doc, onClose }) {
                   </div>
                 )}
                 {result.missing_fields?.length > 0 && (
-                  <div className="text-amber-700">Blank for the IO: {result.missing_fields.join(', ')}</div>
+                  <div className="text-amber-700">Blank for the signatories: {result.missing_fields.join(', ')}</div>
                 )}
                 <div className="grid grid-cols-3 gap-1.5">
                   {['pdf', 'html', 'json'].map((f) => (

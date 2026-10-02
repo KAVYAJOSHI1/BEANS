@@ -90,6 +90,38 @@ class IngestWorker:
         self.unscored_rows += rows
         return rows
 
+    @staticmethod
+    def _db_now():
+        from beans.alerting import watch
+        from beans.store.duck import DuckStore
+        conn = DuckStore().get_connection()
+        try:
+            return watch.db_now(conn)
+        finally:
+            conn.close()
+
+    def quick_watch(self, since) -> int:
+        """Right after a load, before any scoring: report spends by watched wallets and seeds in the new files."""
+        from beans.alerting import watch, webhooks
+        from beans.store.duck import DuckStore
+        try:
+            store = DuckStore()
+            conn = store.get_connection()
+            try:
+                events = watch.quick_check(conn, since)
+            finally:
+                conn.close()
+        except Exception as e:   # the fast path must never stop loading or scoring
+            self.state["last_error"] = f"quick watch failed: {e}"[:300]
+            self.log(f"  quick watch failed: {e}")
+            return 0
+        if events:
+            self.state["quick_events"] = self.state.get("quick_events", 0) + len(events)
+            unconf = sum(1 for e in events if not e["confirmed"])
+            self.log(f"  ! {len(events)} watched/seed wallet movement(s) in the new data ({unconf} unconfirmed)")
+            webhooks.dispatch_in_background(store)
+        return len(events)
+
     def score(self) -> dict:
         from beans.ingest.pipeline import ForensicPipeline
         self.state["scoring"] = True
@@ -113,7 +145,9 @@ class IngestWorker:
         self.inbox.mkdir(parents=True, exist_ok=True)
         files = self.ready_files()
         if files:
+            since = self._db_now()
             self.load(files)
+            self.quick_watch(since)
         if self.unscored_rows and time.time() - self.last_score >= self.score_every:
             try:
                 self.score()

@@ -42,6 +42,8 @@ DEFAULT_COLUMN_MAPPING = {
     "tx_version": ["tx_version", "version", "nversion"],
     "locktime": ["locktime", "nlocktime", "lock_time"],
     "rbf": ["rbf", "replaceable", "bip125_replaceable", "opt_in_rbf"],
+    "confirmed": ["confirmed", "is_confirmed", "in_block"],
+    "op_return": ["op_return", "opreturn", "memo"],
 }
 SCRIPT_TYPES = {"P2PKH", "P2SH", "P2WPKH", "P2WSH", "P2TR"}
 OPTION_KEYS = {"amount_unit"}
@@ -136,7 +138,7 @@ def _opt_int(v):
     return None if v in (None, "") else int(float(v))
 
 
-def _opt_bool(v):
+def _opt_bool(v, name="rbf"):
     if v in (None, ""):
         return None
     s = str(v).strip().lower()
@@ -144,9 +146,11 @@ def _opt_bool(v):
         return True
     if s in ("0", "false", "no", "n", "f"):
         return False
-    raise ValueError(f"rbf: cannot read {v!r} as true/false")
+    raise ValueError(f"{name}: cannot read {v!r} as true/false")
 
 
 def fingerprint(n: dict) -> dict:
     """Optional wallet-software fields; absent → None (never guessed)."""
-    return {"tx_version": _opt_int(n.get("tx_version")), "locktime": _opt_int(n.get("locktime")), "rbf": _opt_bool(n.get("rbf"))}
+    return {"tx_version": _opt_int(n.get("tx_version")), "locktime": _opt_int(n.get("locktime")), "rbf": _opt_bool(n.get("rbf")),
+            "confirmed": _opt_bool(n.get("confirmed"), "confirmed"),
+            "op_return": (str(n["op_return"]).strip()[:160] or None) if n.get("op_return") not in (None, "") else None}

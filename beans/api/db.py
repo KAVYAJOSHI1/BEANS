@@ -14,7 +14,7 @@ from typing import Any, Iterable, Optional
 from beans.store.duck import DuckStore
 
 JSON_COLUMNS = {"payload", "shap_top_features", "engine_scores", "evidence", "details", "recommended_action", "destinations",
-                "io", "annex", "timestamp_token"}
+                "io", "annex", "timestamp_token", "forecast"}
 
 _API_DDL = """
 CREATE TABLE IF NOT EXISTS ingest_log (

@@ -105,7 +105,7 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   whose amount fits (input − denomination − fee share): probability 1 when exactly one input fits, 1/n when n fit. E4
   uses these links as edge weights, so a tainted participant's change stays tainted and pool outputs carry taint/k.
   Alerts list the mixing transactions they touched, with candidate counterparties and inherited taint
-  (`evidence.mixer_traversal`); the link graph draws the links as dotted amber edges; `GET /api/mixer/{txid}`. On 3
+  (`evidence.mixer_traversal`); the link graph draws the links as dotted amber edges; `GET /api/mixer/{txid}`, and the **Mixer Lab** page (link matrix per mixing transaction). On 3
   synthetic datasets (seeds 42/7/123) PR-AUC rose 0.978 → 0.983 and alert precision 0.924 → 0.959; certain change links
   were 100 % correct (217 of 217 on seed 42). Equal outputs remain unlinkable from amounts, so no claim is made there.
   `E6_MIXER=false` turns it off.
@@ -113,7 +113,7 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   cash-outs already observed in the database: delay quantiles of alerts with the same typology (p25-p75 window counted
   from the wallet's last receipt, shown as IN_WINDOW / OVERDUE / EXPECTED_LATER against the latest data) and
   destination probabilities from the typology plus the actor's own earlier deposits. Wallets that still hold coins go
-  into the interdiction queue (`GET /api/forecast`, `evidence.cashout_forecast` on the alert), so the freeze request can
+  into the interdiction queue (the **Cash-Out Forecast** page, `GET /api/forecast`, `evidence.cashout_forecast` on the alert), so the freeze request can
   be prepared before the deposit. Backtest (leave-one-actor-out, seed 42, 114 observed cash-outs): the delay window
   covers 47 % (nominal 50 %) and 72 % (nominal 80 %); median error 5.1 h vs 5.9 h for one global median; destination
   top-1 0.39 vs 0.33 chance, i.e. no real skill, because the synthetic actors pick exchanges at random. Expect the
@@ -127,6 +127,23 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   broadcast from their own addresses. **Without network identity** (behaviour only, the number to expect on real
   data where the first relay is not the sender) it is 30-41 % at top 5 against 3-5 % for random ranking, and 13-30 %
   at top 1 (23-33 operators per dataset, so wide error bars). `E8_OPERATOR=false` turns it off.
+- **Section 63 BSA certificate:** one click on an alert (or a case) drafts the certificate for the electronic records
+  behind it (Section 63 of the Bharatiya Sakshya Adhiniyam, 2023): source files and every transaction record with its
+  SHA-256, a digest over all of them, the sealed annex (SHA-256 + RFC 3161) and a verification code. Part A (person in
+  charge) and Part B (expert) stay blank for the signatories: BEANS cannot affirm lawful control of the device or its
+  regular use. It is filed like the Section 94 and freeze drafts (pending until a *different* supervisor approves,
+  audited), and `POST /api/bsa63/verify` recomputes every hash of a stored annex. The code proves the annex is unchanged,
+  not that a court will admit it; have counsel check the wording against the Schedule before first use.
+- **Unconfirmed-first monitoring:** the ingest worker checks every newly loaded file against the watchlist and the seed
+  wallets straight away, without waiting for the next scoring run (at most once a minute). A transaction the collector saw
+  in the mempool (`confirmed` = false) becomes an `UNCONFIRMED_MOVEMENT` event: a heads-up, never a freeze trigger, because
+  the coins can still be replaced (BIP-125 is flagged) or dropped and have reached no exchange. The next scoring run adds the
+  exchange trace, and the event carries the cash-out forecast. Files without a `confirmed` column behave as before.
+- **Swap memos:** the collector keeps printable `OP_RETURN` payloads. A THORChain-style swap memo
+  (`=:ETH.ETH:0x…:limit`) names the destination chain and address on the chain itself, so funds traced to such a
+  transaction get the `CROSS_CHAIN_EXIT` directive with the destination, no attribution list needed. THORChain and Maya share
+  the grammar, so the match says "a swap in this style". Whether the swap completed is not visible from Bitcoin, and
+  FixedFloat / ChangeNOW / SideShift cannot be recognised from the chain alone (they still need `known-entities`).
 - **Global search:** Ctrl+K (⌘K) finds wallets, transactions, IPs, alerts, entity clusters and cases by prefix.
 - **Cross-chain exits:** give swap services and bridges `entity_type` `SWAP` or `BRIDGE` in the attribution list
   (`beans known-entities swaps.csv`). Funds traced to one get the `CROSS_CHAIN_EXIT` directive: a Bitcoin freeze no longer

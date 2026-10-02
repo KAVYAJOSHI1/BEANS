@@ -19,6 +19,7 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
         raise FileNotFoundError("no training report yet: run the pipeline on a labelled dataset first")
     r = json.loads(REPORT_PATH.read_text())
     fu, e3, e1, e4, aq = r.get("fusion", {}), r.get("e3", {}), r.get("e1", {}), r.get("e4", {}), r.get("alert_quality", {})
+    e6, e7, e8 = r.get("e6", {}), r.get("e7", {}), r.get("e8", {})
     m = []
 
     def add(engine, metric, score, target=None, baseline=None):
@@ -42,6 +43,15 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
     add("E4 seed propagation", "All hidden illicit wallets reached (most entities have no seed)", e4.get("hidden_reached"),
         None, e4.get("legit_reached"))
     add("Typology model", "Accuracy on illicit wallets, grouped CV", fu.get("typology_accuracy_grouped_cv"), ">= 0.70")
+    add("E6 mixer traversal", "Certain change links that are correct", e6.get("change_link_precision_p1"), ">= 0.95")
+    add("E7 cash-out forecast", "Observed deposit delay inside the predicted 25th-75th percentile window (nominal 0.50)",
+        e7.get("delay_coverage_p25_p75"), "about 0.50")
+    add("E7 cash-out forecast", "Destination: top-1 exchange correct (baseline: chance)", e7.get("destination_top1"),
+        None, e7.get("destination_top1_uniform_baseline"))
+    add("E8 same-operator leads", "Sibling cluster in the top 5, behaviour only (baseline: random ranking)",
+        (e8.get("without_network") or {}).get("hit_at_5"), None, e8.get("hit_at_5_random"))
+    add("E8 same-operator leads", "Sibling cluster in the top 5, with network identity (synthetic operators own their IPs)",
+        e8.get("hit_at_5"), None, e8.get("hit_at_5_random"))
 
     ext = _elliptic()
     if ext:
@@ -57,7 +67,7 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
     conf = e3.get("confusion")
     card = {
         "model_overview": {
-            "name": "BEANS: five engines + calibrated fusion",
+            "name": "BEANS: five engines + calibrated fusion, with mixer traversal, cash-out forecast and operator leads",
             "evaluated_at": r.get("evaluated_at"), "trained_this_run": r.get("trained"),
             "transactions": r.get("transactions"), "wallets": r.get("wallets"),
             "illicit_wallets": fu.get("illicit_wallets"), "illicit_entities": fu.get("illicit_entities"),
@@ -71,6 +81,7 @@ def build_model_card(conn=None, labels_path: Optional[Path] = None) -> Dict[str,
         "e3_per_class_f1": e3.get("per_class_f1"),
         "e1_clustering": {k: v for k, v in e1.items() if not isinstance(v, (list, dict))},
         "e4_propagation": e4,
+        "e6_mixer": e6, "e7_forecast": e7, "e8_operator": e8,
         "alert_quality": aq,
         "evaluation_protocol": {
             "split": "StratifiedGroupKFold (5 folds) by entity; calibration on held-out entities inside each fold",

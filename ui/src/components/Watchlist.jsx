@@ -27,6 +27,12 @@ export default function Watchlist({ events, watchlist, alerts, onChanged, onSele
             {e.status === 'OPEN' && <span className="w-2 h-2 rounded-full bg-red-500 pulse-dot" />}
             <ArrowRightLeft className="w-4 h-4 text-red-600" />
             <span className="font-bold text-slate-900 text-sm">{Number(e.amount_btc).toFixed(8)} BTC moved</span>
+            {e.confirmed === false && (
+              <span className="px-1.5 py-0.5 rounded border border-amber-300 bg-amber-100 text-amber-800 text-[10px] font-bold"
+                title="Seen in the mempool, not in a block yet: it can still be replaced or dropped">
+                UNCONFIRMED{e.replaceable ? ' · replaceable (RBF)' : ''}
+              </span>
+            )}
             <span className="text-slate-500">from</span>
             <button onClick={() => onInspectEntity(e.address)} className="font-mono text-blue-700 hover:underline">{short(e.address, 18)}</button>
           </div>
@@ -40,16 +46,19 @@ export default function Watchlist({ events, watchlist, alerts, onChanged, onSele
                 <Building2 className="w-3 h-3" /> {e.vasp} {e.vasp_in_jurisdiction ? '(India, §94 BNSS)' : '(outside India)'}
               </span>
             ) : <span className="text-slate-700">no known exchange within 4 hops yet</span>}
+            {e.forecast?.likely_exchange && !e.vasp && (
+              <span className="block text-[10px] text-slate-500">forecast: likely {e.forecast.likely_exchange} within {Math.round(e.forecast.delay_minutes.p25)}-{Math.round(e.forecast.delay_minutes.p75)} min of receipt</span>
+            )}
           </div>
           <div><span className="text-slate-500">First relay: </span><span className="font-mono">{e.first_spy_ip || 'unknown'}</span> <span className="text-slate-500">{e.first_spy_asn_type} {e.first_spy_country}</span></div>
           <div><span className="text-slate-500">Moved </span><b>{e.minutes_since_move} min</b><span className="text-slate-500"> before the latest data · tx </span><span className="font-mono">{short(e.txid, 12)}</span></div>
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-slate-500">Watched because: {e.watch_reason === 'AUTO_TAINT_WATCH' ? 'taint-watch directive' : e.watch_reason === 'CASE' ? `suspect in case #${e.case_id}` : 'analyst'}</span>
+          <span className="text-slate-500">Watched because: {e.watch_reason === 'AUTO_TAINT_WATCH' ? 'taint-watch directive' : e.watch_reason === 'CASE' ? `suspect in case #${e.case_id}` : e.watch_reason === 'SEED' ? 'known-bad seed wallet' : 'analyst'}</span>
           <span className="flex-1" />
           {alert && (
-            <button onClick={() => onSelectAlert(alert)} className={`px-3 py-1.5 rounded-lg font-bold ${e.vasp ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-900 text-white'}`}>
-              {e.vasp ? 'Open alert → draft freeze request' : 'Open alert'}
+            <button onClick={() => onSelectAlert(alert)} className={`px-3 py-1.5 rounded-lg font-bold ${e.vasp && e.confirmed !== false ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-slate-900 text-white'}`}>
+              {e.confirmed === false ? 'Open alert (wait for confirmation before any freeze)' : e.vasp ? 'Open alert → draft freeze request' : 'Open alert'}
             </button>
           )}
           {e.status === 'OPEN' && (

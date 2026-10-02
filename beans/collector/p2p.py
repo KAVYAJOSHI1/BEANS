@@ -36,7 +36,8 @@ MSG_TX, MSG_WITNESS_TX = 1, 0x40000001
 DNS_SEEDS = ["seed.bitcoin.sipa.be", "dnsseed.bluematt.me", "seed.bitcoinstats.com", "seed.bitcoin.jonasschnelli.ch",
              "seed.btc.petertodd.net", "seed.bitcoin.sprovoost.nl"]
 COLS = ["timestamp", "src_ip", "src_port", "dst_ip", "dst_port", "txid", "input_addresses", "input_amounts",
-        "output_addresses", "output_amounts", "fee", "script_type", "tx_version", "locktime", "rbf", "unresolved_inputs"]
+        "output_addresses", "output_amounts", "fee", "script_type", "tx_version", "locktime", "rbf", "unresolved_inputs",
+        "confirmed", "op_return"]
 
 
 # ---------------------------------------------------------------------------------------------- encoding helpers
@@ -114,6 +115,19 @@ def script_address(spk: bytes) -> Tuple[Optional[str], str]:
     return None, "UNKNOWN"
 
 
+def op_return_memo(spk: bytes) -> Optional[str]:
+    """Printable text of a single-push OP_RETURN output (the form swap memos use); None otherwise."""
+    if len(spk) < 3 or spk[0] != 0x6A:
+        return None
+    n, off = spk[1], 2
+    if n == 0x4C and len(spk) > 2:      # OP_PUSHDATA1
+        n, off = spk[2], 3
+    if n > 0x4C and off == 2 or len(spk) != off + n:
+        return None
+    from beans.enrich.swaps import decode_memo
+    return decode_memo(spk[off:])
+
+
 # ---------------------------------------------------------------------------------------------- transaction parsing
 class _Reader:
     def __init__(self, b: bytes):
@@ -156,6 +170,7 @@ class Tx:
     locktime: int
     inputs: List[Tuple[str, int, bytes, List[bytes], int]]        # prev txid, vout, scriptSig, witness, sequence
     outputs: List[Tuple[Optional[str], int, str]]                 # address, value (sat), script type
+    memo: Optional[str] = None                                    # printable OP_RETURN payload, if any
 
     @property
     def rbf(self) -> bool:
@@ -173,11 +188,13 @@ def parse_tx(raw: bytes) -> Tx:
         prev = r.take(32)[::-1].hex()
         vout = r.u32()
         ins.append([prev, vout, r.varbytes(), [], r.u32()])
-    outs = []
+    outs, memo = [], None
     for _ in range(r.varint()):
         value = r.u64()
-        addr, typ = script_address(r.varbytes())
+        spk = r.varbytes()
+        addr, typ = script_address(spk)
         outs.append((addr, value, typ))
+        memo = memo or op_return_memo(spk)
     if segwit:
         for vin in ins:
             vin[3] = [r.varbytes() for _ in range(r.varint())]
@@ -186,7 +203,7 @@ def parse_tx(raw: bytes) -> Tx:
     base = struct.pack("<i", version) + varint(len(ins)) + b"".join(
         bytes.fromhex(p)[::-1] + struct.pack("<I", v) + varint(len(s)) + s + struct.pack("<I", q) for p, v, s, _, q in ins) \
         + varint(len(outs)) + b"".join(_out_bytes(raw, outs)) + struct.pack("<I", locktime)
-    return Tx(sha256d(base)[::-1].hex(), version, locktime, [tuple(x) for x in ins], outs)
+    return Tx(sha256d(base)[::-1].hex(), version, locktime, [tuple(x) for x in ins], outs, memo)
 
 
 def _out_bytes(raw, outs):
@@ -319,7 +336,7 @@ class Collector:
         return [datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z", ip, port,
                 "collector", 8333, tx.txid, ";".join(in_addr), ";".join(f"{x:.8f}" for x in in_amt),
                 ";".join(a for a, _ in outs), ";".join(f"{v / 1e8:.8f}" for _, v in outs), fee, stype,
-                tx.version, tx.locktime, int(tx.rbf), unresolved]
+                tx.version, tx.locktime, int(tx.rbf), unresolved, 0, tx.memo or ""]   # confirmed=0: seen in the mempool
 
     def observe(self, txid: str, ts: float, ip: str, port: int):
         tx = self.txs.get(txid)

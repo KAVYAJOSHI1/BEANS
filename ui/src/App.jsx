@@ -22,6 +22,8 @@ const Approvals = lazy(() => import('./components/Approvals'));
 const AuditTrail = lazy(() => import('./components/AuditTrail'));
 const LiveMonitor = lazy(() => import('./components/LiveMonitor'));
 const ReviewQueue = lazy(() => import('./components/ReviewQueue'));
+const ForecastPage = lazy(() => import('./components/ForecastPage'));
+const MixerLab = lazy(() => import('./components/MixerLab'));
 // Warm the graph chunk in the background once the shell is up.
 const preloadGraph = () => import('./components/LinkGraph');
 
@@ -419,6 +421,10 @@ export default function App() {
         {activeTab === 'review' && (
           <ReviewQueue onSelectAlert={openAlert} onInspectEntity={inspectEntity} onDataChanged={fetchAllData} />
         )}
+
+        {activeTab === 'forecast' && <ForecastPage onSelectAlert={openAlert} onInspectEntity={inspectEntity} />}
+
+        {activeTab === 'mixer' && <MixerLab />}
 
         {activeTab === 'approvals' && (
           <Approvals onChanged={() => fetch(`${API_BASE}/legal-requests?status=PENDING_APPROVAL`).then((r) => r.json())

@@ -28,7 +28,7 @@ class Frames:
 def load_frames(conn) -> Frames:
     # every query is explicitly ordered: DuckDB's parallel scans return rows in varying order, and row order
     # changes model training (bagging) → results must be reproducible run to run
-    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type, tx_version, locktime, rbf FROM transactions "
+    tx = conn.execute("SELECT txid, timestamp AS ts, fee, script_type, tx_version, locktime, rbf, op_return FROM transactions "
                       "ORDER BY txid").df()
     tin = conn.execute("""SELECT * FROM (SELECT txid, timestamp AS ts, generate_subscripts(input_addresses, 1) AS idx,
                           unnest(input_addresses) AS address, unnest(input_amounts) AS amount FROM transactions)
@@ -104,7 +104,7 @@ def tx_features(f: Frames) -> pd.DataFrame:
         cid = min(comp)[:12]
         for t in comp:
             chain_len[t], chain_id[t] = len(comp), cid
-    X["peel_chain_len"] = pd.Series(chain_len).reindex(X.index).fillna(0)
+    X["peel_chain_len"] = pd.Series(chain_len, dtype=float).reindex(X.index).fillna(0)   # float even with no chain at all
     X.attrs["peel_chain_id"] = chain_id
 
     # --- round trip: value comes back to one of the input addresses within 3 hops

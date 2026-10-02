@@ -107,5 +107,5 @@ class StreamingXMLParser:
             output_amounts=out_amts,
             fee=fee,
             script_type=script_type,
-            **fingerprint({k: elem.attrib.get(k) or elem.findtext(k) for k in ("tx_version", "locktime", "rbf")}),
+            **fingerprint({k: elem.attrib.get(k) or elem.findtext(k) for k in ("tx_version", "locktime", "rbf", "confirmed", "op_return")}),
         )

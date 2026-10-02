@@ -2,6 +2,17 @@ import React, { useState } from 'react';
 import { Briefcase, Download, Plus, FileText, CheckCircle2, Shield, Hash, ArrowDownToLine } from 'lucide-react';
 
 export default function CaseManager({ cases, onCreateCase, onExportDossier, exportResult, onWatchCase }) {
+  const [certMsg, setCertMsg] = React.useState(null);
+  // files a Section 63 BSA certificate request for the whole case; the signatories' details are completed on the draft
+  const fileCertificate = async (caseId) => {
+    let io = {};
+    try { io = JSON.parse(localStorage.getItem('beans-io-details')) || {}; } catch { /* storage blocked */ }
+    const r = await fetch(`/api/cases/${caseId}/bsa63`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(io) });
+    const body = await r.json().catch(() => ({}));
+    setCertMsg(r.ok
+      ? { ok: true, text: `Section 63 certificate filed as request #${body.request?.id} (verification code ${body.verification_code}). A different supervisor approves it on the Legal Approvals page.` }
+      : { ok: false, text: body.detail || `HTTP ${r.status}` });
+  };
   const [caseName, setCaseName] = useState('');
   const [incidentType, setIncidentType] = useState('RANSOMWARE');
   const [notes, setNotes] = useState('');
@@ -150,6 +161,10 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
                   >
                     Preview
                   </button>
+                  <button onClick={() => fileCertificate(c.id)} title="Section 63 BSA certificate for all alerts in this case (filed for supervisor approval)"
+                    className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs hover:bg-slate-200">
+                    §63 certificate
+                  </button>
                   <a href={`/api/cases/${c.id}/export?fmt=pdf`}
                     className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold text-xs hover:bg-slate-800 flex items-center gap-1">
                     <Download className="w-3.5 h-3.5" /> PDF
@@ -160,6 +175,10 @@ export default function CaseManager({ cases, onCreateCase, onExportDossier, expo
               </div>
             ))}
           </div>
+
+          {certMsg && (
+            <div className={`text-xs px-3 py-2 rounded-lg border ${certMsg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>{certMsg.text}</div>
+          )}
 
           {/* Dossier Preview if generated */}
           {exportResult && (

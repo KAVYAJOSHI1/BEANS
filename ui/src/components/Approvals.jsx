@@ -8,7 +8,7 @@ const STATUS_CLS = {
   APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   REJECTED: 'bg-red-50 text-red-700 border-red-200',
 };
-const KIND = { section94: 'Section 94 BNSS notice', freeze: 'Freeze / hold request' };
+const KIND = { section94: 'Section 94 BNSS notice', freeze: 'Freeze / hold request', BSA63: 'Section 63 BSA certificate' };
 
 export default function Approvals({ onChanged }) {
   const { user, authEnabled } = useSession();
@@ -52,7 +52,7 @@ export default function Approvals({ onChanged }) {
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2"><Stamp className="w-4 h-4 text-blue-600" /> Legal drafts</h2>
           <button onClick={load} className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100"><RefreshCw className="w-3.5 h-3.5" /></button>
         </div>
-        <p className="text-xs text-slate-500">Section 94 and freeze drafts need a supervisor's approval, by someone other than the drafter, before a final copy can be issued.</p>
+        <p className="text-xs text-slate-500">Section 94, freeze and Section 63 certificate drafts need a supervisor's approval, by someone other than the drafter, before a final copy can be issued.</p>
         <div className="flex gap-1 text-xs">
           {['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'ALL'].map((s) => (
             <button key={s} onClick={() => setFilter(s)}
@@ -70,7 +70,7 @@ export default function Approvals({ onChanged }) {
                 <span className="font-bold text-slate-900">#{r.id} · {KIND[r.kind] || r.kind}</span>
                 <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${STATUS_CLS[r.status]}`}>{r.status.replace('_', ' ')}</span>
               </div>
-              <div className="text-slate-500 mt-1">{r.vasp} · wallet <span className="font-mono">{r.entity_id?.slice(0, 14)}…</span></div>
+              <div className="text-slate-500 mt-1">{r.vasp || 'electronic-record certificate'} · wallet <span className="font-mono">{r.entity_id?.slice(0, 14)}…</span></div>
               <div className="text-slate-400 mt-0.5">drafted by {r.created_by} · {String(r.created_at).slice(0, 16)}{r.decided_by ? ` · ${r.status.toLowerCase()} by ${r.decided_by}` : ''}</div>
             </button>
           ))}

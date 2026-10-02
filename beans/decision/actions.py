@@ -55,8 +55,8 @@ ACTIONS: Dict[str, Dict[str, str]] = {
     },
     "CROSS_CHAIN_EXIT": {
         "title": "Funds left Bitcoin: request swap records, trace the other chain",
-        "rule": f"Funds traced (≤ {MAX_HOPS} hops) to a known swap service or bridge (e.g. BTC → XMR / ETH). A Bitcoin "
-                "freeze no longer reaches them",
+        "rule": f"Funds traced (≤ {MAX_HOPS} hops) to a known swap service or bridge (e.g. BTC → XMR / ETH), or to a "
+                "transaction whose OP_RETURN memo names a swap destination. A Bitcoin freeze no longer reaches them",
         "legal_basis": "Section 94 BNSS 2023 to the swap service (Letter of Request, Section 112 BNSS, if offshore) for "
                        "the order: payout chain, payout address, IP, account; then trace on the destination chain",
         "priority": "3",
@@ -114,6 +114,14 @@ class _Flows:
         for t, a in zip(f.tout["txid"], f.tout["address"]):
             self.recv_txids[a].append(t)
         self.last_seen = pd.concat([f.tin[["address", "ts"]], f.tout[["address", "ts"]]]).groupby("address")["ts"].max()
+        # swap memos: transactions that name their destination chain and address in an OP_RETURN output
+        self.swaps: Dict[str, dict] = {}
+        if "op_return" in f.tx:
+            from beans.enrich.swaps import parse_memo
+            for t, m in zip(f.tx["txid"], f.tx["op_return"]):
+                parsed = parse_memo(m) if isinstance(m, str) else None
+                if parsed:
+                    self.swaps[t] = parsed
 
     def trace_to_vasp(self, addr: str, known: Dict[str, dict]) -> List[dict]:
         """Every deposit to a known exchange / swap service / bridge reachable from `addr` (≤ MAX_HOPS spends, forward
@@ -129,6 +137,16 @@ class _Flows:
             if txid in seen:
                 continue
             seen.add(txid)
+            sw = self.swaps.get(txid)
+            if sw:   # the vault is not named in the memo: the largest output that does not go back to a sender
+                senders = self.ins_of.get(txid, set())
+                outs = [(o, a) for o, a in self.outs.get(txid, []) if o not in senders]
+                vault, amt = max(outs, key=lambda x: x[1]) if outs else (None, 0.0)
+                delay = None if start is None else (ts - start).total_seconds() / 60
+                hits.append({"vasp": f"{sw['destination_chain'] or 'unknown chain'} swap (memo)", "entity_type": "SWAP",
+                             "in_jurisdiction": False, "country": None, "deposit_address": vault, "txid": txid,
+                             "path": path, "hops": hop, "amount_btc": round(amt, 8), "deposit_ts": str(ts),
+                             "minutes_after_receipt": None if delay is None else round(delay, 1), "swap": sw})
             for o, amt in self.outs.get(txid, []):
                 k = known.get(o)
                 if k and k["entity_type"] in EXIT_TYPES:
@@ -195,7 +213,10 @@ def _decide(alert: dict, w: pd.Series, flows: _Flows, known: Dict[str, dict], no
             "amount_btc": h["amount_btc"], "deposit_ts": h["deposit_ts"], "hops": h["hops"],
             "services_reached": sorted({x["vasp"] for x in exits}),
             "btc_to_services": round(sum(x["amount_btc"] for x in exits), 8),
-            "check": f"deposit to {h['vasp']} ({h['entity_type'].lower()}) {h['hops']} hop(s) from the wallet"}))
+            "destination": h.get("swap"),
+            "check": (f"swap memo in tx {h['txid'][:16]}…: {h['swap']['asset']} to {h['swap']['destination_address']}, "
+                      f"{h['hops']} hop(s) from the wallet" if h.get("swap") else
+                      f"deposit to {h['vasp']} ({h['entity_type'].lower()}) {h['hops']} hop(s) from the wallet")}))
 
     # value is measured over the whole CIOH cluster (one owner): launderers split funds over many small wallets
     moved = max(float(w.get("sent_btc", 0)), float(w.get("recv_btc", 0)), float(w.get("_cluster_sent_btc", 0)))

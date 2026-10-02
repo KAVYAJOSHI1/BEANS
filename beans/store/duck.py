@@ -244,8 +244,10 @@ class DuckStore:
         """)
         # migrations for databases created by earlier versions
         conn.execute("ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action JSON")
-        for col, typ in (("tx_version", "INTEGER"), ("locktime", "BIGINT"), ("rbf", "BOOLEAN")):
+        for col, typ in (("tx_version", "INTEGER"), ("locktime", "BIGINT"), ("rbf", "BOOLEAN"), ("confirmed", "BOOLEAN"), ("op_return", "VARCHAR")):
             conn.execute(f"ALTER TABLE transactions ADD COLUMN IF NOT EXISTS {col} {typ}")
+        for col, typ in (("confirmed", "BOOLEAN"), ("replaceable", "BOOLEAN"), ("detected_via", "VARCHAR"), ("forecast", "JSON")):
+            conn.execute(f"ALTER TABLE watch_events ADD COLUMN IF NOT EXISTS {col} {typ}")
         # tamper-evident audit trail: every row carries the hash of the previous one (beans/api/db.py: audit)
         for col in ("prev_hash", "row_hash"):
             conn.execute(f"ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS {col} VARCHAR")
@@ -270,7 +272,7 @@ class DuckStore:
                     "src_port": r.src_port, "dst_ip": r.dst_ip, "dst_port": r.dst_port, "geo_country": r.geo_country,
                     "geo_city": r.geo_city, "geo_lat": r.geo_lat, "geo_lon": r.geo_lon, "asn": r.asn,
                     "asn_name": r.asn_name, "asn_type": r.asn_type,
-                    "tx_version": r.tx_version, "locktime": r.locktime, "rbf": r.rbf,
+                    "tx_version": r.tx_version, "locktime": r.locktime, "rbf": r.rbf, "confirmed": r.confirmed, "op_return": r.op_return,
                 }
             obs_rows.append({
                 "id": f"obs_{r.txid[:12]}_{r.src_ip}_{int(ts.timestamp() * 1000)}", "timestamp": ts, "txid": r.txid,

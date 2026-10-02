@@ -82,3 +82,11 @@ def test_mixer_api_and_alert_evidence(client):
     pools = [x for x in r["links"] if x["kind"] == "POOL"]
     assert all(abs(x["prob"] - 1 / r["anonymity_set"]) < 1e-9 for x in pools)
     assert c.get("/api/mixer/" + "0" * 64).status_code == 404
+
+
+def test_mixing_transaction_list(client):
+    r = client.get("/api/mixer/transactions").json()["transactions"]
+    assert r and all(x["anonymity_set"] >= 3 for x in r)
+    certain = [x["certain_change"] for x in r]
+    assert certain == sorted(certain, reverse=True)           # the most informative mixes come first
+    assert client.get(f"/api/mixer/{r[0]['txid']}").json()["anonymity_set"] == r[0]["anonymity_set"]

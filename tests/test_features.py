@@ -124,3 +124,17 @@ def test_every_ingest_path_logs_the_file(client, dataset, tmp_path):
     rows = {r["file"]: r for r in db.query("SELECT file, sha256, source FROM ingest_log")}
     assert any(k.endswith("f.csv") and r["source"] == "UPLOAD" for k, r in rows.items())   # the fixture's API upload
     assert rows["cli_copy.csv"] == {"file": "cli_copy.csv", "sha256": hashlib.sha256(f.read_bytes()).hexdigest(), "source": "WATCH"}
+
+
+def test_single_transaction_database_has_numeric_features():
+    """A tiny live file (one transaction, no peel chain) must still give a purely numeric matrix: the persisted model rejects object columns."""
+    import pandas as pd
+    from beans.features.extractors import Frames, tx_features
+    ts = pd.Timestamp("2026-09-01 10:00")
+    f = Frames(pd.DataFrame([{"txid": "t", "ts": ts, "fee": 0.0001, "script_type": "P2WPKH"}]),
+               pd.DataFrame([{"txid": "t", "ts": ts, "address": "a", "amount": 1.0}]),
+               pd.DataFrame([{"txid": "t", "ts": ts, "idx": 0, "address": "b", "amount": 0.9}]),
+               pd.DataFrame([{"txid": "t", "spy_ip": "1.2.3.4", "spy_port": 8333, "spy_country": "US", "spy_asn": "AS1",
+                              "spy_asn_type": "RESIDENTIAL", "n_obs": 1, "spy_delta": float("nan")}]))
+    X = tx_features(f)
+    assert all(pd.api.types.is_numeric_dtype(t) for t in X.dtypes), X.dtypes[~X.dtypes.map(pd.api.types.is_numeric_dtype)]

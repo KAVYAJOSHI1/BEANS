@@ -26,6 +26,11 @@ Rows that fail validation go to `data/quarantine.csv` with the reason. BEANS nev
 `locktime` (`nlocktime`, `lock_time`), `rbf` (`replaceable`, `bip125_replaceable`, `opt_in_rbf`; true/false or 1/0).
 When present, clustering refuses to call an output "change" if it is later spent by different wallet software than
 the sender's, and can identify change by matching software. When absent they are simply not used (never guessed).
+
+**Optional `confirmed` column** (`is_confirmed`, `in_block`; true/false or 1/0): `false` marks a transaction seen in the mempool and not yet
+in a block. The collector writes it. When absent the transaction counts as confirmed, so historic files behave as before. Watched-wallet and
+seed movements that are unconfirmed are reported at once as `UNCONFIRMED_MOVEMENT` (a heads-up: the coins can still be replaced or dropped, and a freeze is never
+drafted from them); the next scoring run adds the exchange trace.
 Entity 360 shows each wallet's fingerprint(s).
 
 ## 2. File formats
@@ -140,7 +145,7 @@ scoring run, alerts at or above each hook's `min_severity` are sent once per hoo
 A separate tool for a connected machine; the analysis product stays offline. It connects to Bitcoin peers you choose
 (`--peer host:port`, or `--dns-seed`), completes the version handshake, listens for transaction announcements, fetches
 each new transaction once and writes **one row per (transaction, announcing peer)** in the input format above, plus
-`tx_version`, `locktime`, `rbf` and `unresolved_inputs`. Files rotate atomically into `--out` (default `data/inbox`),
+`tx_version`, `locktime`, `rbf`, `unresolved_inputs` and `confirmed` (always 0). Files rotate atomically into `--out` (default `data/inbox`),
 so `beans watch data/inbox` scores them as they arrive.
 
 ```bash

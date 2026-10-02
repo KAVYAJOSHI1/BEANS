@@ -1,11 +1,33 @@
 """Mixer traversal (E6): who a CoinJoin's outputs could belong to, with link probabilities."""
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from beans.api import db
 
 router = APIRouter(prefix="/mixer", tags=["Mixer traversal"])
+
+
+@router.get("/transactions")
+def mixing_transactions(limit: int = Query(50, ge=1, le=200)) -> Dict[str, Any]:
+    """Traversed mixing transactions, most informative first: certain change links, then the smallest anonymity set."""
+    if not db.table_exists("mixer_links"):
+        return {"transactions": []}
+    rows = db.query("""
+        SELECT m.txid, any_value(t.timestamp) AS timestamp, any_value(t.total_output) AS total_btc,
+               COUNT(DISTINCT m.src) FILTER (WHERE m.kind = 'POOL') AS anonymity_set,
+               COUNT(*) FILTER (WHERE m.kind = 'CHANGE' AND m.prob >= 0.99) AS certain_change,
+               COUNT(*) FILTER (WHERE m.kind = 'CHANGE') AS change_links,
+               COUNT(DISTINCT m.src) AS participants
+        FROM mixer_links m LEFT JOIN transactions t ON t.txid = m.txid GROUP BY m.txid
+        ORDER BY certain_change DESC, anonymity_set ASC, timestamp DESC LIMIT ?""", [limit])
+    if rows and db.table_exists("wallet_scores"):
+        tainted = {r["txid"]: r["n"] for r in db.query(
+            """SELECT m.txid, COUNT(DISTINCT m.src) AS n FROM mixer_links m JOIN wallet_scores w ON w.address = m.src
+               WHERE w.taint > 0.01 AND list_contains(?, m.txid) GROUP BY m.txid""", [[r["txid"] for r in rows]])}
+        for r in rows:
+            r["tainted_inputs"] = tainted.get(r["txid"], 0)
+    return {"transactions": rows}
 
 
 @router.get("/{txid}")
