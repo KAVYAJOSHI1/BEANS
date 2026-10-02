@@ -100,6 +100,15 @@ progress, transactions stored per minute, newest alerts and ingested files. Both
   model runs through [Ollama](https://ollama.com) on the same machine (`ollama pull llama3.2`); nothing leaves it.
   `OLLAMA_MODEL=mistral NARRATIVE_TIMEOUT_S=300` writes better text but is slower on a CPU; `NARRATIVE_ENGINE=template`
   disables the model. Stored summaries go into case evidence packs, labelled with the model that wrote them.
+- **Mixer traversal (E6):** taint no longer stops at a CoinJoin. From amounts alone, each input links to each of the k
+  equal ("pool") outputs with probability 1/k (an honest anonymity set), and each change output is pinned to the input
+  whose amount fits (input − denomination − fee share): probability 1 when exactly one input fits, 1/n when n fit. E4
+  uses these links as edge weights, so a tainted participant's change stays tainted and pool outputs carry taint/k.
+  Alerts list the mixing transactions they touched, with candidate counterparties and inherited taint
+  (`evidence.mixer_traversal`); the link graph draws the links as dotted amber edges; `GET /api/mixer/{txid}`. On 3
+  synthetic datasets (seeds 42/7/123) PR-AUC rose 0.978 → 0.983 and alert precision 0.924 → 0.959; certain change links
+  were 100 % correct (217 of 217 on seed 42). Equal outputs remain unlinkable from amounts, so no claim is made there.
+  `E6_MIXER=false` turns it off.
 - **Global search:** Ctrl+K (⌘K) finds wallets, transactions, IPs, alerts, entity clusters and cases by prefix.
 - **Cross-chain exits:** give swap services and bridges `entity_type` `SWAP` or `BRIDGE` in the attribution list
   (`beans known-entities swaps.csv`). Funds traced to one get the `CROSS_CHAIN_EXIT` directive: a Bitcoin freeze no longer

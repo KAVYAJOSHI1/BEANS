@@ -102,6 +102,15 @@ def get_graph_topology(
             if (w := wallet_node(addr)):
                 edges.append({"source": tid, "target": w, "type": "OUTPUT", "label": f"{amt:.4f}", "amount": amt})
 
+    # E6: probable input→output links through CoinJoins (certain change links and the 1/k pool links)
+    if txs and db.table_exists("mixer_links"):
+        for m in db.query("SELECT txid, src, dst, prob, kind FROM mixer_links WHERE list_contains(?, txid) "
+                          "AND (kind != 'POOL' OR prob >= ?)", [[t["txid"] for t in txs], 0.0]):
+            a, b = f"w_{m['src']}", f"w_{m['dst']}"
+            if a in nodes and b in nodes:
+                edges.append({"source": a, "target": b, "type": "MIXER_LINK", "probability": round(m["prob"], 3),
+                              "link_kind": m["kind"], "txid": m["txid"], "label": f"{round(100 * m['prob'])}%"})
+
     # Evidence overlays the UI can highlight: path to the nearest seed and the peel chain of the center
     highlight: Dict[str, List[str]] = {"path_to_seed": [], "txids": []}
     if center and center in risk:

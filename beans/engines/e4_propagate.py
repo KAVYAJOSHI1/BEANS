@@ -15,13 +15,23 @@ HUB_DEGREE = 60
 ANY_DIRECTION_MAX_HOPS = 4
 
 
-def graph(frames) -> nx.DiGraph:
+def graph(frames, mixer_links: pd.DataFrame = None) -> nx.DiGraph:
+    """Value-weighted address flow graph. `mixer_links` (E6) replaces the proportional split inside mixing
+    transactions with input→output link probabilities × output amount."""
     tot_in = frames.tin.groupby("txid")["amount"].sum()
-    e = frames.tin[["txid", "address", "amount"]].merge(frames.tout[["txid", "address", "amount"]], on="txid",
-                                                        suffixes=("_s", "_d"))
+    tin, tout = frames.tin[["txid", "address", "amount"]], frames.tout[["txid", "address", "amount"]]
+    if mixer_links is not None and len(mixer_links):
+        mixed = set(mixer_links["txid"])
+        tin, tout = tin[~tin["txid"].isin(mixed)], tout[~tout["txid"].isin(mixed)]
+    e = tin.merge(tout, on="txid", suffixes=("_s", "_d"))
     e = e[e["address_s"] != e["address_d"]]
     e["w"] = e["amount_s"] / e["txid"].map(tot_in).clip(lower=1e-12) * e["amount_d"]
-    agg = e.groupby(["address_s", "address_d"])["w"].sum().reset_index()
+    agg = e.groupby(["address_s", "address_d"])["w"].sum()
+    if mixer_links is not None and len(mixer_links):
+        m = (mixer_links["prob"] * mixer_links["amount"]).groupby([mixer_links["src"], mixer_links["dst"]]).sum()
+        m.index.names = agg.index.names
+        agg = agg.add(m, fill_value=0.0)
+    agg = agg.reset_index()
     del e, tot_in
     G = nx.DiGraph()
     G.add_weighted_edges_from(agg.itertuples(index=False, name=None))

@@ -51,6 +51,7 @@ const stylesheet = (c) => [
       'line-color': c.edge, 'target-arrow-color': c.edge } },
   { selector: 'edge[type="INPUT"]', style: { 'line-color': '#94a3b8', 'target-arrow-color': '#94a3b8' } },
   { selector: 'edge[type="OUTPUT"]', style: { 'line-color': '#818cf8', 'target-arrow-color': '#818cf8' } },
+  { selector: 'edge[type="MIXER_LINK"]', style: { 'line-style': 'dotted', 'line-color': '#f59e0b', 'target-arrow-color': '#f59e0b', width: 'mapData(probability, 0, 1, 1, 4)', opacity: 0.85 } },
   { selector: 'edge[type="RELAYED"]', style: { 'line-style': 'dashed', 'line-color': '#38bdf8', 'target-arrow-color': '#38bdf8' } },
   // flow mode: value-carrying edges become moving dashes ("particles"); faster = more BTC
   { selector: 'edge.flow', style: { 'line-style': 'dashed', 'line-dash-pattern': [2, 7], 'line-cap': 'round', width: 2.2 } },

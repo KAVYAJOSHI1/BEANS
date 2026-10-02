@@ -18,7 +18,7 @@ import pyarrow as pa
 
 from beans.config import settings
 from beans.decision import actions as directives
-from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn
+from beans.engines import e1_cluster, e2_anomaly, e3_peelmix, e4_propagate, e5_gnn, e6_mixer
 from beans.explain.reasons import reasons_from_shap
 from beans.explain.shap_explain import explain
 from beans.features.extractors import (WALLET_NETWORK_COLS, TX_NETWORK_COLS, load_frames, tx_features,
@@ -119,7 +119,8 @@ def _run(conn, t0) -> dict:
     timings["e2"] = round(time.time() - t0, 2); timings["mem_gb_e2"] = _peak_gb()
 
     # ---- E4: propagation from seeds
-    G = e4_propagate.graph(f)
+    mix_links, e6_rep = e6_mixer.links(f, coinjoin) if settings.E6_MIXER else (e6_mixer.links(f, ())[0], {})
+    G = e4_propagate.graph(f, mix_links)
     e4df, e4info = e4_propagate.propagate(G, seeds)
     W = W.join(e4df, how="left")
     W[["ppr", "ppr_reverse", "taint"]] = W[["ppr", "ppr_reverse", "taint"]].fillna(0)
@@ -188,13 +189,13 @@ def _run(conn, t0) -> dict:
     shap_map, global_imp = explain(fuse.final_model(), Xw.loc[cand.index]) if len(cand) else ({}, [])
     if not global_imp and fuse.final_model() is not None:
         _, global_imp = explain(fuse.final_model(), Xw.sample(min(500, len(Xw)), random_state=1))
-    alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map)
+    alerts = _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map, mix_links)
     from beans.explain import counterfactual
     counterfactual.compute(alerts, Xw, shap_map, lambda X: fuse.predict(X)[0])
     timings["counterfactuals"] = round(time.time() - t0, 2); timings["mem_gb_counterfactuals"] = _peak_gb()
     directives.recommend(alerts, W, f, directives.load_known(conn))
     timings["actions"] = round(time.time() - t0, 2); timings["mem_gb_actions"] = _peak_gb()
-    _write(conn, W, probs, alerts)
+    _write(conn, W, probs, alerts, mix_links)
     # watchlist: movements of already-watched wallets, then start watching new taint-watch wallets
     from beans.alerting import watch
     known = directives.load_known(conn)
@@ -207,13 +208,14 @@ def _run(conn, t0) -> dict:
         "evaluated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), "trained": trained,
         "transactions": int(len(X_tx)), "wallets": int(len(W)), "seeds": len(seeds),
         "seeds_in_graph": e4info.get("seeds_in_graph", 0), "alerts": len(alerts),
-        "e3": e3_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
+        "e3": e3_rep, "e6": e6_rep, "e1": e1_rep, "fusion": fusion_rep, "global_importance": global_imp, "timings_s": timings,
         "feature_count": len(feats), "network_features": network_cols + TX_NETWORK_COLS,
         "watchlist": {"new_movement_events": len(watch_events), "auto_watched": auto_watched},
     }
     if labels_addr is not None and len(labels_addr):
         report["e1"].update(_cluster_quality(W, labels_addr))
         report["e4"] = _propagation_quality(W, labels_addr, seeds, in_seed_cluster)
+        report["e6"].update(e6_mixer.evaluate(mix_links, labels_addr))
         report["alert_quality"] = _alert_quality(alerts, labels_addr)
     report["actions"] = {k: int(v) for k, v in pd.Series([a["recommended_action"]["action"] for a in alerts]).value_counts().items()}
     settings.MODELS_DIR.mkdir(parents=True, exist_ok=True)
@@ -226,7 +228,8 @@ def _run(conn, t0) -> dict:
             "watch_events": len(watch_events)}
 
 
-def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:
+def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map, mix_links=None) -> list:
+    mixes = e6_mixer.exposure(mix_links, W["taint"], cand.index) if mix_links is not None and len(mix_links) else {}
     spy = f.spy.set_index("txid")
     tx_ts = f.tx.set_index("txid")["ts"]
     chain_id = X_tx.attrs.get("peel_chain_id", {})
@@ -272,12 +275,13 @@ def _build_alerts(cand, W, X_tx, probs, f, e4info, shap_map) -> list:
                 "first_spy_asn_type": None if s is None else s["spy_asn_type"],
                 "path_to_seed": path, "peel_chain": chain, "cluster_id": w["cluster_id"],
                 "cluster_size": int(cluster_size.get(w["cluster_id"], 1)),
+                "mixer_traversal": mixes.get(addr, []),
             },
         })
     return alerts
 
 
-def _write(conn, W, probs, alerts):
+def _write(conn, W, probs, alerts, mix_links=None):
     kept = conn.execute("SELECT entity_id, status, assigned_to FROM alerts WHERE status != 'OPEN' OR assigned_to != 'Unassigned'").fetchall()
     conn.execute("DELETE FROM alerts")
     if alerts:
@@ -314,6 +318,8 @@ def _write(conn, W, probs, alerts):
     conn.execute("CREATE OR REPLACE TABLE wallet_scores AS SELECT * FROM scores")
     txs = probs.reset_index(names="txid")
     conn.execute("CREATE OR REPLACE TABLE tx_scores AS SELECT * FROM txs")
+    ml = mix_links if mix_links is not None else pd.DataFrame(columns=["txid", "src", "dst", "prob", "kind", "amount"])
+    conn.execute("CREATE OR REPLACE TABLE mixer_links AS SELECT * FROM ml")
 
 
 def _cluster_quality(W, labels) -> dict:
